@@ -197,7 +197,6 @@ does not find one it says so and waits for you to plug one in (Enter checks agai
   `MISTER_RESTORE_MODE` if your display uses something else.
 - **GemRB ignores `SIGTERM`.** Quit from the game menu, or use `kill -KILL`; the launcher restores the display either
   way.
-- You cannot save during combat: that is the game's rule.
 
 ## Building
 
