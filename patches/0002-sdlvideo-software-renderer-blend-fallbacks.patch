@@ -1,0 +1,59 @@
+diff --git a/gemrb/plugins/SDLVideo/SDL20Video.cpp b/gemrb/plugins/SDLVideo/SDL20Video.cpp
+index 859d6ec..9d91b84 100644
+--- a/gemrb/plugins/SDLVideo/SDL20Video.cpp
++++ b/gemrb/plugins/SDLVideo/SDL20Video.cpp
+@@ -204,6 +204,17 @@ int SDL20VideoDriver::CreateSDLDisplay(const char* title, bool vsync)
+ 	SDL_GetRendererInfo(renderer, &info);
+ 	Log(DEBUG, "SDL20Video", "Renderer: {}", info.name);
+ 
++	// The software renderer cannot set custom blend modes. GemRB uses them to hide characters behind walls (the
++	// stencil pass) and for some glow effects, and without them the stencil is drawn opaque over the character.
++	// Detect it, and fall back to plain drawing and the standard additive blend.
++	if (SDL_Texture* probe = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, 1, 1)) {
++		customBlendModes = SDL_SetTextureBlendMode(probe, stencilAlphaBlender) == 0;
++		SDL_DestroyTexture(probe);
++	}
++	if (!customBlendModes) {
++		Log(WARNING, "SDL20Video", "Renderer lacks custom blend modes: characters are not hidden behind walls, and glow effects are approximated");
++	}
++
+ 	if (renderer == NULL) {
+ 		Log(ERROR, "SDL 2 Driver", "couldnt create renderer: {}", SDL_GetError());
+ 		return GEM_ERROR;
+@@ -414,7 +425,7 @@ void SDL20VideoDriver::BlitSpriteNativeClipped(SDL_Texture* texSprite, const Reg
+ 	SDL_RenderFlush(renderer);
+ 	#endif
+ #else
+-	if (flags & BlitFlags::STENCIL_MASK) {
++	if ((flags & BlitFlags::STENCIL_MASK) && customBlendModes) {
+ 		// 1. clear scratchpad segment
+ 		// 2. blend stencil segment to scratchpad
+ 		// 3. blend texture to scratchpad
+@@ -614,11 +625,11 @@ void SDL20VideoDriver::SetTextureBlendMode(SDL_Texture* texture, BlitFlags flags
+ 		SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_MUL);
+ #endif
+ 	} else if (flags & BlitFlags::SRC) {
+-		SDL_SetTextureBlendMode(texture, srcBlender);
++		SDL_SetTextureBlendMode(texture, customBlendModes ? srcBlender : SDL_BLENDMODE_ADD);
+ 	} else if (flags & BlitFlags::ONE_MINUS_DST) {
+-		SDL_SetTextureBlendMode(texture, oneMinusDstBlender);
++		SDL_SetTextureBlendMode(texture, customBlendModes ? oneMinusDstBlender : SDL_BLENDMODE_ADD);
+ 	} else if (flags & BlitFlags::DST) {
+-		SDL_SetTextureBlendMode(texture, dstBlender);
++		SDL_SetTextureBlendMode(texture, customBlendModes ? dstBlender : SDL_BLENDMODE_ADD);
+ 	} else if (flags & (BlitFlags::BLENDED | BlitFlags::HALFTRANS)) {
+ 		SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+ 	} else {
+diff --git a/gemrb/plugins/SDLVideo/SDL20Video.h b/gemrb/plugins/SDLVideo/SDL20Video.h
+index b675d5b..8848884 100644
+--- a/gemrb/plugins/SDLVideo/SDL20Video.h
++++ b/gemrb/plugins/SDLVideo/SDL20Video.h
+@@ -230,6 +230,8 @@ private:
+ 	SDL_BlendMode oneMinusDstBlender;
+ 	SDL_BlendMode dstBlender;
+ 	SDL_BlendMode srcBlender;
++	// SDL's software renderer has no custom blend modes; see the renderer setup.
++	bool customBlendModes = true;
+ 
+ 	SDL_GameController* gameController = nullptr;
+ 	DPadSoftKeyboard dPadSoftKeyboard;

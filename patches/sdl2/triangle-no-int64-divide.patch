@@ -1,0 +1,106 @@
+--- a/src/render/software/SDL_triangle.c
++++ b/src/render/software/SDL_triangle.c
+@@ -168,6 +168,15 @@
+  *
+  */
+ 
++/* The Cortex-A9 and other CPUs without a hardware 64-bit divide spend hundreds of cycles per division, and the
++   interpolation below divides four times per pixel by the same triangle area. Multiply by the reciprocal in double
++   precision instead (a tiny bias keeps exact multiples from truncating one too low). */
++static SDL_INLINE int triangle_div(Sint64 num, double area_inv)
++{
++    double q = (double)num * area_inv;
++    return (int)(q + (q >= 0 ? 1e-7 : -1e-7));
++}
++
+ #define TRIANGLE_BEGIN_LOOP                                                        \
+     {                                                                              \
+         int x, y;                                                                  \
+@@ -183,21 +192,21 @@
+ 
+ /* Use 64 bits precision to prevent overflow when interpolating color / texture with wide triangles */
+ #define TRIANGLE_GET_TEXTCOORD                                                          \
+-    int srcx = (int)(((Sint64)w0 * s2s0_x + (Sint64)w1 * s2s1_x + s2_x_area.x) / area); \
+-    int srcy = (int)(((Sint64)w0 * s2s0_y + (Sint64)w1 * s2s1_y + s2_x_area.y) / area);
++    int srcx = triangle_div((Sint64)w0 * s2s0_x + (Sint64)w1 * s2s1_x + s2_x_area.x, area_inv); \
++    int srcy = triangle_div((Sint64)w0 * s2s0_y + (Sint64)w1 * s2s1_y + s2_x_area.y, area_inv);
+ 
+ #define TRIANGLE_GET_MAPPED_COLOR                                                      \
+-    int r = (int)(((Sint64)w0 * c0.r + (Sint64)w1 * c1.r + (Sint64)w2 * c2.r) / area); \
+-    int g = (int)(((Sint64)w0 * c0.g + (Sint64)w1 * c1.g + (Sint64)w2 * c2.g) / area); \
+-    int b = (int)(((Sint64)w0 * c0.b + (Sint64)w1 * c1.b + (Sint64)w2 * c2.b) / area); \
+-    int a = (int)(((Sint64)w0 * c0.a + (Sint64)w1 * c1.a + (Sint64)w2 * c2.a) / area); \
++    int r = triangle_div((Sint64)w0 * c0.r + (Sint64)w1 * c1.r + (Sint64)w2 * c2.r, area_inv); \
++    int g = triangle_div((Sint64)w0 * c0.g + (Sint64)w1 * c1.g + (Sint64)w2 * c2.g, area_inv); \
++    int b = triangle_div((Sint64)w0 * c0.b + (Sint64)w1 * c1.b + (Sint64)w2 * c2.b, area_inv); \
++    int a = triangle_div((Sint64)w0 * c0.a + (Sint64)w1 * c1.a + (Sint64)w2 * c2.a, area_inv); \
+     int color = SDL_MapRGBA(format, r, g, b, a);
+ 
+ #define TRIANGLE_GET_COLOR                                                             \
+-    int r = (int)(((Sint64)w0 * c0.r + (Sint64)w1 * c1.r + (Sint64)w2 * c2.r) / area); \
+-    int g = (int)(((Sint64)w0 * c0.g + (Sint64)w1 * c1.g + (Sint64)w2 * c2.g) / area); \
+-    int b = (int)(((Sint64)w0 * c0.b + (Sint64)w1 * c1.b + (Sint64)w2 * c2.b) / area); \
+-    int a = (int)(((Sint64)w0 * c0.a + (Sint64)w1 * c1.a + (Sint64)w2 * c2.a) / area);
++    int r = triangle_div((Sint64)w0 * c0.r + (Sint64)w1 * c1.r + (Sint64)w2 * c2.r, area_inv); \
++    int g = triangle_div((Sint64)w0 * c0.g + (Sint64)w1 * c1.g + (Sint64)w2 * c2.g, area_inv); \
++    int b = triangle_div((Sint64)w0 * c0.b + (Sint64)w1 * c1.b + (Sint64)w2 * c2.b, area_inv); \
++    int a = triangle_div((Sint64)w0 * c0.a + (Sint64)w1 * c1.a + (Sint64)w2 * c2.a, area_inv);
+ 
+ #define TRIANGLE_END_LOOP \
+     }                     \
+@@ -226,6 +235,7 @@
+     int dst_pitch;
+ 
+     Sint64 area;
++    double area_inv = 0.0;
+     int is_clockwise;
+ 
+     int d2d1_y, d1d2_x, d0d2_y, d2d0_x, d1d0_y, d0d1_x;
+@@ -241,6 +251,7 @@
+     }
+ 
+     area = cross_product(d0, d1, d2->x, d2->y);
++    area_inv = area ? 1.0 / (double)area : 0.0;
+ 
+     is_uniform = COLOR_EQ(c0, c1) && COLOR_EQ(c1, c2);
+ 
+@@ -314,6 +325,7 @@
+     is_clockwise = area > 0;
+     if (area < 0) {
+         area = -area;
++        area_inv = -area_inv;
+     }
+ 
+     {
+@@ -470,6 +482,7 @@
+     int src_pitch;
+ 
+     Sint64 area, tmp64;
++    double area_inv = 0.0;
+     int is_clockwise;
+ 
+     int d2d1_y, d1d2_x, d0d2_y, d2d0_x, d1d0_y, d0d1_x;
+@@ -490,6 +503,7 @@
+     }
+ 
+     area = cross_product(d0, d1, d2->x, d2->y);
++    area_inv = area ? 1.0 / (double)area : 0.0;
+ 
+     /* Flat triangle */
+     if (area == 0) {
+@@ -590,6 +604,7 @@
+     is_clockwise = area > 0;
+     if (area < 0) {
+         area = -area;
++        area_inv = -area_inv;
+     }
+ 
+     {
+@@ -784,6 +799,7 @@
+                                   int s2s0_x, int s2s1_x, int s2s0_y, int s2s1_y, int w0_row, int w1_row, int w2_row,
+                                   SDL_Color c0, SDL_Color c1, SDL_Color c2, int is_uniform)
+ {
++    const double area_inv = area ? 1.0 / (double)area : 0.0;
+     const int flags = info->flags;
+     Uint32 modulateR = info->r;
+     Uint32 modulateG = info->g;

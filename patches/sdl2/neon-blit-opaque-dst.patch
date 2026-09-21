@@ -1,0 +1,20 @@
+--- a/src/video/SDL_blit_A.c
++++ b/src/video/SDL_blit_A.c
+@@ -1471,13 +1471,15 @@
+                 }
+ #endif /* __MMX__ || __3dNOW__ */
+                 if (sf->Amask == 0xff000000) {
++                    /* The ARM assembly blitters leave the destination alpha alone, where the C blitter blends it too:
++                       use them only when the destination has no alpha channel (opaque destination). */
+ #ifdef SDL_ARM_NEON_BLITTERS
+-                    if (SDL_HasNEON()) {
++                    if (df->Amask == 0 && SDL_HasNEON()) {
+                         return BlitRGBtoRGBPixelAlphaARMNEON;
+                     }
+ #endif
+ #ifdef SDL_ARM_SIMD_BLITTERS
+-                    if (SDL_HasARMSIMD()) {
++                    if (df->Amask == 0 && SDL_HasARMSIMD()) {
+                         return BlitRGBtoRGBPixelAlphaARMSIMD;
+                     }
+ #endif

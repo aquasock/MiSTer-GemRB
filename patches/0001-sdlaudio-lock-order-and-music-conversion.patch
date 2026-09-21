@@ -1,0 +1,170 @@
+diff --git a/gemrb/plugins/SDLAudio/ChannelManager.cpp b/gemrb/plugins/SDLAudio/ChannelManager.cpp
+index 6adab0d..181060b 100644
+--- a/gemrb/plugins/SDLAudio/ChannelManager.cpp
++++ b/gemrb/plugins/SDLAudio/ChannelManager.cpp
+@@ -31,10 +31,14 @@ std::unordered_map<int, uint64_t> ChannelManager::channelMap = {};
+ 
+ bool ChannelManager::Init(int numChannels, int numReserved)
+ {
+-	std::unique_lock<std::recursive_mutex> lock { stateMutex };
+-
+-	if (initialized) {
+-		return false;
++	// Never hold stateMutex while calling into SDL_mixer: Mix_* takes SDL's audio lock, and the audio thread
++	// holds that lock while it calls finishedCallback(), which takes stateMutex (lock order inversion).
++	{
++		std::unique_lock<std::recursive_mutex> lock { stateMutex };
++		if (initialized) {
++			return false;
++		}
++		initialized = true;
+ 	}
+ 
+ 	int result = Mix_AllocateChannels(numChannels);
+@@ -46,22 +50,21 @@ bool ChannelManager::Init(int numChannels, int numReserved)
+ 	Mix_ChannelFinished(&finishedCallback);
+ 
+ 	numChannels = result;
+-	initialized = true;
+ 
+ 	return true;
+ }
+ 
+ int ChannelManager::Request(const SDLSoundSourceHandle& source, int channel, Mix_Chunk* chunk, bool loop)
+ {
+-	std::unique_lock<std::recursive_mutex> lock { stateMutex };
+-
++	// See Init(): no plugin lock may be held across a Mix_* call.
+ 	int loops = loop ? -1 : 0;
+ 	auto nextChannel = Mix_PlayChannel(channel, chunk, loops);
+ 	if (nextChannel == -1) {
+ 		return -1;
+ 	}
+ 
+-	channelMap.emplace(nextChannel, source.GetID());
++	std::unique_lock<std::recursive_mutex> lock { stateMutex };
++	channelMap[nextChannel] = source.GetID();
+ 
+ 	return nextChannel;
+ }
+diff --git a/gemrb/plugins/SDLAudio/SDLAudio.cpp b/gemrb/plugins/SDLAudio/SDLAudio.cpp
+index e317078..77831fd 100644
+--- a/gemrb/plugins/SDLAudio/SDLAudio.cpp
++++ b/gemrb/plugins/SDLAudio/SDLAudio.cpp
+@@ -204,35 +204,58 @@ SDLSoundStreamSourceHandle::SDLSoundStreamSourceHandle(size_t ringBufferSize)
+ SDLSoundStreamSourceHandle::~SDLSoundStreamSourceHandle()
+ {
+ 	SDLSoundStreamSourceHandle::Stop();
++	std::lock_guard<std::mutex> lock { streamMutex };
++	if (stream) {
++		SDL_FreeAudioStream(stream);
++		stream = nullptr;
++	}
+ }
+ 
+-bool SDLSoundStreamSourceHandle::Feed(const AudioBufferFormat&, const char* memory, size_t length)
++bool SDLSoundStreamSourceHandle::Feed(const AudioBufferFormat& format, const char* memory, size_t length)
+ {
+-	std::vector<char> convertBuffer(length, 0);
++	std::vector<char> volumeBuffer(length, 0);
+ 
+ 	// We can't use `Mix_VolumeMusic` since we don't use Mix to play files, and thus it internally
+ 	// never reaches a playing-state to care about volume calls.
+ 	if (volume == MIX_MAX_VOLUME) {
+-		std::copy(memory, memory + length, convertBuffer.begin());
++		std::copy(memory, memory + length, volumeBuffer.begin());
+ 	} else {
+ #if SDL_VERSION_ATLEAST(2, 0, 0)
+-		SDL_MixAudioFormat(reinterpret_cast<Uint8*>(convertBuffer.data()), reinterpret_cast<const Uint8*>(memory),
++		SDL_MixAudioFormat(reinterpret_cast<Uint8*>(volumeBuffer.data()), reinterpret_cast<const Uint8*>(memory),
+ 				   MIX_DEFAULT_FORMAT, length, volume);
+ #else
+-		SDL_MixAudio(reinterpret_cast<Uint8*>(convertBuffer.data()), reinterpret_cast<const Uint8*>(memory), length, volume);
++		SDL_MixAudio(reinterpret_cast<Uint8*>(volumeBuffer.data()), reinterpret_cast<const Uint8*>(memory), length, volume);
+ #endif
+ 	}
+ 
+-	SDL_AudioCVT cvt;
+-	SDL_BuildAudioCVT(&cvt,
+-			  AUDIO_S16SYS, 2, 22050,
+-			  SDLAudioBackend::audioFormat, SDLAudioBackend::audioChannels, SDLAudioBackend::audioRate);
++	// Convert with a stream that keeps its state from chunk to chunk. Converting every chunk on its own
++	// (SDL_ConvertAudio) rounds each result to a non-whole number of frames whenever the device rate is not the
++	// music's rate, which shifted the byte alignment of every following chunk and played them as noise.
++	std::vector<char> convertBuffer;
++	{
++		std::lock_guard<std::mutex> lock { streamMutex };
++		int srcRate = format.sampleRate ? format.sampleRate : 22050;
++		int srcChannels = format.channels ? format.channels : 2;
++		if (!stream || streamRate != srcRate || streamChannels != srcChannels) {
++			if (stream) {
++				SDL_FreeAudioStream(stream);
++			}
++			stream = SDL_NewAudioStream(AUDIO_S16SYS, srcChannels, srcRate,
++						    SDLAudioBackend::audioFormat, SDLAudioBackend::audioChannels, SDLAudioBackend::audioRate);
++			streamRate = srcRate;
++			streamChannels = srcChannels;
++		}
++		if (!stream) {
++			Log(ERROR, "SDLAudio", "Cannot create the music converter: {}", SDL_GetError());
++			return fillWait;
++		}
+ 
+-	convertBuffer.resize(convertBuffer.size() * cvt.len_mult);
+-	cvt.buf = reinterpret_cast<Uint8*>(convertBuffer.data());
+-	cvt.len = length;
+-	SDL_ConvertAudio(&cvt);
+-	convertBuffer.resize(length * cvt.len_ratio);
++		SDL_AudioStreamPut(stream, volumeBuffer.data(), static_cast<int>(length));
++		int available = SDL_AudioStreamAvailable(stream);
++		convertBuffer.resize(available > 0 ? available : 0);
++		int got = available > 0 ? SDL_AudioStreamGet(stream, convertBuffer.data(), available) : 0;
++		convertBuffer.resize(got > 0 ? got : 0);
++	}
+ 
+ 	size_t offset = 0;
+ 	do {
+@@ -267,6 +290,12 @@ void SDLSoundStreamSourceHandle::Reclaim()
+ 	std::lock_guard<std::mutex> lock { mixMutex };
+ 
+ 	fillWait = true;
++	{
++		std::lock_guard<std::mutex> streamLock { streamMutex };
++		if (stream) {
++			SDL_AudioStreamClear(stream);
++		}
++	}
+ 	// The hook call isn't guarded by Mix' own locking
+ 	{
+ 		std::lock_guard<std::mutex> cbLock { MixCallbackState::mutex };
+@@ -387,8 +416,11 @@ Holder<SoundBufferHandle> SDLAudioBackend::LoadSound(ResourceHolder<SoundMgr> re
+ 	cvt.len = actualSamples * 2;
+ 	SDL_ConvertAudio(&cvt);
+ 
+-	buffer.resize(cvt.len * cvt.len_ratio);
+-	chunk = Mix_QuickLoad_RAW(reinterpret_cast<Uint8*>(buffer.data()), cvt.len * cvt.len_ratio);
++	// The converted length, in whole frames (len * len_ratio can end in a partial frame).
++	size_t frameSize = 2 * static_cast<size_t>(audioChannels);
++	size_t convertedLength = static_cast<size_t>(cvt.len_cvt) / frameSize * frameSize;
++	buffer.resize(convertedLength);
++	chunk = Mix_QuickLoad_RAW(reinterpret_cast<Uint8*>(buffer.data()), convertedLength);
+ 	if (!chunk) {
+ 		Log(ERROR, "SDLAudio", "Error loading chunk!");
+ 		return {};
+diff --git a/gemrb/plugins/SDLAudio/SDLAudio.h b/gemrb/plugins/SDLAudio/SDLAudio.h
+index ba4a815..ff3559c 100644
+--- a/gemrb/plugins/SDLAudio/SDLAudio.h
++++ b/gemrb/plugins/SDLAudio/SDLAudio.h
+@@ -99,6 +99,12 @@ private:
+ 	RingBuffer<char> ringBuffer;
+ 	bool fillWait = true;
+ 
++	// Converts the music to the device format. It has to be a stream that keeps its state between chunks (see Feed()).
++	std::mutex streamMutex;
++	SDL_AudioStream* stream = nullptr;
++	int streamRate = 0;
++	int streamChannels = 0;
++
+ 	static void StreamCallback(const void*, uint8_t* stream, int len);
+ };
+ 
