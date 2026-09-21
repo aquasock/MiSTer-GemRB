@@ -80,10 +80,13 @@ CFG
 }
 write_cfg bg2 bg2 800 600
 write_cfg bg1 bg1 640 480
+write_cfg pst pst 640 480
+write_cfg iwd how 640 480          # GemRB's game type for Icewind Dale with Heart of Winter and Trials of the Luremaster
+write_cfg iwd2 iwd2 800 600        # Icewind Dale 2 has no 640x480 layout
 
 cat > "$OUT/run.sh" <<'RUN'
 #!/bin/sh
-# Starts GemRB on the MiSTer for one game:   run.sh [bg2|bg1] [gemrb options...]      (default bg2)
+# Starts GemRB on the MiSTer for one game:   run.sh [bg2|bg1|pst|iwd|iwd2] [gemrb options...]      (default bg2)
 # Optional settings go in /media/fat/gemrb/env.sh:
 #   MISTER_RESOLUTION=640x480|800x600 skip the resolution question and use this
 #   MISTER_OUTPUT_MODE=off           do not change the HDMI mode (otherwise it follows the chosen resolution)
@@ -132,8 +135,20 @@ fi
 # Ask for the resolution every time (no default, so nobody is surprised by a screen mode their display dislikes). The answer is
 # saved as Width/Height in the game's config, which also decides the HDMI mode below. Setting MISTER_RESOLUTION (for example in
 # env.sh, or on the command line when testing) skips the question.
+# Icewind Dale 2 was made for 800x600 and up and has no 640x480 layout; the other games offer both.
+case "$GAME" in
+    iwd2) RES_CHOICES="800x600" ;;
+    *)    RES_CHOICES="640x480 800x600" ;;
+esac
 choose_resolution() {
-    if [ -n "$MISTER_RESOLUTION" ]; then RES=$MISTER_RESOLUTION; return 0; fi
+    if [ -n "$MISTER_RESOLUTION" ]; then
+        case " $RES_CHOICES " in
+            *" $MISTER_RESOLUTION "*) RES=$MISTER_RESOLUTION; return 0 ;;
+            *) echo "  $GAME does not support $MISTER_RESOLUTION (use one of: $RES_CHOICES)"; sleep 10; return 1 ;;
+        esac
+    fi
+    set -- $RES_CHOICES
+    if [ $# -eq 1 ]; then RES=$1; echo; echo "  $GAME uses $RES (the only size its interface supports)."; return 0; fi
     last=$(sed -n 's/^Width=\([0-9][0-9]*\).*/\1/p' "$CFG" | tail -1)x$(sed -n 's/^Height=\([0-9][0-9]*\).*/\1/p' "$CFG" | tail -1)
     while true; do
         echo
@@ -310,7 +325,7 @@ RUN
 chmod +x "$OUT/run.sh"
 
 # One entry per game for the OSD Scripts menu (F12 > Scripts).
-for g in bg2 bg1; do
+for g in bg2 bg1 pst iwd iwd2; do
 	printf '#!/bin/bash\nexec %s/run.sh %s "$@"\n' "$DEVICE_DIR" "$g" > "$WORK/bundle/Scripts/gemrb-$g.sh"
 	chmod +x "$WORK/bundle/Scripts/gemrb-$g.sh"
 done

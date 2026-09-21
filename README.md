@@ -8,8 +8,10 @@ sound. This project supplies the missing pieces: a cross-build for the MiSTer's 
 Python), the MiSTer's SDL2 video and audio drivers, fixes and speed-ups for software rendering on this CPU, and a
 launcher that fills the screen.
 
-You supply your own copy of the game data. This project does not include it. Baldur's Gate II (the GOG "Complete"
-release, Shadows of Amn and Throne of Bhaal) is what was tested.
+You supply your own copy of the game data. This project does not include it. Five classic games have launchers, all
+tested with the GOG releases: Baldur's Gate, Baldur's Gate II (Shadows of Amn and Throne of Bhaal), Icewind Dale (with
+Heart of Winter and Trials of the Luremaster), Icewind Dale II and Planescape: Torment. See
+[Supported games](#supported-games).
 
 ## What it does
 
@@ -51,12 +53,35 @@ What made the difference, in order: drawing the fog of war with sprites instead 
 - A MiSTer with a DE10-Nano (Cyclone V SoC), running the Menu core, with a MiSTer Linux image that has the `MiSTer_fb`
   and `MrAudio` devices. Tested on the Buildroot image with Linux 6.18.38.
 - A USB mouse and keyboard, and an HDMI display that accepts 800x600 at 60 Hz.
-- Baldur's Gate II data files, about 2.6 GB.
+- The data files of the games you want to play, 1.4 to 2.6 GB each (see [Supported games](#supported-games)).
 - **A USB drive for swap memory**, plugged in before you start a game, formatted as **ext4** with at least
   500 MB free. See "The swap file" below.
 - To build: a Linux PC (Ubuntu 26.04 was used), about 2 GB of free disk space, a network connection for fetching
   sources, and a checkout of [MiSTer-VCMI](https://github.com/aquasock/MiSTer-VCMI) next to this repository: the SDL2
   driver sources are shared, not copied.
+
+## Supported games
+
+| Game | Folder | Launcher | GOG installer | Resolutions | Status |
+| --- | --- | --- | --- | --- | --- |
+| Baldur's Gate II (Shadows of Amn, Throne of Bhaal) | `games/bg2` | `gemrb-bg2` | Baldur's Gate 2 Complete | 640x480, 800x600 | Played the most. One known crash, see below |
+| Baldur's Gate | `games/bg1` | `gemrb-bg1` | Baldur's Gate: The Original Saga | 640x480, 800x600 | Short test, runs well |
+| Planescape: Torment | `games/pst` | `gemrb-pst` | Planescape: Torment 1.01 | 640x480, 800x600 | Works. This edition has no movie files, so cutscene videos are missing |
+| Icewind Dale (with Heart of Winter and Trials of the Luremaster) | `games/iwd` | `gemrb-iwd` | Icewind Dale Complete | 640x480, 800x600 | Menus and navigation checked |
+| Icewind Dale II | `games/iwd2` | `gemrb-iwd2` | Icewind Dale 2 (2.01 fixes) | 800x600 only | Works |
+
+Notes on the GOG installers, after unpacking them with innoextract:
+
+- **Baldur's Gate, Baldur's Gate II, Planescape and Icewind Dale:** the game is in the `app` folder. Copy its contents,
+  including sub-folders such as Icewind Dale's `CD2` and `CD3` (the original game keeps its area graphics there as
+  compressed `.cbf` files, which GemRB reads).
+- **Planescape and Icewind Dale II keep their settings files in `__support/app`** (`Torment.ini`, `beast.ini`,
+  `quests.ini`, `autonote.ini`, `Keymap.ini`, `layout.ini`, or `icewind2.ini`, `Party.ini`, `Keymap.ini`), where the GOG
+  installer would copy them next to the game. GemRB reads them from the game folder, so copy the `.ini` files from
+  `__support/app` into it.
+- **Icewind Dale II** is unpacked straight into the output folder instead of an `app` folder: copy the folder that
+  contains `CHITIN.KEY`, and leave out `__redist`, `__support` and `commonappdata`.
+- Every game needs about 1.4 to 2.6 GB. The Enhanced Editions, mods and multiplayer are untested.
 
 ## Installation
 
@@ -64,17 +89,18 @@ What made the difference, in order: drawing the fog of war with sprites instead 
 
 1. Download `MiSTer-GemRB-v<version>.zip` from the [Releases](https://github.com/aquasock/MiSTer-GemRB/releases) page
    and unzip it onto the root of the MiSTer's SD card, merging with what is there. This creates `/media/fat/gemrb`
-   and one launcher per game in `/media/fat/Scripts` (`gemrb-bg2.sh`, `gemrb-bg1.sh`). The location matters: the programs
+   and one launcher per game in `/media/fat/Scripts` (`gemrb-bg2.sh`, `gemrb-bg1.sh`, `gemrb-pst.sh`, `gemrb-iwd.sh`, `gemrb-iwd2.sh`). The location matters: the programs
    find their libraries under `/media/fat/gemrb`.
-2. Copy your game files into `/media/fat/gemrb/games/<game>`, one folder per game: the folder that contains `CHITIN.KEY`,
-   `dialog.tlk`, `data/`, `override/`, `music/` and `sounds/`. `bg2` is Baldur's Gate II and `bg1` is Baldur's Gate. For
-   the GOG releases, unpack the installer with [innoextract](https://constexpr.org/innoextract/) and copy the contents of
-   its `app` folder. The installer's programs (`.exe`, `.dll`), manuals and helpers are not needed. Use the classic
-   editions (on GOG, redeemable free with the Enhanced Editions), not the Enhanced Editions themselves.
-3. On the MiSTer, open the OSD (F12), choose **Scripts**, and run **gemrb-bg2** or **gemrb-bg1**. The launcher first
-   asks which resolution to use, 640x480 or 800x600: type 1 or 2 and press Enter. Baldur's Gate was made for 640x480 and
-   Baldur's Gate II supports both, so try each and keep the one your display and the game prefer. The screen then blinks as
-   the output switches to that resolution. Quit from the game's own menu; the launcher switches your display back.
+2. Copy your game files into `/media/fat/gemrb/games/<game>`, one folder per game (the table under
+   [Supported games](#supported-games) says which folder is which). For the GOG releases, unpack the installer with
+   [innoextract](https://constexpr.org/innoextract/) and copy the game folder it makes. The installer's programs (`.exe`,
+   `.dll`), manuals and helpers are not needed. Use the classic editions (on GOG, the classic Baldur's Gate games are
+   redeemable free with the Enhanced Editions), not the Enhanced Editions themselves.
+3. On the MiSTer, open the OSD (F12), choose **Scripts**, and run the launcher of the game you want. Most launchers first
+   ask which resolution to use, 640x480 or 800x600: type 1 or 2 and press Enter. Icewind Dale II has no 640x480 layout and
+   always uses 800x600. Try both sizes on the others and keep the one your display and the game prefer. The screen then
+   blinks as the output switches to that resolution. Quit from the game's own menu; the launcher switches your display
+   back.
 
 If you installed version 0.1.0, the first run moves its game folder, saves and settings into this layout for you.
 
@@ -91,6 +117,9 @@ and checksums.
    MISTER_HOST=<your MiSTer's IP> scripts/deploy.sh code
    GAME_DATA=<extracted game folder> MISTER_HOST=<your MiSTer's IP> scripts/deploy.sh data bg2
    ```
+
+   `scripts/deploy.sh data <game>` also finds the game folder in `work/<game>-extract` by itself, and for Planescape and
+   Icewind Dale II it copies the settings files the GOG installer keeps in `__support/app` (see the table).
 
 3. Launch it from the OSD as above.
 
@@ -117,7 +146,8 @@ GemRB's own settings for each game are in `/media/fat/gemrb/GemRB-<game>.cfg`, w
 `GemRB-<game>.cfg.default` on the first run and never overwrites, so updating keeps your edits. The defaults are the SDL
 audio driver, a 30 fps cap, intro videos skipped and sprite fog of war. The launcher writes the resolution you choose
 into `Width` and `Height` in that file each time it starts. GemRB's documentation lists 640x480 as the only size the
-original Baldur's Gate supports and 640x480 and 800x600 as supported by Baldur's Gate II. Each game keeps its own files in `games/<game>`, saves in
+original Baldur's Gate was made for and 640x480 and 800x600 as supported by Baldur's Gate II; in a short test Baldur's Gate
+also ran correctly at 800x600, with the interface panels at the screen edges. Each game keeps its own files in `games/<game>`, saves in
 `saves/<game>` and cache in `cache/<game>`. The options are described in GemRB's documentation.
 
 The drivers read the `SDL_MISTER_*` environment variables described in the
@@ -147,9 +177,9 @@ does not find one it says so and waits for you to plug one in (Enter checks agai
 
 ## Current limitations
 
-- **Baldur's Gate II is the tested game.** The Baldur's Gate launcher is new and has only been checked against the
-  classic installer's files, not yet played on hardware. Other games GemRB supports, the Enhanced Editions, mods and
-  multiplayer have not been tested.
+- **Only short sessions were played in most games.** Baldur's Gate II has had the most play. The other four were checked
+  for a while each (menus, walking around, saving and loading, quitting), not played through. The Enhanced Editions,
+  mods and multiplayer have not been tested.
 - **Known crash: one Baldur's Gate II: Throne of Bhaal fight can crash the game.** In a scripted encounter where an
   enemy starts a cutscene and then summons Kobold Commandos (ranged attackers), the game sometimes aborts a few
   seconds into the fight with a glibc heap error (`corrupted double-linked list` or `unaligned tcache chunk`), right

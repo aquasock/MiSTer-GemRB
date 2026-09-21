@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Copies the bundle (and, once per game, the game data) to the MiSTer over ssh.
 # Usage: MISTER_HOST=<ip> scripts/deploy.sh code
-#        MISTER_HOST=<ip> scripts/deploy.sh data <game>       game: bg2, bg1
+#        MISTER_HOST=<ip> scripts/deploy.sh data <game>       game: bg2, bg1, pst, iwd, iwd2
 #        MISTER_HOST=<ip> scripts/deploy.sh debug              unstripped files for MISTER_DEBUG=1 (run debug-symbols.sh first)
 #   GAME_DATA: the extracted game (default work/<game>-extract/app)
 set -euo pipefail
@@ -29,14 +29,26 @@ code() {
 }
 
 data() {
-	local game="${1:?usage: deploy.sh data <game>  (bg2 or bg1)}"
+	local game="${1:?usage: deploy.sh data <game>  (bg2, bg1, pst, iwd or iwd2)}"
 	local src="${GAME_DATA:-$WORK/$game-extract/app}"
+	# innoextract puts the game in app/ for most GOG installers, but directly in the folder for some (Icewind Dale 2, which
+	# also has a small unrelated app/ next to it): use the folder that holds CHITIN.KEY.
+	if [ -z "${GAME_DATA:-}" ] && [ -z "$(find "$src" -maxdepth 1 -iname chitin.key 2>/dev/null)" ] \
+	   && [ -n "$(find "$WORK/$game-extract" -maxdepth 1 -iname chitin.key 2>/dev/null)" ]; then
+		src="$WORK/$game-extract"
+	fi
 	[ -d "$src" ] || { echo "no game files in $src (set GAME_DATA)" >&2; exit 1; }
 	# Only what the engine reads; the installer's programs, manuals and helpers, and any saves, are left out.
 	tar -C "$src" -cf - --ignore-case --exclude='*.exe' --exclude='*.dll' --exclude='*.pdf' --exclude='*.ico' --exclude='*.doc' \
 		--exclude='ddrawfix' --exclude='script compiler' --exclude='mplayer' --exclude='cache' --exclude='*.cmd' \
-		--exclude='*.sdb' --exclude='temp' --exclude='Save' --exclude='MPSave' . \
+		--exclude='*.sdb' --exclude='__support' --exclude='__redist' --exclude='commonappdata' --exclude='./app' --exclude='temp' --exclude='Save' --exclude='MPSave' . \
 		| "${SSH[@]}" "mkdir -p $DEVICE_DIR/games/$game && tar --no-same-owner -C $DEVICE_DIR/games/$game -xf -"
+	# The GOG installer of Planescape: Torment keeps the game's settings and lists (Torment.ini, beast.ini, quests.ini, ...)
+	# in __support/app and lets its own installer copy them next to the game; GemRB reads them from the game folder.
+	if [ -d "$src/__support/app" ]; then
+		(cd "$src/__support/app" && find . -maxdepth 1 -type f -iname '*.ini' -printf '%P\0' | tar --null -T - -cf -) \
+			| "${SSH[@]}" "tar --no-same-owner -C $DEVICE_DIR/games/$game -xf -"
+	fi
 }
 
 debug() {

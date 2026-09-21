@@ -26,7 +26,7 @@ mkdir -p "$STAGE/gemrb" "$STAGE/Scripts"
 cp -a "$WORK/bundle/gemrb/." "$STAGE/gemrb/"
 cp -a "$WORK/bundle/Scripts/"*.sh "$STAGE/Scripts/"
 echo "$VERSION" > "$STAGE/gemrb/VERSION"
-for g in bg2 bg1; do
+for g in bg2 bg1 pst iwd iwd2; do
 	mkdir -p "$STAGE/gemrb/games/$g"
 	cat > "$STAGE/gemrb/games/$g/README.txt" <<TXT
 Put the game files for '$g' here: the folder that contains CHITIN.KEY, dialog.tlk, data/, override/, music/ and sounds/.
@@ -120,17 +120,24 @@ MiSTer-GemRB v$VERSION: installing
        Scripts/  ->  /media/fat/Scripts
    The location matters: the programs look for their libraries in /media/fat/gemrb.
 
-2. Add your own game files, one folder per game, each about 2.6 GB. Copy the folder that contains CHITIN.KEY,
-   dialog.tlk, data/, override/ (or Override/), music/ (or Music/) and sounds/ into:
-       Baldur's Gate II  ->  /media/fat/gemrb/games/bg2     (GOG "Baldur's Gate 2 Complete", the classic game)
-       Baldur's Gate     ->  /media/fat/gemrb/games/bg1     (GOG "Baldur's Gate - The Original Saga", classic)
+2. Add your own game files, one folder per game, each 1.4 to 2.6 GB. Copy the folder that contains CHITIN.KEY,
+   dialog.tlk, data/ (or Data/), override/ (or Override/), music/ and sounds/ into:
+       Baldur's Gate II         ->  /media/fat/gemrb/games/bg2     (GOG "Baldur's Gate 2 Complete", the classic game)
+       Baldur's Gate            ->  /media/fat/gemrb/games/bg1     (GOG "Baldur's Gate - The Original Saga", classic)
+       Planescape: Torment      ->  /media/fat/gemrb/games/pst     (GOG "Planescape: Torment", version 1.01)
+       Icewind Dale (+ HoW, ToTL) ->  /media/fat/gemrb/games/iwd   (GOG "Icewind Dale Complete", classic)
+       Icewind Dale II          ->  /media/fat/gemrb/games/iwd2    (GOG "Icewind Dale 2", 2.01 fixes)
    For the GOG releases, unpack the installer on a PC with innoextract, https://constexpr.org/innoextract/ , and copy
-   the contents of its "app" folder; the .exe and .dll files and the manuals are not needed. Only the classic
-   editions are supported; the Enhanced Editions are not.
+   the contents of its "app" folder (for Icewind Dale II the files come out directly in the output folder; leave out
+   __redist, __support and commonappdata); the .exe and .dll files and the manuals are not needed. Keep sub-folders
+   such as Icewind Dale's CD2 and CD3. Planescape and Icewind Dale II also need the .ini files from the installer's
+   __support/app folder copied into the game folder (Torment.ini, beast.ini, quests.ini, autonote.ini, Keymap.ini,
+   layout.ini; or icewind2.ini, Party.ini, Keymap.ini). Only the classic editions are supported; the Enhanced
+   Editions are not.
 
-3. On the MiSTer press F12, choose Scripts, and run "gemrb-bg2" or "gemrb-bg1".
-   The launcher asks which resolution to use: type 1 for 640x480 or 2 for 800x600, then press Enter (Baldur's Gate was
-   made for 640x480; Baldur's Gate II supports both). The screen then blinks as the HDMI output switches to that
+3. On the MiSTer press F12, choose Scripts, and run "gemrb-bg2", "gemrb-bg1", "gemrb-pst", "gemrb-iwd" or "gemrb-iwd2".
+   The launcher asks which resolution to use: type 1 for 640x480 or 2 for 800x600, then press Enter. (Icewind Dale II
+   has no 640x480 layout and always uses 800x600.) The screen then blinks as the HDMI output switches to that
    resolution (your display scales it to fill the screen). Quit from the game's own menu; the display is switched back
    to 1080p60. To skip the question, set MISTER_RESOLUTION=640x480 (or 800x600) in /media/fat/gemrb/env.sh.
 
