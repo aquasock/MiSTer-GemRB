@@ -6,10 +6,7 @@ Icewind Dale and Planescape: Torment, running on the ARM (HPS) side of a
 the stock MiSTer system: nothing is installed outside `/media/fat`, and the FPGA only shows the picture and plays the
 sound. This project supplies the missing pieces: a cross-build for the MiSTer's old userland (including an embedded
 Python), the MiSTer's SDL2 video and audio drivers, fixes and speed-ups for software rendering on this CPU, and a
-launcher that fills the screen. It is software, not an FPGA core, and sits beside
-[MiSTer-VCMI](https://github.com/aquasock/MiSTer-VCMI), [MiSTer-DCSS](https://github.com/aquasock/MiSTer-DCSS),
-[MiSTer-Raster](https://github.com/aquasock/MiSTer-Raster) and
-[MiSTer-Phosphor](https://github.com/aquasock/MiSTer-Phosphor).
+launcher that fills the screen.
 
 You supply your own copy of the game data. This project does not include it. Baldur's Gate II (the GOG "Complete"
 release, Shadows of Amn and Throne of Bhaal) is what was tested.
@@ -181,7 +178,7 @@ that `SOURCES.txt` records the commit.
 
 ## License
 
-Original project code is licensed GPL-2.0-or-later (see `LICENSE.txt`), the same baseline as GemRB, MiSTer-VCMI,
-MiSTer-DCSS, MiSTer-Raster and MiSTer-Phosphor. The complete bundle is distributed under the same terms. GemRB, Python,
+Original project code is licensed GPL-2.0-or-later (see `LICENSE.txt`), the same baseline as GemRB, MiSTer-VCMI
+and MiSTer-DCSS. The complete bundle is distributed under the same terms. GemRB, Python,
 SDL, FreeType, glibc and the other libraries keep their own licenses; see [ATTRIBUTIONS.md](ATTRIBUTIONS.md) for the
 full inventory and the redistribution checklist.
