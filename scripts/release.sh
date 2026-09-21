@@ -5,7 +5,7 @@
 #   work/dist/SHA256SUMS
 #   work/dist/RELEASE_NOTES-v<version>.md   (only if docs/release-notes/<version>.md exists)
 #
-# The archive holds gemrb/ (engine, libraries, Python, launcher, license texts, source list) and Scripts/gemrb.sh. It
+# The archive holds gemrb/ (engine, libraries, Python, launcher, license texts, source list) and Scripts/gemrb-<game>.sh. It
 # contains no game data. Run build-deps.sh and build-gemrb.sh first; bundle.sh is run here to get a fresh bundle.
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/env.sh"
@@ -21,17 +21,18 @@ G="$SRC/gemrb"
 rm -rf "$DIST/stage" "$DIST/$NAME.zip"
 mkdir -p "$STAGE/gemrb" "$STAGE/Scripts"
 
-# 2. The game: everything in the bundle. The config ships as a default that the launcher copies on first run, so an
-#    update never overwrites the user's edits.
+# 2. The game: everything in the bundle. The configs ship as GemRB-<game>.cfg.default files that the launcher copies on
+#    the first run, so an update never overwrites the user's edits.
 cp -a "$WORK/bundle/gemrb/." "$STAGE/gemrb/"
-mv "$STAGE/gemrb/GemRB.cfg" "$STAGE/gemrb/GemRB.cfg.default"
-cp -a "$WORK/bundle/Scripts/gemrb.sh" "$STAGE/Scripts/"
+cp -a "$WORK/bundle/Scripts/"*.sh "$STAGE/Scripts/"
 echo "$VERSION" > "$STAGE/gemrb/VERSION"
-mkdir -p "$STAGE/gemrb/game"
-cat > "$STAGE/gemrb/game/README.txt" <<'TXT'
-Put your Baldur's Gate II game files here: the folder that contains CHITIN.KEY, dialog.tlk, data/, override/, music/,
-sounds/ and scripts/. See ../INSTALL.txt.
+for g in bg2 bg1; do
+	mkdir -p "$STAGE/gemrb/games/$g"
+	cat > "$STAGE/gemrb/games/$g/README.txt" <<TXT
+Put the game files for '$g' here: the folder that contains CHITIN.KEY, dialog.tlk, data/, override/, music/ and sounds/.
+See ../../INSTALL.txt.
 TXT
+done
 
 # 3. License texts of everything that ships, plus an index.
 L="$STAGE/gemrb/LICENSES"; mkdir -p "$L"
@@ -119,24 +120,34 @@ MiSTer-GemRB v$VERSION: installing
        Scripts/  ->  /media/fat/Scripts
    The location matters: the programs look for their libraries in /media/fat/gemrb.
 
-2. Add your own Baldur's Gate II game files into /media/fat/gemrb/game: the folder that contains CHITIN.KEY,
-   dialog.tlk, data/, override/, music/, sounds/ and scripts/ (about 2.6 GB). For the GOG release, unpack the
-   installer with innoextract, https://constexpr.org/innoextract/ , and copy the contents of its "app" folder; the
-   .exe and .dll files and the manuals are not needed. Only the GOG "Complete" release has been tested.
+2. Add your own game files, one folder per game, each about 2.6 GB. Copy the folder that contains CHITIN.KEY,
+   dialog.tlk, data/, override/ (or Override/), music/ (or Music/) and sounds/ into:
+       Baldur's Gate II  ->  /media/fat/gemrb/games/bg2     (GOG "Baldur's Gate 2 Complete", the classic game)
+       Baldur's Gate     ->  /media/fat/gemrb/games/bg1     (GOG "Baldur's Gate - The Original Saga", classic)
+   For the GOG releases, unpack the installer on a PC with innoextract, https://constexpr.org/innoextract/ , and copy
+   the contents of its "app" folder; the .exe and .dll files and the manuals are not needed. Only the classic
+   editions are supported; the Enhanced Editions are not.
 
-3. On the MiSTer press F12, choose Scripts, and run "gemrb".
-   The screen blinks as the HDMI output switches to 800x600 (your display scales it to fill the screen).
-   Quit from the game's own menu; the display is switched back to 1080p60.
+3. On the MiSTer press F12, choose Scripts, and run "gemrb-bg2" or "gemrb-bg1".
+   The launcher asks which resolution to use: type 1 for 640x480 or 2 for 800x600, then press Enter (Baldur's Gate was
+   made for 640x480; Baldur's Gate II supports both). The screen then blinks as the HDMI output switches to that
+   resolution (your display scales it to fill the screen). Quit from the game's own menu; the display is switched back
+   to 1080p60. To skip the question, set MISTER_RESOLUTION=640x480 (or 800x600) in /media/fat/gemrb/env.sh.
 
-The first run creates a 384 MB swap file (swapfile) on the SD card in the background, about 40 seconds. The MiSTer has
-little RAM, and a big fight can use nearly all of it: the swap file is only used as a last resort, so that the game is
-not killed. Set MISTER_SWAP_MB=0 in /media/fat/gemrb/env.sh to turn it off.
+The launcher needs a USB drive for swap memory: the MiSTer has little RAM, and the game needs more than it has (a big
+fight, or loading a new area), so a swap file is used to keep the game from being killed. Plug the drive in before you
+start a game: it must already be formatted as ext4 (do that once on a Linux PC; FAT32 is far too slow) and have at least 500 MB free, and only one file,
+gemrb-swapfile (384 MB), is added to it; nothing on the drive is erased. If no drive is found, the launcher says so and
+waits until you plug one in (Enter checks again, q quits). Do not unplug it while playing. The file is created in the
+background the first time (minutes on a slow drive) and kept for next time. Set MISTER_USB=/media/usb0 in
+/media/fat/gemrb/env.sh to pick a drive when several are plugged in. The SD card is never used for swap.
 
 Needs: a MiSTer with a DE10-Nano, a USB mouse and keyboard, and an HDMI display that accepts 800x600 at 60 Hz.
-GemRB's settings are in /media/fat/gemrb/GemRB.cfg (created from GemRB.cfg.default on the first run and never
-overwritten); saves are in /media/fat/gemrb/save.
+GemRB's settings for each game are in /media/fat/gemrb/GemRB-<game>.cfg (created from GemRB-<game>.cfg.default on the
+first run and never overwritten); saves are in /media/fat/gemrb/saves/<game>.
+If you installed version 0.1.0, the first run moves its game folder, saves and settings into this layout for you.
 
-To remove: delete /media/fat/gemrb and /media/fat/Scripts/gemrb.sh.
+To remove: delete /media/fat/gemrb and /media/fat/Scripts/gemrb-*.sh.
 More: README.md, and the license texts in LICENSES/ (see ATTRIBUTIONS.md).
 TXT
 

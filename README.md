@@ -27,8 +27,8 @@ release, Shadows of Amn and Throne of Bhaal) is what was tested.
   music conversion bug that played every other chunk as noise when the sound device does not run at the music's
   sample rate, and a fallback for SDL's software renderer, which lacks the custom blend modes GemRB's wall-occlusion
   stencil needs (without it characters were drawn as solid purple rectangles).
-- **A launcher for the OSD Scripts menu** — switches the HDMI output to 800x600 so your display scales the picture to
-  fill the screen, sets up an emergency swap file (see below), runs the game, and restores your mode afterwards.
+- **A launcher for the OSD Scripts menu, one per game** — switches the HDMI output to the game's resolution so your display scales the picture to
+  fill the screen, checks for a USB swap drive (see below), runs the game, and restores your mode afterwards.
 - **The game's own videos** — GemRB includes its own Bink and MVE decoders, so no FFmpeg is needed.
 
 ## Performance
@@ -51,7 +51,9 @@ What made the difference, in order: drawing the fog of war with sprites instead 
 - A MiSTer with a DE10-Nano (Cyclone V SoC), running the Menu core, with a MiSTer Linux image that has the `MiSTer_fb`
   and `MrAudio` devices. Tested on the Buildroot image with Linux 6.18.38.
 - A USB mouse and keyboard, and an HDMI display that accepts 800x600 at 60 Hz.
-- Baldur's Gate II data files, about 2.6 GB, plus about 400 MB for the swap file.
+- Baldur's Gate II data files, about 2.6 GB.
+- **A USB drive for swap memory**, plugged in before you start a game, formatted as **ext4** with at least
+  500 MB free. See "The swap file" below.
 - To build: a Linux PC (Ubuntu 26.04 was used), about 2 GB of free disk space, a network connection for fetching
   sources, and a checkout of [MiSTer-VCMI](https://github.com/aquasock/MiSTer-VCMI) next to this repository: the SDL2
   driver sources are shared, not copied.
@@ -62,13 +64,19 @@ What made the difference, in order: drawing the fog of war with sprites instead 
 
 1. Download `MiSTer-GemRB-v<version>.zip` from the [Releases](https://github.com/aquasock/MiSTer-GemRB/releases) page
    and unzip it onto the root of the MiSTer's SD card, merging with what is there. This creates `/media/fat/gemrb`
-   and `/media/fat/Scripts/gemrb.sh`. The location matters: the programs find their libraries under `/media/fat/gemrb`.
-2. Copy your game files into `/media/fat/gemrb/game`: the folder that contains `CHITIN.KEY`, `dialog.tlk`, `data/`,
-   `override/`, `music/`, `sounds/` and `scripts/`. For the GOG release, unpack the installer with
-   [innoextract](https://constexpr.org/innoextract/) and copy the contents of its `app` folder. The installer's
-   programs (`.exe`, `.dll`), manuals and helpers are not needed.
-3. On the MiSTer, open the OSD (F12), choose **Scripts**, and run **gemrb**. The screen blinks as the output switches
-   to 800x600. Quit from the game's own menu; the launcher switches your display back.
+   and one launcher per game in `/media/fat/Scripts` (`gemrb-bg2.sh`, `gemrb-bg1.sh`). The location matters: the programs
+   find their libraries under `/media/fat/gemrb`.
+2. Copy your game files into `/media/fat/gemrb/games/<game>`, one folder per game: the folder that contains `CHITIN.KEY`,
+   `dialog.tlk`, `data/`, `override/`, `music/` and `sounds/`. `bg2` is Baldur's Gate II and `bg1` is Baldur's Gate. For
+   the GOG releases, unpack the installer with [innoextract](https://constexpr.org/innoextract/) and copy the contents of
+   its `app` folder. The installer's programs (`.exe`, `.dll`), manuals and helpers are not needed. Use the classic
+   editions (on GOG, redeemable free with the Enhanced Editions), not the Enhanced Editions themselves.
+3. On the MiSTer, open the OSD (F12), choose **Scripts**, and run **gemrb-bg2** or **gemrb-bg1**. The launcher first
+   asks which resolution to use, 640x480 or 800x600: type 1 or 2 and press Enter. Baldur's Gate was made for 640x480 and
+   Baldur's Gate II supports both, so try each and keep the one your display and the game prefer. The screen then blinks as
+   the output switches to that resolution. Quit from the game's own menu; the launcher switches your display back.
+
+If you installed version 0.1.0, the first run moves its game folder, saves and settings into this layout for you.
 
 The zip also holds `INSTALL.txt`, the license texts in `LICENSES/`, and `SOURCES.txt` listing the exact source versions
 and checksums.
@@ -81,14 +89,14 @@ and checksums.
 
    ```sh
    MISTER_HOST=<your MiSTer's IP> scripts/deploy.sh code
-   BG2_DATA=<extracted game folder> MISTER_HOST=<your MiSTer's IP> scripts/deploy.sh data
+   GAME_DATA=<extracted game folder> MISTER_HOST=<your MiSTer's IP> scripts/deploy.sh data bg2
    ```
 
 3. Launch it from the OSD as above.
 
 The SD card is mounted synchronously, so copying the game data takes a long time: about half an hour for 2.6 GB.
 
-To remove it, delete `/media/fat/gemrb` and `/media/fat/Scripts/gemrb.sh`.
+To remove it, delete `/media/fat/gemrb` and `/media/fat/Scripts/gemrb-*.sh`.
 
 ## Configuration
 
@@ -96,33 +104,60 @@ Local settings go in `/media/fat/gemrb/env.sh`, which the launcher reads if it e
 
 | Setting | Meaning |
 | --- | --- |
-| `MISTER_OUTPUT_MODE=800x600` | The default: switch the HDMI output to 800x600 while playing |
-| `MISTER_OUTPUT_MODE=off` | Do not change the HDMI mode |
+| `MISTER_RESOLUTION=640x480` (or `800x600`) | Skip the resolution question and always use this. Without it the launcher asks every time |
+| `MISTER_OUTPUT_MODE=off` | Do not change the HDMI mode. Otherwise the launcher switches to the resolution you chose |
 | `MISTER_RESTORE_MODE="<modeline>"` | Mode to switch back to afterwards. Default is 1080p60 |
-| `MISTER_SWAP_MB=384` | Size of the emergency swap file in MB; `0` turns it off |
+| `MISTER_USB=/media/usb0` | Which USB drive holds the swap file when several are plugged in (skips the question) |
+| `MISTER_SWAP_MB=384` | Size of the swap file in MB |
+| `MISTER_DEBUG=1` | Developer: run the game under gdb and write `crash.log` (call stacks of all threads, plus a raw stack dump) if it crashes. Needs the unstripped files from `scripts/debug-symbols.sh` and `scripts/deploy.sh debug`, which are not in the release zip |
+| `MISTER_MALLOC_CHECK=1` | Developer, with `MISTER_DEBUG`: also use glibc's heap-checking allocator (slower) |
+| `MISTER_SWAP=none` | Developer: run without swap (the game can be killed when memory runs out) |
 
-GemRB's own settings are in `/media/fat/gemrb/GemRB.cfg`, which the launcher creates from `GemRB.cfg.default` on the
-first run and never overwrites, so updating keeps your edits. The defaults are 800x600, the SDL audio driver, a 30 fps cap, intro videos skipped and sprite fog of war. The
-options are described in GemRB's documentation. To try another game, change `GameType` and `GamePath`; only Baldur's
-Gate II has been tested.
+GemRB's own settings for each game are in `/media/fat/gemrb/GemRB-<game>.cfg`, which the launcher creates from
+`GemRB-<game>.cfg.default` on the first run and never overwrites, so updating keeps your edits. The defaults are the SDL
+audio driver, a 30 fps cap, intro videos skipped and sprite fog of war. The launcher writes the resolution you choose
+into `Width` and `Height` in that file each time it starts. GemRB's documentation lists 640x480 as the only size the
+original Baldur's Gate supports and 640x480 and 800x600 as supported by Baldur's Gate II. Each game keeps its own files in `games/<game>`, saves in
+`saves/<game>` and cache in `cache/<game>`. The options are described in GemRB's documentation.
 
 The drivers read the `SDL_MISTER_*` environment variables described in the
 [MiSTer-VCMI README](https://github.com/aquasock/MiSTer-VCMI#configuration); in `env.sh` they need `export`. The launcher
 sets `SDL_MISTER_FORMAT=xrgb` (an alpha-less screen, which lets SDL use its fast blitter) and
 `SDL_RENDER_DRIVER=software`.
 
-### The emergency swap file
+### The swap file
 
-The MiSTer has about 490 MB of RAM and no swap. A big fight (all the creature animations) plus the rest of the game can
-need nearly all of it, and when memory ran out the kernel killed the game. So the launcher creates a 384 MB swap file
-on the SD card (in the background the first time, which takes about 40 seconds), turns it on while the game runs, and
-turns it off when it exits. The kernel is told to use it only as a last resort, so normal play does not write to the
-card. In testing, allocating 160 MB beyond free memory put 131 MB into swap with no kills.
+The MiSTer has about 490 MB of RAM and no swap, and the game needs more than that: the animations of a big fight, and
+while an area loads the old and the new area are in memory at once. When memory ran out the kernel killed the game. So
+the launcher adds a swap file, and it **requires a USB drive** for it. Plug one in before starting a game; if the launcher
+does not find one it says so and waits for you to plug one in (Enter checks again, `q` quits).
+
+- One file, `gemrb-swapfile` (384 MB), is added to the drive. The drive must already be formatted as ext4 (do that
+  once on a Linux PC, for example with `mkfs.ext4`; FAT32 is far too slow, about 0.1 MB/s to create the file) and have at
+  least 500 MB free. The launcher never erases or formats anything. The launcher only looks at drives mounted
+  under `/media/usbN` and never touches anything else. The file is kept for next time; delete it by hand if you no
+  longer want it.
+- The file is created in the background the first time (seconds on a fast drive, minutes on a slow one) and swap is only
+  available once it exists. Do not unplug the drive while playing.
+- The swap is never put on the SD card: the SD card is mounted synchronously, so swapping there is very slow (an area
+  load could stall the game for a minute), and constant writes wear it.
+- The kernel is told to use the swap only as a last resort, so normal play barely writes to it, and it is switched off
+  when the game exits. The speed of the drive matters, most of all its random 4 KB write speed: a card reader with a good
+  microSD card or a USB SSD is much better than a cheap flash stick.
 
 ## Current limitations
 
-- **Only Baldur's Gate II has been tested.** Other games GemRB supports, the Enhanced Editions, mods and multiplayer
-  have not.
+- **Baldur's Gate II is the tested game.** The Baldur's Gate launcher is new and has only been checked against the
+  classic installer's files, not yet played on hardware. Other games GemRB supports, the Enhanced Editions, mods and
+  multiplayer have not been tested.
+- **Known crash: one Baldur's Gate II: Throne of Bhaal fight can crash the game.** In a scripted encounter where an
+  enemy starts a cutscene and then summons Kobold Commandos (ranged attackers), the game sometimes aborts a few
+  seconds into the fight with a glibc heap error (`corrupted double-linked list` or `unaligned tcache chunk`), right
+  after one of the kobolds' shots misses. Other summoned creatures (dogs, in the same encounter) do not trigger it. It
+  is not caused by audio, by this port's SDL speedups, by the swap file or by the allocator settings (each was switched
+  off in testing and it still happened), so it is most likely a bug in GemRB 0.9.5 itself, but the cause is not found
+  yet. Save before scripted fights; quit from the game menu and start again if the screen freezes. Tested at 640x480
+  only. `MISTER_DEBUG=1` (see the settings table) writes `crash.log` with the call stacks if you want to report it.
 - **The frame rate is around 20 fps in busy scenes**, and videos stutter. Both are limits of the CPU.
 - **Characters are drawn in front of walls and trees.** GemRB hides characters behind scenery with a stencil that needs
   blend modes SDL's software renderer does not have, so it is skipped. Some glow effects use plain additive blending.
@@ -150,7 +185,8 @@ Then, from the repository root, with MiSTer-VCMI checked out beside it (or `SDL_
 scripts/build-deps.sh    # zlib, libpng, FreeType, Ogg/Vorbis, SDL2 with the MiSTer drivers, SDL2_mixer, Python
 scripts/build-gemrb.sh   # fetches GemRB 0.9.5, applies patches/, builds the engine and plugins
 scripts/bundle.sh        # assembles work/bundle: binaries, libraries, glibc, Python, launcher
-MISTER_HOST=<your MiSTer's IP> scripts/deploy.sh all
+MISTER_HOST=<your MiSTer's IP> scripts/deploy.sh code
+GAME_DATA=<extracted game folder> MISTER_HOST=<your MiSTer's IP> scripts/deploy.sh data bg2
 ```
 
 Everything is created under `work/`, which is not tracked, and the pinned versions are in `scripts/env.sh`. Each
@@ -164,7 +200,7 @@ that `SOURCES.txt` records the commit.
 ## Source layout
 
 - `scripts/` — `env.sh` (versions and paths), `toolchain.cmake`, `enable-asm.cmake`, `build-deps.sh`, `build-gemrb.sh`,
-  `bundle.sh` (also generates the launcher and the default `GemRB.cfg`), `deploy.sh` and `release.sh`.
+  `bundle.sh` (also generates the launcher and the default `GemRB-<game>.cfg` files), `deploy.sh` and `release.sh`.
 - `patches/0001-*`, `patches/0002-*` — the changes to GemRB, applied by `build-gemrb.sh`.
 - `patches/sdl2/` — the changes to SDL, applied by `build-deps.sh`.
 - `work/` — created by the scripts: downloads, sources, build trees, the install prefix and the bundle. Not tracked.
