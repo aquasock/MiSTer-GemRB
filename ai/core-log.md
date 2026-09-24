@@ -33,6 +33,7 @@ Run `/media/fat/gemrb-noodles-test/run.sh` while the timing-qualified Noodles pr
 
 ---
 
+
 ## 3 COMMIT Unreleased e2fb908 2026-09-24T00:52:47-07:00
 
 #### Coming From:
@@ -597,3 +598,35 @@ None.
 - [x] Passed
 
 ---
+
+## 20 COMMIT Unreleased ??? 2026-09-24T13:58:32-07:00
+
+#### Coming From:
+
+Unreleased e7245ec
+
+#### Purpose:
+
+Use protocol-1.6 fill descriptors to collapse consecutive SDL opaque fills while preserving exact render ordering and protocol-1.5 fallback behavior.
+
+#### Outcome:
+
+The renderer will pin MiSTer-Noodles source `d1702b4`, detect `NOODLES_CAP_FILL_BATCH`, buffer up to 64 consecutive opaque rectangles for one target, and flush them before draws, blends, synchronization, target changes and presentation. Existing scalar fills will remain the fallback on older cores, and statistics will distinguish submitted rectangles from fill batches and table-pressure stalls.
+
+#### Next Steps:
+
+Implement and test mixed fill, sprite and blend ordering, clipping, 64-entry boundaries, retry behavior and old-core fallback; rebuild the SDL diagnostic, GemRB and bundle; then validate exact pixels on the protocol-1.6 hardware candidate and repeat the same AR4000 combat workload against the 11.5-11.9ms fill baseline.
+
+#### Files Modified:
+
+- scripts/env.sh
+- sdl-renderer/noodles/SDL_render_noodles.c
+- tools/noodles-render-test.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
+
