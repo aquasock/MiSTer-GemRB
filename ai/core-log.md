@@ -440,7 +440,7 @@ Replace the self-loading wrapper with the approved stock-Main MGL workflow: a si
 
 ---
 
-## 15 COMMIT Unreleased ??? 2026-09-24T11:18:22-07:00
+## 15 COMMIT Unreleased 27c55d1 2026-09-24T11:18:22-07:00
 
 #### Coming From:
 
@@ -452,11 +452,11 @@ Launch GemRB through a stock-Main Noodles MGL using one silent watcher and super
 
 #### Outcome:
 
-The approved proof will add a deterministic ARM launcher that detaches from the initial OSD script, waits up to 30 seconds for Main to restart with a Noodles MGL, parses an engine-neutral launch record, verifies the selected RBF, registered engine, data directory and required files, then creates a temporary virtual keyboard and sends Main's supported Control-Alt-F9 framebuffer toggle before starting the engine adapter. The same process will supervise the foreground adapter, record bounded diagnostics and restore Main when the game exits or launch validation fails. The first adapter and MGL will cover Baldur's Gate II through GemRB; no RBF or custom Main change is in this proof.
+Sources `aeccf9b`, `b68a754`, `540441e` and `27c55d1` add a deterministic static ARM coordinator, one silent OSD script and a Baldur's Gate II MGL without changing Main or the RBF. The coordinator detaches from the initial script, identifies the restarted Main and MGL through `/proc`, accepts only the qualified protocol-1.5 seed-13 RBF and registered GemRB metadata, validates the exact game-data directory and `CHITIN.KEY`, then uses a temporary virtual keyboard to open Main's OSD context and invoke its supported framebuffer handoff. It supervises GemRB, records bounded logs and returns Main to the core with F12 when the adapter exits or validation fails. The launcher also deduplicates multiple MiSTer mount aliases for the same USB partition so a silent launch can select the existing swap file. Strict native, analyzer and static ARM builds passed; the deployed launcher SHA256 is `2150da81b2b93c3186c695a527fe0939144a59558fd33abe87b1fe819fa085e1`, the generated script SHA256 is `8e7e6094491b7a6d9e755b4a949c3af8a7e706504457324441c53d78495a584e` and the MGL SHA256 is `8354fe8dfa8797256d2f7d0f33427fc3320fe3de9db420d9b8cfdf3368a03db6`. On hardware the one-second no-selection path exited cleanly, a deliberately missing data path was rejected after releasing all four physical input devices and Main reacquired them after the ten-second error interval, and the valid MGL reached the BG2 start menu with the Noodles renderer, music playback and the existing 384 MiB USB swap active while the coordinator remained as supervisor.
 
 #### Next Steps:
 
-Build and deploy the bundle, verify a no-selection timeout and a missing-data rejection, then launch the valid Baldur's Gate II MGL and test mouse, keyboard, HDMI audio, normal exit and repeat launch. Recheck OSD open-close behavior; if stock Main exposes no observable close transition, scope the existing Noodles `OSD_STATUS` signal as the smallest two-build RBF follow-up before spell-heavy profiling.
+Verify mouse and keyboard control plus HDMI music in the live MGL-launched game, then exit through GemRB and confirm automatic Main restoration and a second clean launch. Recheck OSD open-close behavior during gameplay; if stock Main exposes no usable close transition, scope the existing Noodles `OSD_STATUS` signal as the smallest two-build RBF follow-up before returning to spell-heavy profiling.
 
 #### Files Modified:
 
@@ -468,7 +468,7 @@ Build and deploy the bundle, verify a no-selection timeout and a missing-data re
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
