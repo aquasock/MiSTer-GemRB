@@ -599,7 +599,7 @@ None.
 
 ---
 
-## 20 COMMIT Unreleased 4be9ddd 2026-09-24T13:58:32-07:00
+## 20 COMMIT Unreleased 4a41cb0 2026-09-24T14:12:59-07:00
 
 #### Coming From:
 
@@ -611,22 +611,24 @@ Use protocol-1.6 fill descriptors to collapse consecutive SDL opaque fills while
 
 #### Outcome:
 
-Source `4be9ddd` pins MiSTer-Noodles `d1702b4` and its GitHub archive SHA256 `672fb6e71fd069bc7bd876527ad3e491fa3c937eb16297c5761976bfce5a7004`, detects `NOODLES_CAP_FILL_BATCH`, buffers up to 64 consecutive opaque rectangles for one target, and flushes them at draw, blend, synchronization, target and presentation boundaries. Existing scalar fills remain the fallback on older cores, and statistics distinguish submitted rectangles from fill batches and table-pressure stalls. Fresh SDK, SDL, diagnostic, GemRB and bundle builds passed; the diagnostic SHA256 is `21595f3d89ef0542407d9059c0ecf06df4d1cb1ba69f54b66089ff430bf10a0e` and its SDL SHA256 is `0649af787553741604acf5220ed1d3d0c55a40b053d1eaa8ae1cd25a08e57e40`. On the accepted protocol-1.5 RBF, the extended 64-fill-boundary and mixed-order diagnostic passed through the scalar fallback with exact-pixel hash `787b0fbd` and its audio queue drained. Protocol-1.6 hardware validation remains pending.
+Source `4be9ddd` pins MiSTer-Noodles `d1702b4` and its GitHub archive SHA256 `672fb6e71fd069bc7bd876527ad3e491fa3c937eb16297c5761976bfce5a7004`, detects `NOODLES_CAP_FILL_BATCH`, buffers up to 64 consecutive opaque rectangles for one target, and flushes them at every ordering boundary; source `4a41cb0` selects the accepted seed-13 image in the launcher and MGL. Existing scalar fills remain the fallback on older cores, and statistics distinguish rectangles, fill batches and table-pressure stalls. Fresh SDK, SDL, diagnostic, GemRB, launcher and bundle builds passed. Protocol 1.5 passed the extended diagnostic through scalar fallback, then protocol 1.6 RBF SHA256 `6b19b4a21e3f5fcfecd46558c9ba49c12f1056d87a5ed44bdfe7468f864d82b9` reported the expected identity and twice passed exact pixels with hash `787b0fbd`, including 70 fills across the descriptor boundary and mixed fill/draw ordering, while its audio queue drained. The deployed launcher SHA256 is `4d140dedc3313ed34e1e96760f8c71278879a459330e686d112768b2b819e794`, the MGL SHA256 is `d785835734498cb6da817ed582c423063b6eb9d873ecd295f6fede7d8b8a4ddd`, and SDL SHA256 is `0c29ebf44e81ff6a91408f5107e48a9cbfa34911c84ae0ea4e1ec84f52ab5526`. In AR4000, fill submission fell from 11.5-11.9ms to 1.25-1.76ms per frame and total queue time fell from 14.2-14.5ms to 3.7-5.0ms; stable combat reached 19.9fps, but spell intervals remained 10.4-13.4fps and the user reported similar stutter because non-renderer time rose to 28.9-62.6ms and presentation waits took 28.7-42.0ms. RSS was 332MiB with 125MiB system memory available and no swap, and no renderer or allocator fault occurred.
 
 #### Next Steps:
 
-Perform exactly two Quartus fits of MiSTer-Noodles `d1702b4` using seeds 13 and 7, deploy the stronger passing image, and validate protocol identity, exact pixels, fill-batch statistics and HDMI audio. Then update the MGL launcher to the accepted RBF and repeat the same AR4000 combat workload against the 11.5-11.9ms fill baseline.
+Keep protocol 1.6 as the accepted Noodles baseline and investigate the spell-specific CPU and presentation path before adding another FPGA operation. Separate ordinary animation work from texture update/readback bursts, and compare statistics-disabled pacing so measurement serialization does not hide overlap; choose another generic accelerator feature only if that evidence identifies reusable render work.
 
 #### Files Modified:
 
 - README.md
+- scripts/bundle.sh
 - scripts/env.sh
 - sdl-renderer/noodles/SDL_render_noodles.c
+- tools/noodles-launcher.c
 - tools/noodles-render-test.c
 
 #### Status:
 
 - [x] Built
-- [ ] Passed
+- [x] Passed
 
 ---
