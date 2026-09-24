@@ -485,7 +485,7 @@ Preserve the Noodles core display while handing Main's physical input devices to
 
 #### Outcome:
 
-The hardware test showed that the supported framebuffer hotkey released input correctly but placed Main's black Linux framebuffer over the live Noodles output, leaving GemRB music audible with no visible game. The correction will keep the watcher, MGL validation and supervision architecture while replacing the valid-game framebuffer transition with the previously proven kernel `pidfd_getfd` path: duplicate Main's existing event descriptors, remove their exclusive grabs without closing or replacing Main's descriptors, start GemRB on the still-visible Noodles display, and restore those grabs after the adapter exits. The temporary virtual keyboard will remain limited to the visible validation-error path.
+The hardware test showed that the supported framebuffer hotkey released input correctly but placed Main's black Linux framebuffer over the live Noodles output, leaving GemRB music audible with no visible game. The correction will keep the watcher, MGL validation and supervision architecture while replacing the valid-game framebuffer transition with the previously proven kernel `pidfd_getfd` path: duplicate Main's existing event descriptors, remove their exclusive grabs without closing or replacing Main's descriptors, start GemRB on the still-visible Noodles display, and restore those grabs after the adapter exits. The temporary virtual keyboard will remain limited to the visible validation-error path. The BG2 MGL will also move directly under Utility because hardware testing showed that Main did not expose its extra Noodles Games subdirectory.
 
 #### Next Steps:
 
@@ -494,6 +494,9 @@ Build and deploy the corrected coordinator, launch the valid Baldur's Gate II MG
 #### Files Modified:
 
 - README.md
+- scripts/bundle.sh
+- scripts/deploy.sh
+- scripts/release.sh
 - tools/noodles-launcher.c
 
 #### Status:
