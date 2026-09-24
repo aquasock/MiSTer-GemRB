@@ -122,7 +122,7 @@ Add an isolated Noodles GemRB launcher and run a real installed-game smoke test 
 
 ---
 
-## 5 COMMIT Unreleased ??? 2026-09-24T01:30:00-07:00
+## 5 COMMIT Unreleased 3aff3e6 2026-09-24T01:30:00-07:00
 
 #### Coming From:
 
@@ -134,11 +134,13 @@ Add isolated Noodles launchers for the installed GemRB games without changing th
 
 #### Outcome:
 
-Before modifying the bundle, the installed Baldur's Gate II binary was run for 25 seconds with only its SDL library path and renderer selection redirected to the qualified Noodles package. Its log selected `Renderer: noodles`, completed core initialization, loaded the start GUI and title assets, began menu music, and remained alive until the deliberate SIGKILL, with no renderer error, out-of-memory event or kernel fault. The planned bundle change will add a `run-noodles.sh` wrapper and one explicit `gemrb-noodles-*` OSD script per installed game while leaving `run.sh` and the existing `gemrb-*` scripts on their software default. Documentation and deployment cleanup will include the parallel launch path.
+Source `547756c` adds `run-noodles.sh` and explicit `gemrb-noodles-*` OSD launchers for BG1, BG2, Planescape: Torment, Icewind Dale and Icewind Dale II while retaining the existing launchers and their software default. Source `3aff3e6` also sets SDL's framebuffer-acceleration hint for the software path, preventing SDL's window-surface helper from opening a hidden Noodles renderer. The deployed SDL library SHA256 is `49bf1fcab8ca03b2a1f8cd7be8287ae23d4c50e6f89f57065df492079dea5e57`; the deployed wrapper SHA256 values are `ae9cefdcddbc012e8018a9f98de45ad241d78e328a83c9c062a0ad8e86897492` for `run.sh` and `fafefafc71d26d489e92ffeb112c894080655135397f5899ec4577fcbf11be43` for `run-noodles.sh`.
+
+All ten OSD launchers were present after deployment. Baldur's Gate II selected `Renderer: software`, completed core initialization and loaded its start script through the normal launcher; after its deliberate SIGKILL, the Noodles diagnostic opened on the same core boot and passed with hash `b656c299`, proving the software path did not claim the hardware session. The parallel launcher selected `Renderer: noodles`, completed core initialization, loaded the start GUI and title assets, began menu music and remained alive for the 25-second smoke window until deliberate SIGKILL, with no renderer error, out-of-memory event or kernel fault. Reloading the timing-qualified core recovered the intentionally dirty session, and two consecutive diagnostics passed with hash `b656c299` and left the session clean.
 
 #### Next Steps:
 
-Build and deploy the parallel launchers with the qualified SDL library, run Baldur's Gate II through the installed Noodles launcher, and record renderer selection, startup behavior and clean launcher recovery before considering any default change.
+Move GemRB's null-renderer check immediately after `SDL_CreateRenderer` so a busy or stale Noodles session reports a controlled startup error, then add frame-timing measurements and exercise an actual BG2 gameplay area before considering broader game qualification or any default change.
 
 #### Files Modified:
 
@@ -148,7 +150,7 @@ Build and deploy the parallel launchers with the qualified SDL library, run Bald
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
