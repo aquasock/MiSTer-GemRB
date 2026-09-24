@@ -268,7 +268,7 @@ static int NOODLES_EnsureCPU(NOODLES_RenderData *data, NOODLES_TextureData *surf
         surface->cpu_valid = SDL_TRUE;
         return 0;
     }
-    if (!surface->surface) {
+    if (!surface->surface && surface != &data->composition) {
         return SDL_SetError("Noodles evicted surface has no CPU contents");
     }
     rect.x = 0;
