@@ -125,6 +125,8 @@ int main(int argc, char **argv)
     SDL_RendererInfo info;
     SDL_BlendMode stencil;
     SDL_Rect rect;
+    SDL_Point line[2];
+    SDL_Vertex triangle[3];
     uint32_t hash = 2166136261u;
     int failures = 0;
     int x, y;
@@ -223,6 +225,53 @@ int main(int argc, char **argv)
         goto done;
     }
 
+    /* Force GPU -> CPU synchronization with a scaled copy and software draws. */
+    rect = (SDL_Rect){ 0, 32, 32, 32 };
+    if (SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE) < 0 ||
+        SDL_SetTextureColorMod(texture, 255, 255, 255) < 0 ||
+        SDL_SetTextureAlphaMod(texture, 255) < 0 ||
+        SDL_SetTextureScaleMode(texture, SDL_ScaleModeNearest) < 0 ||
+        SDL_RenderCopy(renderer, texture, NULL, &rect) < 0) {
+        fprintf(stderr, "scaled copy setup: %s\n", SDL_GetError());
+        goto done;
+    }
+    rect = (SDL_Rect){ 40, 32, 16, 16 };
+    if (SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND) < 0 ||
+        SDL_SetRenderDrawColor(renderer, 100, 50, 200, 128) < 0 ||
+        SDL_RenderFillRect(renderer, &rect) < 0) {
+        fprintf(stderr, "blended fill setup: %s\n", SDL_GetError());
+        goto done;
+    }
+    line[0] = (SDL_Point){ 64, 36 };
+    line[1] = (SDL_Point){ 79, 51 };
+    if (SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE) < 0 ||
+        SDL_SetRenderDrawColor(renderer, 9, 199, 111, 77) < 0 ||
+        SDL_RenderDrawPoint(renderer, 64, 32) < 0 ||
+        SDL_RenderDrawLines(renderer, line, 2) < 0) {
+        fprintf(stderr, "point and line setup: %s\n", SDL_GetError());
+        goto done;
+    }
+    triangle[0] = (SDL_Vertex){ { 96.0f, 32.0f }, { 33, 144, 222, 255 }, { 0, 0 } };
+    triangle[1] = (SDL_Vertex){ { 120.0f, 32.0f }, { 33, 144, 222, 255 }, { 0, 0 } };
+    triangle[2] = (SDL_Vertex){ { 96.0f, 56.0f }, { 33, 144, 222, 255 }, { 0, 0 } };
+    if (SDL_RenderGeometry(renderer, NULL, triangle, 3, NULL, 0) < 0) {
+        fprintf(stderr, "geometry setup: %s\n", SDL_GetError());
+        goto done;
+    }
+
+    /* Force CPU -> GPU for an accelerated copy, then GPU -> CPU for a point. */
+    rect = (SDL_Rect){ 140, 32, 16, 16 };
+    if (SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE) < 0 ||
+        SDL_SetTextureColorMod(texture, 255, 255, 255) < 0 ||
+        SDL_SetTextureAlphaMod(texture, 255) < 0 ||
+        SDL_RenderCopy(renderer, texture, NULL, &rect) < 0 ||
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE) < 0 ||
+        SDL_SetRenderDrawColor(renderer, 231, 17, 99, 211) < 0 ||
+        SDL_RenderDrawPoint(renderer, 180, 32) < 0) {
+        fprintf(stderr, "mixed synchronization setup: %s\n", SDL_GetError());
+        goto done;
+    }
+
     if (SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_ABGR8888,
                              result, WIDTH * 4) < 0) {
         fprintf(stderr, "readback: %s\n", SDL_GetError());
@@ -256,6 +305,17 @@ int main(int argc, char **argv)
     failures += check_pixel(result, 184, 4, p1, "clip inside left") != 0;
     failures += check_pixel(result, 191, 4, p2, "clip inside right") != 0;
     failures += check_pixel(result, 225, 5, rgba(70, 80, 90, 100), "opaque fill") != 0;
+    failures += check_pixel(result, 4, 52, p3, "scaled copy left") != 0;
+    failures += check_pixel(result, 24, 52, p4, "scaled copy right") != 0;
+    failures += check_pixel(result, 44, 36, rgba(55, 36, 118, 228),
+                            "blended fill") != 0;
+    failures += check_pixel(result, 64, 32, rgba(9, 199, 111, 77), "point") != 0;
+    failures += check_pixel(result, 72, 44, rgba(9, 199, 111, 77), "line") != 0;
+    failures += check_pixel(result, 102, 38, rgba(33, 144, 222, 255),
+                            "geometry") != 0;
+    failures += check_pixel(result, 142, 42, p3, "post-fallback hardware copy") != 0;
+    failures += check_pixel(result, 180, 32, rgba(231, 17, 99, 211),
+                            "post-hardware point") != 0;
 
     for (y = 0; y < HEIGHT; ++y) {
         for (x = 0; x < WIDTH; ++x) {
