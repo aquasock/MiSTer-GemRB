@@ -32,3 +32,32 @@ Run `/media/fat/gemrb-noodles-test/run.sh` while the timing-qualified Noodles pr
 - [ ] Passed
 
 ---
+
+## 2 COMMIT Unreleased 35f1d20 2026-09-24T00:51:40-07:00
+
+#### Coming From:
+
+Unreleased 35f1d20
+
+#### Purpose:
+
+Record hardware acceptance of the first SDL2 Noodles renderer and its isolated diagnostic.
+
+#### Outcome:
+
+The staged diagnostic ran twice consecutively on the standard MiSTer at 10.10.0.22 with the timing-qualified protocol-1.3 Noodles core, reporting `Noodles renderer diagnostic: PASS (renderer=noodles, hash=91df6ac5)` both times. The matching exact readback hash validates clear, opaque fill, clipping, unscaled copy, both mirror axes, colour and alpha modulation, SDL BLEND, ADD, MOD and MUL modes, GemRB's custom stencil blend and managed render targets; the second clean open validates session release and recovery. The user observed the centered colour and palette map on screen, accepting the presentation path visually. The installed GemRB bundle and its software-renderer launchers remained unchanged.
+
+#### Next Steps:
+
+Add synchronized CPU fallbacks for the SDL operations that protocol 1.3 does not accelerate, validate mixed CPU and FPGA command ordering independently, and defer texture eviction to a following boundary so coherence and memory pressure remain separately diagnosable.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
