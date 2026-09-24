@@ -159,6 +159,8 @@ The drivers read the `SDL_MISTER_*` environment variables described in the
 [MiSTer-VCMI README](https://github.com/aquasock/MiSTer-VCMI#configuration); in `env.sh` they need `export`. The launcher
 sets `SDL_MISTER_FORMAT=xrgb` (an alpha-less screen, which lets SDL use its fast blitter). Normal launchers select
 `SDL_RENDER_DRIVER=software`; the parallel Noodles launchers select `SDL_RENDER_DRIVER=noodles`.
+Set `SDL_RENDER_NOODLES_STATS=1` when starting a Noodles launcher to log a five-second summary of observed frame rate,
+SDL command-queue time, FPGA presentation time, and the remaining per-frame time. The timing code is disabled otherwise.
 
 ### The swap file
 

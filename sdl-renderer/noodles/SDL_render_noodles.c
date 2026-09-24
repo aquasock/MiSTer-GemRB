@@ -20,6 +20,7 @@
 #include "SDL_pixels.h"
 #include "SDL_rect.h"
 #include "SDL_stdinc.h"
+#include "SDL_timer.h"
 #include "../software/SDL_blendfillrect.h"
 #include "../software/SDL_blendline.h"
 #include "../software/SDL_blendpoint.h"
@@ -61,6 +62,13 @@ typedef struct NOODLES_RenderData
     size_t resident_bytes;
     size_t resident_budget;
     Uint64 use_clock;
+    SDL_bool stats_enabled;
+    Uint64 stats_start;
+    Uint64 stats_frames;
+    Uint64 stats_queue_ticks;
+    Uint64 stats_queue_max_ticks;
+    Uint64 stats_present_ticks;
+    Uint64 stats_present_max_ticks;
 } NOODLES_RenderData;
 
 typedef struct NOODLES_CopyExData
@@ -899,8 +907,8 @@ static int NOODLES_RunCopy(NOODLES_RenderData *data, NOODLES_TextureData *target
     return 0;
 }
 
-static int NOODLES_RunCommandQueue(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
-                                   void *vertices, size_t vertsize)
+static int NOODLES_RunCommandQueueImpl(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
+                                       void *vertices, size_t vertsize)
 {
     NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
     NOODLES_TextureData *target = data->target;
@@ -1140,6 +1148,24 @@ static int NOODLES_RunCommandQueue(SDL_Renderer *renderer, SDL_RenderCommand *cm
     return 0;
 }
 
+static int NOODLES_RunCommandQueue(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
+                                   void *vertices, size_t vertsize)
+{
+    NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
+    Uint64 start = 0;
+    int result;
+    if (data->stats_enabled) {
+        start = SDL_GetPerformanceCounter();
+    }
+    result = NOODLES_RunCommandQueueImpl(renderer, cmd, vertices, vertsize);
+    if (data->stats_enabled) {
+        const Uint64 elapsed = SDL_GetPerformanceCounter() - start;
+        data->stats_queue_ticks += elapsed;
+        data->stats_queue_max_ticks = SDL_max(data->stats_queue_max_ticks, elapsed);
+    }
+    return result;
+}
+
 static int NOODLES_RenderReadPixels(SDL_Renderer *renderer, const SDL_Rect *rect,
                                     Uint32 format, void *pixels, int pitch)
 {
@@ -1167,6 +1193,7 @@ static int NOODLES_RenderReadPixels(SDL_Renderer *renderer, const SDL_Rect *rect
 static int NOODLES_RenderPresent(SDL_Renderer *renderer)
 {
     NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
+    const Uint64 start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
     noodles_rect_t source;
     source.x = 0;
     source.y = 0;
@@ -1185,6 +1212,40 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
     }
     if (noodles_present_and_wait(data->link) < 0) {
         return NOODLES_SetErrno("present");
+    }
+    if (data->stats_enabled) {
+        const Uint64 now = SDL_GetPerformanceCounter();
+        const Uint64 frequency = SDL_GetPerformanceFrequency();
+        const Uint64 present_ticks = now - start;
+        const Uint64 interval_ticks = now - data->stats_start;
+        data->stats_frames++;
+        data->stats_present_ticks += present_ticks;
+        data->stats_present_max_ticks = SDL_max(data->stats_present_max_ticks,
+                                                present_ticks);
+        if (interval_ticks >= frequency * 5u) {
+            const double milliseconds = 1000.0 / (double)frequency;
+            const double frame_count = (double)data->stats_frames;
+            double other_ticks = (double)interval_ticks -
+                                 (double)data->stats_queue_ticks -
+                                 (double)data->stats_present_ticks;
+            if (other_ticks < 0.0) {
+                other_ticks = 0.0;
+            }
+            SDL_Log("Noodles stats: frames=%llu fps=%.2f queue=%.3f ms avg/%.3f max present=%.3f ms avg/%.3f max other=%.3f ms avg",
+                    (unsigned long long)data->stats_frames,
+                    frame_count * (double)frequency / (double)interval_ticks,
+                    (double)data->stats_queue_ticks * milliseconds / frame_count,
+                    (double)data->stats_queue_max_ticks * milliseconds,
+                    (double)data->stats_present_ticks * milliseconds / frame_count,
+                    (double)data->stats_present_max_ticks * milliseconds,
+                    other_ticks * milliseconds / frame_count);
+            data->stats_start = now;
+            data->stats_frames = 0;
+            data->stats_queue_ticks = 0;
+            data->stats_queue_max_ticks = 0;
+            data->stats_present_ticks = 0;
+            data->stats_present_max_ticks = 0;
+        }
     }
     return 0;
 }
@@ -1241,6 +1302,10 @@ static int NOODLES_CreateRenderer(SDL_Renderer *renderer, SDL_Window *window, Ui
         }
     }
     data->resident_budget = (size_t)budget_mb * 1024u * 1024u;
+    data->stats_enabled = SDL_getenv("SDL_RENDER_NOODLES_STATS") != NULL;
+    if (data->stats_enabled) {
+        data->stats_start = SDL_GetPerformanceCounter();
+    }
     if (noodles_link_open(&data->link) < 0) {
         const int saved_errno = errno;
         NOODLES_DestroyRenderer(renderer);

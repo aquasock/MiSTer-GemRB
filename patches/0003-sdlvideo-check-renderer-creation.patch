@@ -1,0 +1,16 @@
+diff --git a/gemrb/plugins/SDLVideo/SDL20Video.cpp b/gemrb/plugins/SDLVideo/SDL20Video.cpp
+index 9d91b84..55457ef 100644
+--- a/gemrb/plugins/SDLVideo/SDL20Video.cpp
++++ b/gemrb/plugins/SDLVideo/SDL20Video.cpp
+@@ -192,6 +192,11 @@ int SDL20VideoDriver::CreateSDLDisplay(const char* title, bool vsync)
+ 
+ 	renderer = SDL_CreateRenderer(window, -1, rendererFlags);
+ 
++	if (renderer == NULL) {
++		Log(ERROR, "SDL 2 Driver", "couldn't create renderer: {}", SDL_GetError());
++		return GEM_ERROR;
++	}
++
+ 	// Moved this here to fix a weird rendering issue
+ 
+ 	// we set logical size so that platforms where the window can be a different size then requested
