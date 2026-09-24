@@ -347,7 +347,7 @@ The remaining host-visible cost is approximately 20 blended rectangle fallbacks 
 
 ---
 
-## 12 COMMIT Unreleased ??? 2026-09-24T08:29:17-07:00
+## 12 COMMIT Unreleased 7eb7efd 2026-09-24T08:29:17-07:00
 
 #### Coming From:
 
@@ -359,22 +359,23 @@ Move SDL blended rectangle fills onto the new Noodles hardware operation and qua
 
 #### Outcome:
 
-The planned renderer update will use the protocol 1.4 solid-source blended-fill operation for supported SDL blend modes on managed and default targets, preserving command order and retaining the regional CPU path for unsupported cases. The exact-pixel diagnostic will distinguish the accelerated default-target and managed-target results, and its SDL package will add a deterministic 48 kHz stereo tone check. Existing testing has already confirmed that the qualified protocol 1.3 RBF contains the MiSTer ALSA path, `/dev/MrAudio` consumes nonzero GemRB PCM and a controlled tone is audible over HDMI, so this cycle will test audio as an RBF regression rather than add a redundant enable switch.
+Source `7eb7efd` pins the exact MiSTer-Noodles `2dea6a1` source used for the timing-qualified protocol 1.4 RBF, requires the blended-fill capability, and routes every supported SDL rectangle blend mode on managed and default targets through hardware while retaining opaque fills and the bounded unsupported-mode fallback. Separate counters expose opaque and blended hardware fills. The diagnostic adds a managed custom blended fill, preserves exact readback checks on both target kinds, and queues a deterministic one-second 48 kHz stereo S16 tone through SDL's `mister` audio driver. Fresh SDK, SDL, diagnostic, GemRB and bundle builds passed; the diagnostic binary SHA256 is `fe8153e4f4279dba13c7d7e0293a5945b73c02cdf22d9c45fb69e04ae77f49cb`, its SDL SHA256 is `75ed5c5fc0d8a7132bce5131e1cda0cd10c0d5c355d65980df6731453e97878a`, and the deployed bundle SDL SHA256 is `0f207da2ee273c461ece9cf2fb2e8e5dc7afbeece00b783f6c27b13feb25c7ed`. On the seed-13 core the diagnostic passed with renderer hash `64d5728e`, selected the `mister` audio driver and drained its tone; the user also heard the direct RBF tone and GemRB menu music over HDMI. In the same Throne of Bhaal AR4000 save, cutscene intervals ran at 15.5-19.3fps and settled combat rose from 11.58 to 13.93fps while command-queue time was 24.1-26.5ms per frame, roughly half the prior 45.6-47.7ms. Hardware handled about 26-28 blended fills per combat frame with zero blended-fill stalls, CPU fills or readbacks; GemRB consumed 48-50.5% of one Cortex-A9 core during sampled combat. The run reached the game-over video without a renderer fault, and that video held 19.8fps with zero fallback work. Peak RSS was 390MiB, USB swap remained effectively unused, and the intentionally terminated post-game run exited 137 after launcher cleanup. The complete captured log has SHA256 `ed6f80e6a12cf93b6910dd9e3f720d62dd89e774de0f46f0a74139a8c51f04b8`.
 
 #### Next Steps:
 
-After MiSTer-Noodles publishes the tested SDK and timing-qualified protocol 1.4 image, pin that source, replace supported blended-fill fallbacks, rebuild SDL, the diagnostic and GemRB, deploy the new RBF, verify exact pixels and HDMI audio, then repeat the Throne of Bhaal AR4000 save with statistics disabled and enabled to measure the removed synchronization and CPU fallback cost.
+Repeat AR4000 once with statistics disabled to quantify instrumentation overhead, then add a supported Main input handoff so an OSD launch cannot retain or reacquire the physical devices. The next rendering optimization should address the high sprite-batch drain count through core descriptor buffering; blended fills no longer justify host-side work.
 
 #### Files Modified:
 
 - README.md
+- scripts/build-noodles-test.sh
 - scripts/env.sh
 - sdl-renderer/noodles/SDL_render_noodles.c
 - tools/noodles-render-test.c
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
