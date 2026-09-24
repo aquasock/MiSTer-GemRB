@@ -154,3 +154,34 @@ Move GemRB's null-renderer check immediately after `SDL_CreateRenderer` so a bus
 - [x] Passed
 
 ---
+
+## 6 COMMIT Unreleased ??? 2026-09-24T01:35:00-07:00
+
+#### Coming From:
+
+Unreleased 3aff3e6
+
+#### Purpose:
+
+Harden GemRB renderer startup and add opt-in Noodles frame timing for qualification in a real Baldur's Gate II gameplay area.
+
+#### Outcome:
+
+The planned GemRB patch will check the result of `SDL_CreateRenderer` before any renderer API is called so an unavailable or stale Noodles session produces a controlled startup failure. The Noodles SDL backend will gain disabled-by-default periodic statistics covering observed frame rate, command-queue time and presentation time, allowing the remaining frame interval to be attributed to GemRB and other SDL work without changing normal runtime behavior.
+
+#### Next Steps:
+
+Apply the GemRB error-path patch during reproducible builds, add and document the statistics control, run clean cross-builds, verify the diagnostic on hardware, deliberately test a refused Noodles open, and collect measurements from an installed BG2 gameplay area through both Noodles and software launchers.
+
+#### Files Modified:
+
+- README.md
+- patches/0003-sdlvideo-check-renderer-creation.patch
+- sdl-renderer/noodles/SDL_render_noodles.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
