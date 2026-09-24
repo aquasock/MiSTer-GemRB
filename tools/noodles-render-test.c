@@ -180,6 +180,7 @@ int main(int argc, char **argv)
     SDL_AudioDeviceID audio = 0;
     SDL_Texture *texture = NULL;
     SDL_Texture *target = NULL;
+    SDL_Texture *lazy = NULL;
     SDL_Texture *residency[3] = { NULL, NULL, NULL };
     SDL_RendererInfo info;
     SDL_BlendMode stencil;
@@ -419,6 +420,47 @@ int main(int argc, char **argv)
         }
     }
 
+    /* A resident source drops its redundant CPU shadow. Updating and then
+       locking it must recreate current CPU contents without losing untouched
+       pixels, upload the change and permit the shadow to be dropped again. */
+    lazy = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
+                             SDL_TEXTUREACCESS_STREAMING, 16, 16);
+    if (!lazy || SDL_UpdateTexture(lazy, NULL, source, 16 * 4) < 0 ||
+        SDL_SetTextureBlendMode(lazy, SDL_BLENDMODE_NONE) < 0) {
+        fprintf(stderr, "lazy-shadow texture setup: %s\n", SDL_GetError());
+        goto done;
+    }
+    {
+        const uint32_t updated = rgba(17, 93, 201, 255);
+        const uint32_t locked = rgba(211, 71, 19, 255);
+        SDL_Rect source_rect = { 0, 0, 1, 1 };
+        SDL_Rect destination = { 20, 80, 1, 1 };
+        void *locked_pixels;
+        int locked_pitch;
+        if (SDL_RenderCopy(renderer, lazy, &source_rect, &destination) < 0 ||
+            SDL_UpdateTexture(lazy, &source_rect, &updated, 4) < 0) {
+            fprintf(stderr, "lazy-shadow update transition: %s\n", SDL_GetError());
+            goto done;
+        }
+        destination.x = 24;
+        if (SDL_RenderCopy(renderer, lazy, &source_rect, &destination) < 0) {
+            fprintf(stderr, "lazy-shadow updated draw: %s\n", SDL_GetError());
+            goto done;
+        }
+        source_rect.x = 1;
+        if (SDL_LockTexture(lazy, &source_rect, &locked_pixels, &locked_pitch) < 0) {
+            fprintf(stderr, "lazy-shadow lock transition: %s\n", SDL_GetError());
+            goto done;
+        }
+        *(uint32_t *)locked_pixels = locked;
+        SDL_UnlockTexture(lazy);
+        destination.x = 28;
+        if (SDL_RenderCopy(renderer, lazy, &source_rect, &destination) < 0) {
+            fprintf(stderr, "lazy-shadow locked draw: %s\n", SDL_GetError());
+            goto done;
+        }
+    }
+
     if (SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_ABGR8888,
                              result, WIDTH * 4) < 0) {
         fprintf(stderr, "readback: %s\n", SDL_GetError());
@@ -491,6 +533,12 @@ int main(int argc, char **argv)
                             "resident texture two") != 0;
     failures += check_pixel(result, 12, 80, rgba(40, 210, 30, 255),
                             "evicted texture restore") != 0;
+    failures += check_pixel(result, 20, 80, p1,
+                            "lazy-shadow initial draw") != 0;
+    failures += check_pixel(result, 24, 80, rgba(17, 93, 201, 255),
+                            "lazy-shadow update") != 0;
+    failures += check_pixel(result, 28, 80, rgba(211, 71, 19, 255),
+                            "lazy-shadow lock") != 0;
 
     for (y = 0; y < HEIGHT; ++y) {
         for (x = 0; x < WIDTH; ++x) {
@@ -573,6 +621,7 @@ done:
     for (i = 0; i < 3; ++i) {
         SDL_DestroyTexture(residency[i]);
     }
+    SDL_DestroyTexture(lazy);
     SDL_DestroyTexture(target);
     SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);
