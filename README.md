@@ -102,9 +102,9 @@ Notes on the GOG installers, after unpacking them with innoextract:
 
 1. Download `MiSTer-GemRB-v<version>.zip` from the [Releases](https://github.com/aquasock/MiSTer-GemRB/releases) page
    and unzip it onto the root of the MiSTer's SD card, merging with what is there. This creates `/media/fat/gemrb`
-   and two launchers per game in `/media/fat/Scripts`. The normal `gemrb-<game>.sh` launchers use SDL's software
-   renderer. The parallel `gemrb-noodles-<game>.sh` launchers select the MiSTer-Noodles hardware renderer. The location
-   matters: the programs find their libraries under `/media/fat/gemrb`.
+   plus software-renderer launchers in `/media/fat/Scripts`, the silent `noodles-launcher.sh` watcher and Noodles game
+   entries under `/media/fat/_Utility/Noodles Games`. The location matters: the programs find their libraries under
+   `/media/fat/gemrb`.
 2. Copy your game files into `/media/fat/gemrb/games/<game>`, one folder per game (the table under
    [Supported games](#supported-games) says which folder is which). For the GOG releases, unpack the installer with
    [innoextract](https://constexpr.org/innoextract/) and copy the game folder it makes. The installer's programs (`.exe`,
@@ -116,11 +116,12 @@ Notes on the GOG installers, after unpacking them with innoextract:
    blinks as the output switches to that resolution. Quit from the game's own menu; the launcher switches your display
    back.
 
-   Start `gemrb-noodles-<game>.sh` from the OSD Scripts menu. Main's Scripts path releases its mouse and keyboard grabs;
-   the launcher then loads the timing-qualified MiSTer-Noodles protocol 1.5 core itself and starts with a clean hardware
-   session. Direct shell launch is refused because it bypasses Main's input handoff. The renderer can attach to protocol
-   1.4, but only protocol 1.5 provides the multi-table sprite-batch path. The matching `gemrb-<game>.sh` launcher remains
-   available as the software-renderer fallback.
+   For Noodles acceleration, run `noodles-launcher.sh` from the OSD Scripts menu. It returns immediately and waits silently
+   for 30 seconds. During that interval return to the core browser and select **_Utility > Noodles Games > Baldurs Gate II
+   (GemRB)**. The MGL loads the timing-qualified protocol 1.5 core; the watcher validates the selected RBF and `CHITIN.KEY`,
+   asks stock Main to release input through its normal framebuffer hotkey, and starts GemRB. The same process supervises
+   the game and restores Main on exit. The renderer can attach to protocol 1.4, but only protocol 1.5 provides the
+   multi-table sprite-batch path. The matching `gemrb-<game>.sh` launcher remains the software-renderer fallback.
 
 If you installed version 0.1.0, the first run moves its game folder, saves and settings into this layout for you.
 
@@ -145,7 +146,8 @@ and checksums.
 
 The SD card is mounted synchronously, so copying the game data takes a long time: about half an hour for 2.6 GB.
 
-To remove it, delete `/media/fat/gemrb` and `/media/fat/Scripts/gemrb-*.sh`.
+To remove it, delete `/media/fat/gemrb`, `/media/fat/Scripts/gemrb-*.sh`, `/media/fat/Scripts/noodles-launcher.sh` and
+`/media/fat/_Utility/Noodles Games`.
 
 ## Configuration
 
@@ -155,8 +157,7 @@ Local settings go in `/media/fat/gemrb/env.sh`, which the launcher reads if it e
 | --- | --- |
 | `MISTER_RESOLUTION=640x480` (or `800x600`) | Skip the resolution question and always use this. Without it the launcher asks every time |
 | `MISTER_OUTPUT_MODE=off` | Do not change the HDMI mode. Otherwise the launcher switches to the resolution you chose |
-| `MISTER_NOODLES_RBF=/media/fat/pet/Noodles_descriptor_ring_seed13.rbf` | Protocol 1.5 RBF loaded by every Noodles launcher; this path is the default |
-| `MISTER_NOODLES_ALLOW_DIRECT=1` | Developer override for noninteractive shell launches; it does not release Main's input grabs |
+| `NOODLES_LAUNCH_WAIT=30` | Seconds the silent Noodles watcher waits for a matching game MGL; valid values are 1–300 |
 | `MISTER_RESTORE_MODE="<modeline>"` | Mode to switch back to afterwards. Default is 1080p60 |
 | `MISTER_USB=/media/usb0` | Which USB drive holds the swap file when several are plugged in (skips the question) |
 | `MISTER_SWAP_MB=384` | Size of the swap file in MB |

@@ -5,8 +5,8 @@
 #   work/dist/SHA256SUMS
 #   work/dist/RELEASE_NOTES-v<version>.md   (only if docs/release-notes/<version>.md exists)
 #
-# The archive holds gemrb/ (engine, libraries, Python, launcher, license texts, source list) and Scripts/gemrb-<game>.sh. It
-# contains no game data. Run build-deps.sh and build-gemrb.sh first; bundle.sh is run here to get a fresh bundle.
+# The archive holds gemrb/ (engine, libraries, Python, launcher, license texts, source list), Scripts/ launchers and the
+# Noodles game MGLs under _Utility/. It contains no game data. Run build-deps.sh and build-gemrb.sh first.
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 
@@ -19,12 +19,13 @@ G="$SRC/gemrb"
 # 1. Fresh bundle.
 "$ROOT/scripts/bundle.sh" >/dev/null
 rm -rf "$DIST/stage" "$DIST/$NAME.zip"
-mkdir -p "$STAGE/gemrb" "$STAGE/Scripts"
+mkdir -p "$STAGE/gemrb" "$STAGE/Scripts" "$STAGE/_Utility"
 
 # 2. The game: everything in the bundle. The configs ship as GemRB-<game>.cfg.default files that the launcher copies on
 #    the first run, so an update never overwrites the user's edits.
 cp -a "$WORK/bundle/gemrb/." "$STAGE/gemrb/"
 cp -a "$WORK/bundle/Scripts/"*.sh "$STAGE/Scripts/"
+cp -a "$WORK/bundle/_Utility/." "$STAGE/_Utility/"
 echo "$VERSION" > "$STAGE/gemrb/VERSION"
 for g in bg2 bg1 pst iwd iwd2; do
 	mkdir -p "$STAGE/gemrb/games/$g"
@@ -115,9 +116,10 @@ DRIVER_REPO="$(git -C "$SDL_DRIVER_DIR" rev-parse --show-toplevel 2>/dev/null ||
 cat > "$STAGE/gemrb/INSTALL.txt" <<TXT
 MiSTer-GemRB v$VERSION: installing
 
-1. Copy the two folders from this zip onto the root of your MiSTer's SD card, merging with what is there:
+1. Copy the three folders from this zip onto the root of your MiSTer's SD card, merging with what is there:
        gemrb/    ->  /media/fat/gemrb
        Scripts/  ->  /media/fat/Scripts
+       _Utility/ ->  /media/fat/_Utility
    The location matters: the programs look for their libraries in /media/fat/gemrb.
 
 2. Add your own game files, one folder per game, each 1.4 to 2.6 GB. Copy the folder that contains CHITIN.KEY,
@@ -135,11 +137,13 @@ MiSTer-GemRB v$VERSION: installing
    layout.ini; or icewind2.ini, Party.ini, Keymap.ini). Only the classic editions are supported; the Enhanced
    Editions are not.
 
-3. On the MiSTer press F12, choose Scripts, and run "gemrb-bg2", "gemrb-bg1", "gemrb-pst", "gemrb-iwd" or "gemrb-iwd2".
+3. For the software renderer, press F12, choose Scripts, and run "gemrb-bg2", "gemrb-bg1", "gemrb-pst", "gemrb-iwd" or "gemrb-iwd2".
    The launcher asks which resolution to use: type 1 for 640x480 or 2 for 800x600, then press Enter. (Icewind Dale II
    has no 640x480 layout and always uses 800x600.) The screen then blinks as the HDMI output switches to that
    resolution (your display scales it to fill the screen). Quit from the game's own menu; the display is switched back
-   to 1080p60. To skip the question, set MISTER_RESOLUTION=640x480 (or 800x600) in /media/fat/gemrb/env.sh.
+   to 1080p60. To skip the question, set MISTER_RESOLUTION=640x480 (or 800x600) in /media/fat/gemrb/env.sh. For Noodles
+   acceleration, run "noodles-launcher" from Scripts, return to the core browser within 30 seconds and select
+   _Utility/Noodles Games/Baldurs Gate II (GemRB). Main loads Noodles and the waiting launcher starts GemRB.
 
 The launcher needs a USB drive for swap memory: the MiSTer has little RAM, and the game needs more than it has (a big
 fight, or loading a new area), so a swap file is used to keep the game from being killed. Plug the drive in before you
@@ -154,7 +158,8 @@ GemRB's settings for each game are in /media/fat/gemrb/GemRB-<game>.cfg (created
 first run and never overwritten); saves are in /media/fat/gemrb/saves/<game>.
 If you installed version 0.1.0, the first run moves its game folder, saves and settings into this layout for you.
 
-To remove: delete /media/fat/gemrb and /media/fat/Scripts/gemrb-*.sh.
+To remove: delete /media/fat/gemrb, /media/fat/Scripts/gemrb-*.sh, /media/fat/Scripts/noodles-launcher.sh and
+/media/fat/_Utility/Noodles Games.
 More: README.md, and the license texts in LICENSES/ (see ATTRIBUTIONS.md).
 TXT
 

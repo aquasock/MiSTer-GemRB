@@ -26,6 +26,7 @@ code() {
 	for f in "$BUNDLE"/Scripts/*.sh; do
 		"${SSH[@]}" "mkdir -p /media/fat/Scripts && cat > /media/fat/Scripts/$(basename "$f") && chmod +x /media/fat/Scripts/$(basename "$f")" < "$f"
 	done
+	tar -C "$BUNDLE" -cf - "_Utility/Noodles Games" | "${SSH[@]}" "tar --no-same-owner -C /media/fat -xf -"
 }
 
 data() {

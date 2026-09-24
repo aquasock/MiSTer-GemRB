@@ -21,6 +21,12 @@ mkdir -p "$WORK/bundle/Scripts"
 cp -a "$INSTALL/gemrb" "$INSTALL"/libgemrb_core.so* "$INSTALL/plugins" "$INSTALL/GUIScripts" \
 	"$INSTALL/unhardcoded" "$INSTALL/override" "$OUT/"
 
+# The stock-Main MGL coordinator is static because it starts before GemRB's
+# private runtime is involved and must survive Main restarting around it.
+"${CROSS}-gcc" $ARCH_FLAGS -std=c11 -O2 -Wall -Wextra -Werror -static -Wl,--build-id=none \
+	-o "$OUT/noodles-launcher" "$ROOT/tools/noodles-launcher.c"
+$STRIP --strip-unneeded "$OUT/noodles-launcher"
+
 # Libraries: the ones built here, then a private glibc so the MiSTer's old one is not used.
 for l in libSDL2-2.0.so.0 libSDL2_mixer-2.0.so.0 libpython$PYV.so.1.0 libz.so.1 libpng16.so.16 \
          libfreetype.so.6 libogg.so.0 libvorbis.so.0.4.9 libvorbisfile.so.3.3.8; do
@@ -329,58 +335,32 @@ exit $rc
 RUN
 chmod +x "$OUT/run.sh"
 
-# Parallel hardware-renderer entry point. The standard run.sh keeps its
-# software default so this path can be selected and qualified independently.
-cat > "$OUT/run-noodles.sh" <<'RUN_NOODLES'
-#!/bin/sh
-set -e
-D=/media/fat/gemrb
-[ -f "$D/env.sh" ] && . "$D/env.sh"
-RBF="${MISTER_NOODLES_RBF:-/media/fat/pet/Noodles_descriptor_ring_seed13.rbf}"
-LAUNCH_TTY="$(tty 2>/dev/null || true)"
-LOG="$D/noodles-launch.log"
-printf '%s\n' "launch: tty=${LAUNCH_TTY:-none} rbf=$RBF" >> "$LOG"
-if [ ! -t 0 ] && [ "${MISTER_NOODLES_ALLOW_DIRECT:-0}" != 1 ]; then
-    echo "Launch Noodles games from MiSTer's OSD Scripts menu so Main releases the mouse and keyboard."
-    echo "Noninteractive shell launch is refused because Main keeps exclusive evdev grabs outside the Scripts path."
-    echo "refused: no controlling terminal" >> "$LOG"
-    exit 1
-fi
-case "$RBF" in
-    /*) ;;
-    *) echo "MISTER_NOODLES_RBF must be an absolute path: $RBF"; echo "refused: relative RBF path" >> "$LOG"; exit 1 ;;
-esac
-if [ ! -r "$RBF" ]; then
-    echo "MiSTer-Noodles RBF not found: $RBF"
-    echo "Copy the protocol 1.5 seed-13 RBF there or set MISTER_NOODLES_RBF in $D/env.sh."
-    echo "refused: unreadable RBF" >> "$LOG"
-    exit 1
-fi
-if [ ! -p /dev/MiSTer_cmd ]; then
-    echo "/dev/MiSTer_cmd is unavailable; cannot load MiSTer-Noodles or release Main input."
-    echo "refused: command FIFO unavailable" >> "$LOG"
-    exit 1
-fi
-
-# Main's OSD Scripts path relinquishes its evdev grabs before this wrapper
-# starts. Reloading Noodles here gives the game a clean hardware session while
-# preserving that handoff. The core owns its fixed 800x600 output, so do not
-# ask Main to switch the separate Linux framebuffer/output mode around it.
-printf 'load_core %s\n' "$RBF" > /dev/MiSTer_cmd
-echo "core load requested" >> "$LOG"
-sleep 3
-export SDL_RENDER_DRIVER=noodles
-export MISTER_RESOLUTION=800x600
-export MISTER_OUTPUT_MODE=off
-exec "$D/run.sh" "$@"
-RUN_NOODLES
-chmod +x "$OUT/run-noodles.sh"
-
-# One entry per game for the OSD Scripts menu (F12 > Scripts).
+# Software-renderer entries remain direct OSD scripts. Hardware launches use
+# one silent watcher followed by an MGL selected from the normal core browser.
 for g in bg2 bg1 pst iwd iwd2; do
 	printf '#!/bin/bash\nexec %s/run.sh %s "$@"\n' "$DEVICE_DIR" "$g" > "$WORK/bundle/Scripts/gemrb-$g.sh"
-	printf '#!/bin/bash\nexec %s/run-noodles.sh %s "$@"\n' "$DEVICE_DIR" "$g" > "$WORK/bundle/Scripts/gemrb-noodles-$g.sh"
 	chmod +x "$WORK/bundle/Scripts/gemrb-$g.sh"
-	chmod +x "$WORK/bundle/Scripts/gemrb-noodles-$g.sh"
 done
+
+cat > "$WORK/bundle/Scripts/noodles-launcher.sh" <<'NOODLES_SCRIPT'
+#!/bin/sh
+[ -f /media/fat/gemrb/env.sh ] && . /media/fat/gemrb/env.sh
+exec /media/fat/gemrb/noodles-launcher --wait "${NOODLES_LAUNCH_WAIT:-30}"
+NOODLES_SCRIPT
+chmod +x "$WORK/bundle/Scripts/noodles-launcher.sh"
+
+MGL_DIR="$WORK/bundle/_Utility/Noodles Games"
+mkdir -p "$MGL_DIR"
+cat > "$MGL_DIR/Baldurs Gate II (GemRB).mgl" <<'MGL'
+<?xml version="1.0"?>
+<mistergamedescription>
+  <rbf>pet/Noodles_descriptor_ring_seed13</rbf>
+  <noodles>
+    <engine>gemrb</engine>
+    <game>bg2</game>
+    <data>/media/fat/gemrb/games/bg2</data>
+    <require>CHITIN.KEY</require>
+  </noodles>
+</mistergamedescription>
+MGL
 du -sh "$WORK/bundle"; du -sh "$OUT"/*
