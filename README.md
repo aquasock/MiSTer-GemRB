@@ -156,7 +156,7 @@ Local settings go in `/media/fat/gemrb/env.sh`, which the launcher reads if it e
 | `MISTER_RESOLUTION=640x480` (or `800x600`) | Skip the resolution question and always use this. Without it the launcher asks every time |
 | `MISTER_OUTPUT_MODE=off` | Do not change the HDMI mode. Otherwise the launcher switches to the resolution you chose |
 | `MISTER_NOODLES_RBF=/media/fat/pet/Noodles_descriptor_ring_seed13.rbf` | Protocol 1.5 RBF loaded by every Noodles launcher; this path is the default |
-| `MISTER_NOODLES_ALLOW_DIRECT=1` | Developer override for shell launches; it does not release Main's input grabs |
+| `MISTER_NOODLES_ALLOW_DIRECT=1` | Developer override for noninteractive shell launches; it does not release Main's input grabs |
 | `MISTER_RESTORE_MODE="<modeline>"` | Mode to switch back to afterwards. Default is 1080p60 |
 | `MISTER_USB=/media/usb0` | Which USB drive holds the swap file when several are plugged in (skips the question) |
 | `MISTER_SWAP_MB=384` | Size of the swap file in MB |

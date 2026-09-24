@@ -338,22 +338,27 @@ D=/media/fat/gemrb
 [ -f "$D/env.sh" ] && . "$D/env.sh"
 RBF="${MISTER_NOODLES_RBF:-/media/fat/pet/Noodles_descriptor_ring_seed13.rbf}"
 LAUNCH_TTY="$(tty 2>/dev/null || true)"
-if [ "$LAUNCH_TTY" != /dev/tty2 ] && [ "${MISTER_NOODLES_ALLOW_DIRECT:-0}" != 1 ]; then
+LOG="$D/noodles-launch.log"
+printf '%s\n' "launch: tty=${LAUNCH_TTY:-none} rbf=$RBF" >> "$LOG"
+if [ ! -t 0 ] && [ "${MISTER_NOODLES_ALLOW_DIRECT:-0}" != 1 ]; then
     echo "Launch Noodles games from MiSTer's OSD Scripts menu so Main releases the mouse and keyboard."
-    echo "Direct shell launch is refused because Main keeps exclusive evdev grabs outside the Scripts path."
+    echo "Noninteractive shell launch is refused because Main keeps exclusive evdev grabs outside the Scripts path."
+    echo "refused: no controlling terminal" >> "$LOG"
     exit 1
 fi
 case "$RBF" in
     /*) ;;
-    *) echo "MISTER_NOODLES_RBF must be an absolute path: $RBF"; exit 1 ;;
+    *) echo "MISTER_NOODLES_RBF must be an absolute path: $RBF"; echo "refused: relative RBF path" >> "$LOG"; exit 1 ;;
 esac
 if [ ! -r "$RBF" ]; then
     echo "MiSTer-Noodles RBF not found: $RBF"
     echo "Copy the protocol 1.5 seed-13 RBF there or set MISTER_NOODLES_RBF in $D/env.sh."
+    echo "refused: unreadable RBF" >> "$LOG"
     exit 1
 fi
 if [ ! -p /dev/MiSTer_cmd ]; then
     echo "/dev/MiSTer_cmd is unavailable; cannot load MiSTer-Noodles or release Main input."
+    echo "refused: command FIFO unavailable" >> "$LOG"
     exit 1
 fi
 
@@ -362,6 +367,7 @@ fi
 # preserving that handoff. The core owns its fixed 800x600 output, so do not
 # ask Main to switch the separate Linux framebuffer/output mode around it.
 printf 'load_core %s\n' "$RBF" > /dev/MiSTer_cmd
+echo "core load requested" >> "$LOG"
 sleep 3
 export SDL_RENDER_DRIVER=noodles
 export MISTER_RESOLUTION=800x600
