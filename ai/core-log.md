@@ -536,3 +536,35 @@ Make no-swap operation the default for the tested Noodles MGL launch while retai
 - [x] Passed
 
 ---
+
+## 18 COMMIT Unreleased ??? 2026-09-24T13:25:27-07:00
+
+#### Coming From:
+
+Unreleased 564c25c
+
+#### Purpose:
+
+Make the hardware-proven Noodles Baldur's Gate II launch run without swap by default while retaining an explicit USB-swap fallback.
+
+#### Outcome:
+
+The Noodles coordinator will set `MISTER_SWAP=none` before starting its engine adapter, while the existing per-installation `env.sh` remains able to override that choice with `MISTER_SWAP=usb`; software-renderer launches will retain their current USB-swap default. User and release documentation will distinguish the tested Noodles behavior from the software fallback and explain the explicit override without changing the RBF or renderer.
+
+#### Next Steps:
+
+Build the coordinator with strict native, static ARM and analyzer checks, regenerate and validate the bundle and release documentation, deploy it to the MiSTer, remove the temporary no-swap statistics override, and verify that the MGL launch reaches Baldur's Gate II with statistics disabled and no active swap before repeating the save and one area transition.
+
+#### Files Modified:
+
+- README.md
+- scripts/bundle.sh
+- scripts/release.sh
+- tools/noodles-launcher.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
