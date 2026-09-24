@@ -160,7 +160,10 @@ The drivers read the `SDL_MISTER_*` environment variables described in the
 sets `SDL_MISTER_FORMAT=xrgb` (an alpha-less screen, which lets SDL use its fast blitter). Normal launchers select
 `SDL_RENDER_DRIVER=software`; the parallel Noodles launchers select `SDL_RENDER_DRIVER=noodles`.
 Set `SDL_RENDER_NOODLES_STATS=1` when starting a Noodles launcher to log a five-second summary of observed frame rate,
-SDL command-queue time, FPGA presentation time, and the remaining per-frame time. The summary also reports accelerated
+SDL command-queue time, FPGA presentation time, and the remaining per-frame time. Detailed timing separates fills,
+sprite batches, synchronization, the full-screen presentation copy and vertical-blank waiting. While statistics are
+enabled, the renderer waits for the presentation copy before submitting the present command so those two costs can be
+measured independently; the normal disabled path remains asynchronous. The summary also reports accelerated
 fill, plain-draw and flagged-draw counts and pixels, sprite-batch counts and maximum size, submission stalls, CPU fallback
 work, uploads, readbacks, evictions, drains and current FPGA texture residency. The instrumentation is disabled otherwise.
 Opaque points and simple lines use the FPGA fill engine. Operations that still need SDL's software rasterizer keep the
