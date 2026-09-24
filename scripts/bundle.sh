@@ -184,7 +184,10 @@ sed -e "s/^Width=.*/Width=$NEW_W/" -e "s/^Height=.*/Height=$NEW_H/" "$CFG" > "$C
 # is erased, formatted or changed. MISTER_USB=/media/usbN picks the drive when several are plugged in.
 SWAP_MB="${MISTER_SWAP_MB:-384}"
 usb_mounts() {
-    awk '$2 ~ /^\/media\/usb[0-9]+$/ && $3 == "ext4" { print $2 }' /proc/mounts
+    # MiSTer may expose one partition at more than one /media/usbN path after
+    # reconnects. Present each backing device once so silent launches do not
+    # mistake aliases for multiple drives and try to ask an interactive question.
+    awk '$2 ~ /^\/media\/usb[0-9]+$/ && $3 == "ext4" && !seen[$1]++ { print $2 }' /proc/mounts
 }
 free_mb() { df -Pk "$1" 2>/dev/null | awk 'NR == 2 { print int($4 / 1024) }'; }
 pick_usb() {
