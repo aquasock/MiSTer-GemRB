@@ -220,7 +220,7 @@ Accelerate opaque points and lines with the existing solid-fill command, and mak
 
 ---
 
-## 8 COMMIT Unreleased ??? 2026-09-24T07:26:33-07:00
+## 8 COMMIT Unreleased 9ced707 2026-09-24T07:34:17-07:00
 
 #### Coming From:
 
@@ -232,11 +232,13 @@ Eliminate full-surface CPU and FPGA synchronization around small fallback primit
 
 #### Outcome:
 
-The planned renderer change will submit opaque points and lines through the existing FPGA solid-fill path and will constrain blended fill and remaining primitive fallback readbacks and uploads to the pixels' affected regions. Command order and surface coherence will remain exact, while the regional path will avoid the approximately 402MiB of full-screen synchronization measured per gameplay frame without requiring a protocol or RTL change.
+Source `9ced707` submits opaque points and horizontal, vertical or 45-degree lines through the existing solid-fill command, while arbitrary antialiased lines retain SDL's rasterizer. Blended fills and remaining primitive fallbacks read the affected bounding region from the current FPGA target, render into that region of the CPU shadow and upload the same region immediately, preserving command order and the untouched pixels inside and outside the bounding box without marking the whole shadow current. Fresh SDL, diagnostic and complete GemRB cross-builds passed. The deployed stripped SDL library SHA256 is `4e0a4a25d7c8dc561d7a1f01bab9cd54ecdcec5f3e8dce7bd9857cd8b937ff9c`, the expanded diagnostic binary SHA256 is `80ea3787aa6ccf7910b38fdc64e164a05c04244265ee3867777f031d68daed72`, and its SDL library SHA256 is `06ca8887bcc011745719b30207b87bdcfe81f962e8243097b56bb18d643ca2cb`. The hardware diagnostic passed with hash `31b60c99`, including a regional blended fill between accelerated operations.
+
+In the same BG2 Throne of Bhaal AR4000 save, the user reported substantially better performance and did not report a visual problem. Steady gameplay improved from 0.14-0.20fps to 6.5-6.8fps. Per-frame synchronization fell from approximately 201MiB of uploads plus 201MiB of readbacks to 0.40MiB in each direction, CPU primitive fallbacks fell to zero, and the remaining 17 blended fill fallbacks per frame transferred only their regions. Queue execution fell from 5.0-6.8 seconds to approximately 104ms; presentation remained 35-37ms and other work remained about 8ms. The remaining queue pressure is 104 plain plus 137 flagged draws per frame submitted as one-entry sprite batches, producing approximately 228 draw stalls and drains per frame even though the total accelerated workload is only about 2.7 million draw and fill pixels.
 
 #### Next Steps:
 
-Implement regional synchronization and opaque primitive submission, extend the deterministic diagnostic with interleaved accelerated and regional-fallback operations, run fresh SDL and GemRB cross-builds, verify pixel readback on hardware, and repeat the same Throne of Bhaal AR4000 save with timing and transfer totals recorded.
+Group consecutive compatible draws to the same target into the core's existing 64-entry sprite batches and flush them at ordering boundaries such as fills, regional fallbacks, uploads, readbacks and presentation. Extend statistics with submitted batch counts and sizes, verify exact mixed-operation ordering in the diagnostic, and repeat AR4000 before considering a double-buffered descriptor table or a direct-back-buffer presentation path.
 
 #### Files Modified:
 
@@ -246,7 +248,7 @@ Implement regional synchronization and opaque primitive submission, extend the d
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
