@@ -635,7 +635,7 @@ Keep protocol 1.6 as the accepted Noodles baseline and investigate the spell-spe
 
 ---
 
-## 21 COMMIT Unreleased ??? 2026-09-24T14:48:41-07:00
+## 21 COMMIT Unreleased ebaa9e5 2026-09-24T14:52:46-07:00
 
 #### Coming From:
 
@@ -647,11 +647,11 @@ Separate texture synchronization and SDL command-construction costs from GemRB's
 
 #### Outcome:
 
-Instrument the Noodles renderer's texture updates, locks, readbacks, target changes and command-building callbacks with five-second timing and call-volume summaries, retaining the existing opt-in statistics path and normal behavior when disabled.
+Source `ebaa9e5` adds opt-in five-second timing and call-volume summaries for Noodles texture creation, updates, locks, target changes, explicit readback and destruction plus SDL command-building callbacks. It also corrects the statistics documentation: presentation fence time includes completion of queued FPGA rendering and the vertical-blank handoff, while statistics-disabled operation uses the same synchronization with performance-clock reads and counters disabled. The SDL cross-build, renderer diagnostic build and complete bundle build passed; the diagnostic remains SHA256 `21595f3d89ef0542407d9059c0ecf06df4d1cb1ba69f54b66089ff430bf10a0e` and the instrumented SDL library SHA256 is `c3cbaad9c4113711106b78ee8cd08f23952b1a7d5b66cd0c15e54afddc8b233a`.
 
 #### Next Steps:
 
-Build and deploy the instrumented SDL library, repeat the AR4000 spell interval with statistics enabled, then repeat it with statistics disabled to check whether measurement overhead affects pacing; use the evidence to select a targeted GemRB, SDL or reusable Noodles optimization.
+Deploy the instrumented SDL library, repeat the AR4000 spell interval with statistics enabled, then repeat it with statistics disabled to check whether measurement overhead affects pacing; use the evidence to select a targeted GemRB, SDL or reusable Noodles optimization.
 
 #### Files Modified:
 
@@ -660,7 +660,7 @@ Build and deploy the instrumented SDL library, repeat the AR4000 spell interval 
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
