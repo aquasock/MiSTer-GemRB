@@ -92,7 +92,7 @@ None.
 
 ---
 
-## 4 COMMIT Unreleased ??? 2026-09-24T01:12:00-07:00
+## 4 COMMIT Unreleased 28e1a83 2026-09-24T01:12:00-07:00
 
 #### Coming From:
 
@@ -104,11 +104,11 @@ Bound SDL texture residency in the Noodles managed-surface arena so GemRB can re
 
 #### Outcome:
 
-The planned change will create texture shadows without immediately allocating a managed Noodles surface, track resident bytes and least-recently-used access, preserve GPU-only contents before eviction, and restore a texture from its CPU shadow when hardware next needs it. The 800x600 composition surface will remain pinned, the active render target and current copy source will remain resident together, and a configurable budget below the SDK's 224 MiB arena will leave deterministic headroom. The diagnostic will lower that budget, cycle enough large textures to force eviction, revisit an evicted texture and verify its restored pixels.
+Source `28e1a83` creates CPU texture shadows without immediately allocating managed Noodles surfaces, tracks resident bytes and least-recently-used hardware access, preserves GPU-only contents before eviction, and restores textures from their CPU shadows when hardware next needs them. The 800x600 composition surface remains pinned, the active render target stays resident while a copy source is restored, and the default 192 MiB budget leaves 32 MiB of deterministic headroom in the SDK's 224 MiB arena; `SDL_RENDER_NOODLES_RESIDENT_MB` can lower the budget for testing. Allocation first drains and collects deferred frees before evicting a live surface. The diagnostic uses a 12 MiB budget, cycles three 4 MiB textures to force deterministic eviction and revisits the first texture to verify restored pixels. A fresh SDL configuration and build, diagnostic build and complete GemRB cross-build passed. The hash-verified diagnostic package, with binary SHA256 `301012988ea8329ae5da329d2fba162a474a8f8f5819e40e88d9f79a24b686d7` and SDL library SHA256 `383017eb51e5c75e24c6597b0712f14c9997a1a7da11c92f0d509f5b1123f11a`, ran twice on the MiSTer and reported `Noodles renderer diagnostic: PASS (renderer=noodles, hash=b656c299)` both times.
 
 #### Next Steps:
 
-Implement and qualify lazy residency and eviction, then add an isolated Noodles GemRB launcher and run a real installed-game smoke test before changing any default launcher.
+Add an isolated Noodles GemRB launcher and run a real installed-game smoke test with renderer selection and frame behavior recorded before changing any default launcher.
 
 #### Files Modified:
 
@@ -117,7 +117,7 @@ Implement and qualify lazy residency and eviction, then add an isolated Noodles 
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
