@@ -410,7 +410,7 @@ Repeat AR4000 once with statistics disabled to quantify instrumentation overhead
 
 ---
 
-## 14 COMMIT Unreleased ??? 2026-09-24T10:38:00-07:00
+## 14 COMMIT Unreleased c1f5c21 2026-09-24T10:38:00-07:00
 
 #### Coming From:
 
@@ -422,16 +422,47 @@ Give every Noodles game launch a supported Main input handoff and clean core ses
 
 #### Outcome:
 
-The approved change will make `run-noodles.sh` load a configurable protocol-1.5 RBF through `/dev/MiSTer_cmd` immediately before starting GemRB, which uses Main's own core-load path to release its evdev grabs and resets any dirty Noodles session. The wrapper will select the core's fixed 800x600 geometry and suppress the unrelated Linux-output mode switch. It will validate the configured RBF and command FIFO and fail visibly instead of starting without input or compatible hardware.
+Sources `cd0362d`, `8a64424` and `c1f5c21` added a Noodles wrapper that validates and reloads the protocol-1.5 RBF before starting GemRB, restricts normal use to Main's OSD Scripts terminal and logs launch progress. Local wrapper tests and bundle generation passed, but two hardware launches failed. The second persistent log proved that the wrapper ran on `/dev/tty2` and successfully requested the core load; Main then restarted for the new RBF, reacquired all four physical evdev devices and stranded the surviving launcher without input. The source built and deployed correctly but did not pass its hardware purpose.
 
 #### Next Steps:
 
-Rebuild and deploy the bundle, launch through the generated Noodles wrapper, verify mouse and keyboard before and after one OSD open-close cycle, then load the AR4000 autosave and capture a spell-heavy statistics interval to identify the next accelerator operation.
+Replace the self-loading wrapper with the approved stock-Main MGL workflow: a single generic process will detach from an initial Scripts launch, watch for a Noodles MGL for 30 seconds, validate its engine and game data, use a temporary virtual keyboard for Main's normal framebuffer handoff, supervise the game and restore Main on exit.
 
 #### Files Modified:
 
 - README.md
 - scripts/bundle.sh
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
+
+## 15 COMMIT Unreleased ??? 2026-09-24T11:18:22-07:00
+
+#### Coming From:
+
+Unreleased c1f5c21
+
+#### Purpose:
+
+Launch GemRB through a stock-Main Noodles MGL using one silent watcher and supervisor with validated game data and automatic input handoff.
+
+#### Outcome:
+
+The approved proof will add a deterministic ARM launcher that detaches from the initial OSD script, waits up to 30 seconds for Main to restart with a Noodles MGL, parses an engine-neutral launch record, verifies the selected RBF, registered engine, data directory and required files, then creates a temporary virtual keyboard and sends Main's supported Control-Alt-F9 framebuffer toggle before starting the engine adapter. The same process will supervise the foreground adapter, record bounded diagnostics and restore Main when the game exits or launch validation fails. The first adapter and MGL will cover Baldur's Gate II through GemRB; no RBF or custom Main change is in this proof.
+
+#### Next Steps:
+
+Build and deploy the bundle, verify a no-selection timeout and a missing-data rejection, then launch the valid Baldur's Gate II MGL and test mouse, keyboard, HDMI audio, normal exit and repeat launch. Recheck OSD open-close behavior; if stock Main exposes no observable close transition, scope the existing Noodles `OSD_STATUS` signal as the smallest two-build RBF follow-up before spell-heavy profiling.
+
+#### Files Modified:
+
+- README.md
+- scripts/bundle.sh
+- tools/noodles-launcher.c
 
 #### Status:
 
