@@ -472,3 +472,33 @@ Verify mouse and keyboard control plus HDMI music in the live MGL-launched game,
 - [ ] Passed
 
 ---
+
+## 16 COMMIT Unreleased ??? 2026-09-24T19:04:00-07:00
+
+#### Coming From:
+
+Unreleased 27c55d1
+
+#### Purpose:
+
+Preserve the Noodles core display while handing Main's physical input devices to an MGL-launched game.
+
+#### Outcome:
+
+The hardware test showed that the supported framebuffer hotkey released input correctly but placed Main's black Linux framebuffer over the live Noodles output, leaving GemRB music audible with no visible game. The correction will keep the watcher, MGL validation and supervision architecture while replacing the valid-game framebuffer transition with the previously proven kernel `pidfd_getfd` path: duplicate Main's existing event descriptors, remove their exclusive grabs without closing or replacing Main's descriptors, start GemRB on the still-visible Noodles display, and restore those grabs after the adapter exits. The temporary virtual keyboard will remain limited to the visible validation-error path.
+
+#### Next Steps:
+
+Build and deploy the corrected coordinator, launch the valid Baldur's Gate II MGL and verify visible Noodles video with mouse, keyboard and HDMI audio, then exit normally and repeat the launch. Recheck OSD open-close behavior separately because Main can reacquire input when its OSD opens during gameplay.
+
+#### Files Modified:
+
+- README.md
+- tools/noodles-launcher.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
