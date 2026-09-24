@@ -284,7 +284,7 @@ Instrument the full-screen composition-to-back-buffer copy separately from verti
 
 ---
 
-## 10 COMMIT Unreleased ??? 2026-09-24T07:48:20-07:00
+## 10 COMMIT Unreleased 774a7eb 2026-09-24T07:48:20-07:00
 
 #### Coming From:
 
@@ -296,11 +296,11 @@ Measure the remaining presentation and command-queue costs after sprite batching
 
 #### Outcome:
 
-The planned disabled-by-default timing detail will separate the full-screen composition copy from vertical-blank waiting and divide command-queue execution among solid fills, sprite-batch submission, CPU and FPGA synchronization, and remaining renderer work. It will retain the existing aggregate and workload statistics and will not change rendering behavior or the qualified RBF.
+Source `774a7eb` adds disabled-by-default timing for solid fills, sprite-batch submission, queue and total CPU-to-FPGA synchronization, remaining command-queue work, the full-screen composition copy and vertical-blank waiting. With statistics enabled only, presentation waits for the composition copy to finish before submitting the present command so copy execution and display wait can be measured independently; the normal path remains asynchronous. Fresh SDL, diagnostic and complete GemRB cross-builds passed. The deployed stripped SDL library SHA256 is `3b0262e2aa5655bd444786419cbe263517f208788bc4650e9d02945b07c75d2d`, the unchanged diagnostic binary SHA256 is `687ca9d94befe61f0131d5e826f9eef95a66746abae0adede516f56e2c80684e`, and its SDL library SHA256 is `452f079dfed4561278ead53ccc160dfeb885d80644d6cf9695bf2daf8bc4100e`. The existing timing-qualified protocol-1.3 core passed the exact-pixel hardware diagnostic with hash `a6d5728e`. In the same Throne of Bhaal AR4000 area, the deliberately separated path measured 9.8-10.1fps with approximately 45-47ms in the command queue, 46ms in presentation and 8-9ms elsewhere. Per frame, queue time consists of approximately 19ms of regional synchronization, 14ms of CPU fallback and command processing, 9.4ms of sprite-batch submission and waits, and 3.3ms of fills. Presentation consists of approximately 35ms copying the completed 800x600 composition surface to the hardware back buffer and 11ms waiting for display retirement. The copy is therefore the largest single remaining cost and is avoidable because protocol 1.3 already exposes the current back buffer and accepts sprite batches and raw fills directed to it. Memory remained healthy with 305MiB available and swap unused.
 
 #### Next Steps:
 
-Implement the timing counters, rebuild SDL and GemRB, run the existing exact-pixel diagnostic on the timing-qualified protocol-1.3 core, and repeat the Throne of Bhaal AR4000 save. Use the measured split to implement the next host-side performance change, and defer audio until a performance cycle requires an RBF rebuild so both hardware changes can share qualification.
+Add bounded SDK operations for reading, updating and filling the current back buffer, then make the SDL default render target use that buffer directly while retaining managed surfaces for textures and explicit render targets. Preserve CPU-fallback coherence and exact command order, validate render-target switching and regional fallback behavior in the diagnostic, and repeat AR4000 without changing the RBF. Defer audio until a performance change requires an RBF rebuild so both hardware changes can share qualification.
 
 #### Files Modified:
 
@@ -309,7 +309,7 @@ Implement the timing counters, rebuild SDL and GemRB, run the existing exact-pix
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
