@@ -27,8 +27,9 @@ Heart of Winter and Trials of the Luremaster), Icewind Dale II and Planescape: T
   [Performance](#performance).
 - **Optional MiSTer-Noodles acceleration** — the parallel Noodles launchers keep textures and render targets in FPGA
   memory and accelerate sprite copies, modulation, SDL blend modes, opaque fills and blended rectangle fills. The
-  renderer requires the timing-qualified protocol 1.4 core and falls back to SDL only for operations the core does not
-  implement.
+  renderer uses the protocol 1.5 descriptor ring so it can queue later sprite batches while earlier batches execute,
+  and falls back to SDL only for operations the core does not implement. Protocol 1.4 remains compatible, with its
+  original single in-flight descriptor table.
 - **Fixes to GemRB's SDL plugins** — a lock-order deadlock in the audio plugin that froze the game while walking, a
   music conversion bug that played every other chunk as noise when the sound device does not run at the music's
   sample rate, and a fallback for SDL's software renderer, which lacks the custom blend modes GemRB's wall-occlusion
@@ -107,8 +108,9 @@ Notes on the GOG installers, after unpacking them with innoextract:
    blinks as the output switches to that resolution. Quit from the game's own menu; the launcher switches your display
    back.
 
-   To use a `gemrb-noodles-<game>.sh` launcher, load the timing-qualified MiSTer-Noodles protocol 1.4 core first. The
-   matching `gemrb-<game>.sh` launcher remains available as the software-renderer fallback.
+   To use a `gemrb-noodles-<game>.sh` launcher, load the timing-qualified MiSTer-Noodles protocol 1.5 core first. The
+   renderer can attach to protocol 1.4, but only protocol 1.5 provides the multi-table sprite-batch path. The matching
+   `gemrb-<game>.sh` launcher remains available as the software-renderer fallback.
 
 If you installed version 0.1.0, the first run moves its game folder, saves and settings into this layout for you.
 
@@ -176,7 +178,9 @@ FPGA result coherent by reading and uploading only the affected target region.
 Consecutive accelerated copies to the same target share the core's 64-entry sprite batches. Fills, software fallbacks,
 target changes and resource synchronization flush pending copies to preserve SDL command order. The SDL default target
 is the core's current hardware back buffer, so presentation does not copy an intermediate 800x600 composition surface;
-textures and explicit render targets remain managed surfaces.
+textures and explicit render targets remain managed surfaces. With protocol 1.5 and SDK 0.9, each flushed batch uses a
+free descriptor table with its own completion fence, allowing consecutive batches to remain queued without overwriting
+each other's descriptors.
 
 ### The swap file
 
