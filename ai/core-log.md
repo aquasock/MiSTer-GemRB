@@ -409,3 +409,33 @@ Repeat AR4000 once with statistics disabled to quantify instrumentation overhead
 - [x] Passed
 
 ---
+
+## 14 COMMIT Unreleased ??? 2026-09-24T10:38:00-07:00
+
+#### Coming From:
+
+Unreleased 50cf286
+
+#### Purpose:
+
+Give every Noodles game launch a supported Main input handoff and clean core session before profiling the remaining spell-animation cost.
+
+#### Outcome:
+
+The approved change will make `run-noodles.sh` load a configurable protocol-1.5 RBF through `/dev/MiSTer_cmd` immediately before starting GemRB, which uses Main's own core-load path to release its evdev grabs and resets any dirty Noodles session. The wrapper will select the core's fixed 800x600 geometry and suppress the unrelated Linux-output mode switch. It will validate the configured RBF and command FIFO and fail visibly instead of starting without input or compatible hardware.
+
+#### Next Steps:
+
+Rebuild and deploy the bundle, launch through the generated Noodles wrapper, verify mouse and keyboard before and after one OSD open-close cycle, then load the AR4000 autosave and capture a spell-heavy statistics interval to identify the next accelerator operation.
+
+#### Files Modified:
+
+- README.md
+- scripts/bundle.sh
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
