@@ -462,6 +462,8 @@ Build and deploy the bundle, verify a no-selection timeout and a missing-data re
 
 - README.md
 - scripts/bundle.sh
+- scripts/deploy.sh
+- scripts/release.sh
 - tools/noodles-launcher.c
 
 #### Status:
