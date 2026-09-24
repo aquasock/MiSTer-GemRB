@@ -33,7 +33,7 @@ Run `/media/fat/gemrb-noodles-test/run.sh` while the timing-qualified Noodles pr
 
 ---
 
-## 3 COMMIT Unreleased ??? 2026-09-24T00:52:47-07:00
+## 3 COMMIT Unreleased e2fb908 2026-09-24T00:52:47-07:00
 
 #### Coming From:
 
@@ -45,11 +45,11 @@ Add coherent CPU fallbacks for the SDL operations GemRB needs but Noodles protoc
 
 #### Outcome:
 
-The planned change will give every managed render target a CPU shadow with explicit CPU-valid and FPGA-valid state, drain and read back before a CPU fallback, and upload current contents before later accelerated access. It will use SDL's software raster helpers for scaled copies, blended fills, points, lines and geometry while preserving the accelerated unscaled copy, blend, mirror and present paths. The diagnostic will interleave accelerated and CPU operations on the same targets and verify the final pixels so ordering and ownership transitions are tested directly; texture eviction remains outside this boundary.
+Source `e2fb908` gives every managed surface a CPU shadow with explicit CPU-valid and FPGA-valid state, reads current FPGA contents before a CPU fallback, and uploads current CPU contents before later accelerated access. SDL's software raster helpers now handle scaled, mirrored and self copies, blended fills, points, lines and textured or untextured geometry while preserving the accelerated clear, opaque fill, unscaled copy, blend and present paths. Rotation and custom blend modes on CPU fallback operations return errors rather than rendering incorrectly. The expanded diagnostic interleaves FPGA and CPU operations on the same target and checks every transition. A fresh SDL configuration and build, diagnostic build and complete GemRB cross-build passed. The hash-verified diagnostic package, with binary SHA256 `89936cd1436be1e8269ecf76e66b10c580ee28b9dee0631c2d167412cf381ad9` and SDL library SHA256 `87732b631e56a1a30f0a0cf09275138c7bdaebca841caa8ccbd4735179865c20`, ran twice on the MiSTer and reported `Noodles renderer diagnostic: PASS (renderer=noodles, hash=99b2815b)` both times.
 
 #### Next Steps:
 
-Implement the coherence state machine and GemRB-required fallbacks, rebuild SDL and GemRB, and run the expanded diagnostic twice on hardware before enabling the renderer in a GemRB launcher.
+Add bounded FPGA texture residency with deterministic eviction and restoration, then select the Noodles renderer in an isolated GemRB launcher and run a real game smoke test without changing the accepted software-renderer launcher.
 
 #### Files Modified:
 
@@ -58,8 +58,8 @@ Implement the coherence state machine and GemRB-required fallbacks, rebuild SDL 
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
 
