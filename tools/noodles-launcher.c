@@ -411,9 +411,19 @@ static int emit_key(int fd, uint16_t code, int value)
 
 static int send_handoff_key(int fd)
 {
-    if (emit_key(fd, KEY_LEFTCTRL, 1) || emit_key(fd, KEY_LEFTALT, 1) ||
-        emit_key(fd, KEY_F9, 1) || emit_key(fd, KEY_F9, 0) ||
-        emit_key(fd, KEY_LEFTALT, 0) || emit_key(fd, KEY_LEFTCTRL, 0)) return -1;
+    if (emit_key(fd, KEY_LEFTCTRL, 1)) return -1;
+    sleep_ms(40);
+    if (emit_key(fd, KEY_LEFTALT, 1)) return -1;
+    sleep_ms(40);
+    if (emit_key(fd, KEY_F9, 1)) return -1;
+    /* Main exposes one debounced menu-key slot. Keep F9 there long enough for
+     * its 20 ms debounce instead of immediately overwriting it with releases. */
+    sleep_ms(100);
+    if (emit_key(fd, KEY_F9, 0)) return -1;
+    sleep_ms(40);
+    if (emit_key(fd, KEY_LEFTALT, 0)) return -1;
+    sleep_ms(40);
+    if (emit_key(fd, KEY_LEFTCTRL, 0)) return -1;
     return 0;
 }
 
