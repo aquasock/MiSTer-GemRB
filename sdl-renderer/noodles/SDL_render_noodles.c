@@ -49,6 +49,7 @@ typedef struct NOODLES_TextureData
     size_t shadow_bytes;
     SDL_bool cpu_valid;
     SDL_bool gpu_valid;
+    SDL_bool keep_shadow;
     SDL_Rect lock_rect;
     SDL_bool locked;
     SDL_bool pinned;
@@ -267,7 +268,8 @@ static void NOODLES_FreeShadow(NOODLES_RenderData *data,
 static void NOODLES_DropRedundantShadow(NOODLES_RenderData *data,
                                         NOODLES_TextureData *surface)
 {
-    if (!surface->pinned && surface != data->target && !surface->locked &&
+    if (!surface->pinned && !surface->keep_shadow &&
+        surface != data->target && !surface->locked &&
         surface->surface && surface->gpu_valid) {
         NOODLES_FreeShadow(data, surface);
     }
@@ -787,6 +789,9 @@ static int NOODLES_UpdateTexture(SDL_Renderer *renderer, SDL_Texture *texture,
     int row;
     const SDL_bool gpu_was_valid = texturedata->gpu_valid;
 
+    if (!texturedata->shadow && texturedata->gpu_valid) {
+        texturedata->keep_shadow = SDL_TRUE;
+    }
     if (NOODLES_EnsureCPU(data, texturedata) < 0) {
         return -1;
     }
@@ -829,6 +834,9 @@ static int NOODLES_LockTexture(SDL_Renderer *renderer, SDL_Texture *texture,
 
     if (texturedata->locked) {
         return SDL_SetError("Noodles texture is not lockable");
+    }
+    if (!texturedata->shadow && texturedata->gpu_valid) {
+        texturedata->keep_shadow = SDL_TRUE;
     }
     if (NOODLES_EnsureCPU(data, texturedata) < 0) {
         return -1;

@@ -28,9 +28,9 @@ Heart of Winter and Trials of the Luremaster), Icewind Dale II and Planescape: T
 - **Optional MiSTer-Noodles acceleration** — the parallel Noodles launchers keep textures and render targets in FPGA
   memory and accelerate sprite copies, modulation, SDL blend modes, opaque fills and blended rectangle fills. The
   renderer uses the protocol 1.5 descriptor ring so it can queue later sprite batches while earlier batches execute,
-  releases redundant CPU shadows while texture contents are current in FPGA memory, and falls back to SDL only for
-  operations the core does not implement. Protocol 1.4 remains compatible, with its original single in-flight
-  descriptor table.
+  releases redundant CPU shadows while texture contents are current in FPGA memory, retains a recreated shadow for
+  textures that return to CPU updates, and falls back to SDL only for operations the core does not implement. Protocol
+  1.4 remains compatible, with its original single in-flight descriptor table.
 - **Fixes to GemRB's SDL plugins** — a lock-order deadlock in the audio plugin that froze the game while walking, a
   music conversion bug that played every other chunk as noise when the sound device does not run at the music's
   sample rate, and a fallback for SDL's software renderer, which lacks the custom blend modes GemRB's wall-occlusion

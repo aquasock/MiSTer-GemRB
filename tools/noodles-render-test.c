@@ -420,9 +420,9 @@ int main(int argc, char **argv)
         }
     }
 
-    /* A resident source drops its redundant CPU shadow. Updating and then
-       locking it must recreate current CPU contents without losing untouched
-       pixels, upload the change and permit the shadow to be dropped again. */
+    /* A resident source drops its redundant CPU shadow. Updating it must
+       recreate current CPU contents without losing untouched pixels; later
+       locks reuse that restored shadow instead of repeating the readback. */
     lazy = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
                              SDL_TEXTUREACCESS_STREAMING, 16, 16);
     if (!lazy || SDL_UpdateTexture(lazy, NULL, source, 16 * 4) < 0 ||
