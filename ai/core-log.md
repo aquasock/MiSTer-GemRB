@@ -537,7 +537,7 @@ Make no-swap operation the default for the tested Noodles MGL launch while retai
 
 ---
 
-## 18 COMMIT Unreleased ??? 2026-09-24T13:25:27-07:00
+## 18 COMMIT Unreleased e7245ec 2026-09-24T13:25:27-07:00
 
 #### Coming From:
 
@@ -549,11 +549,11 @@ Make the hardware-proven Noodles Baldur's Gate II launch run without swap by def
 
 #### Outcome:
 
-The Noodles coordinator will set `MISTER_SWAP=none` before starting its engine adapter, while the existing per-installation `env.sh` remains able to override that choice with `MISTER_SWAP=usb`; software-renderer launches will retain their current USB-swap default. User and release documentation will distinguish the tested Noodles behavior from the software fallback and explain the explicit override without changing the RBF or renderer.
+Source `e7245ec` makes the Noodles coordinator set `MISTER_SWAP=none` before starting its engine adapter, while the later per-installation `env.sh` source point can override it with `MISTER_SWAP=usb`; software-renderer launches retain their USB-swap default, invalid modes are rejected, and user, generated-launcher and release documentation distinguish the two paths. Strict native, GCC analyzer, static ARM, shell-syntax and bundle builds passed. The stripped deployed coordinator SHA256 is `1873ac97f7767eb534b7b59823e73b439978154c1ca3ead4347c742e496a319e`, the generated `run.sh` SHA256 is `ec97b4980b2b5a7ed80f29164a945eb4635b75a5d8968f406ee96fe08a8180f7`, and the MGL retained SHA256 `8354fe8dfa8797256d2f7d0f33427fc3320fe3de9db420d9b8cfdf3368a03db6`. With `env.sh` absent, hardware inspection proved that GemRB inherited `MISTER_SWAP=none` and `SDL_RENDER_DRIVER=noodles`, statistics were disabled and `/proc/swaps` remained empty. The autosave, combat, game-over video and game-over screen completed without a renderer, allocator or launcher fault; across a 163-second sample RSS rose from 179MiB to a 358MiB peak, Linux retained at least 113.6MiB available, process and system swap stayed zero, and GemRB used approximately 43% of one Cortex-A9 core. Forced test shutdown returned status 137 as expected, after which the supervisor restored all four Main input grabs.
 
 #### Next Steps:
 
-Build the coordinator with strict native, static ARM and analyzer checks, regenerate and validate the bundle and release documentation, deploy it to the MiSTer, remove the temporary no-swap statistics override, and verify that the MGL launch reaches Baldur's Gate II with statistics disabled and no active swap before repeating the save and one area transition.
+Capture a spell-heavy interval with statistics enabled to identify whether flagged sprites, scaling, uploads or a remaining software primitive dominates its visible slowdown, then implement the largest reusable Noodles acceleration opportunity. Keep the reserved-DDR swap-driver idea as a future fallback only if another supported engine exceeds Linux-visible RAM after adopting the same texture-shadow policy.
 
 #### Files Modified:
 
@@ -564,7 +564,7 @@ Build the coordinator with strict native, static ARM and analyzer checks, regene
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
