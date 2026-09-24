@@ -313,3 +313,35 @@ Add bounded SDK operations for reading, updating and filling the current back bu
 - [x] Passed
 
 ---
+
+## 11 COMMIT Unreleased ??? 2026-09-24T07:59:06-07:00
+
+#### Coming From:
+
+Unreleased 774a7eb
+
+#### Purpose:
+
+Eliminate the measured full-screen presentation copy by rendering SDL's default target directly into the current Noodles back buffer.
+
+#### Outcome:
+
+The planned integration will update to the SDK revision that adds bounded current-back-buffer read, update and fill operations, then use those operations and existing back-buffer sprite batches for SDL's default target. Textures and explicit render targets will remain managed surfaces, CPU fallbacks will retain regional coherence, target switching will flush pending work, and presentation will submit only the existing protocol-1.3 present command without changing the qualified RBF.
+
+#### Next Steps:
+
+Implement and test the SDK dependency update and direct default-target path, extend the exact-pixel diagnostic to exercise default-target CPU and FPGA ordering, rebuild SDL and GemRB, run the diagnostic on hardware, and repeat the Throne of Bhaal AR4000 save with statistics disabled for an unperturbed FPS result and enabled for residual timing. Defer audio until an optimization requires an RBF rebuild.
+
+#### Files Modified:
+
+- README.md
+- scripts/env.sh
+- sdl-renderer/noodles/SDL_render_noodles.c
+- tools/noodles-render-test.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
