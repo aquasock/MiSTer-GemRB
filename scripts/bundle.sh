@@ -352,7 +352,7 @@ exec /media/fat/gemrb/noodles-launcher --wait "${NOODLES_LAUNCH_WAIT:-30}"
 NOODLES_SCRIPT
 chmod +x "$WORK/bundle/Scripts/noodles-launcher.sh"
 
-MGL_DIR="$WORK/bundle/_Utility/Noodles Games"
+MGL_DIR="$WORK/bundle/_Utility"
 mkdir -p "$MGL_DIR"
 cat > "$MGL_DIR/Baldurs Gate II (GemRB).mgl" <<'MGL'
 <?xml version="1.0"?>

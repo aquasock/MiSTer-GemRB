@@ -103,7 +103,7 @@ Notes on the GOG installers, after unpacking them with innoextract:
 1. Download `MiSTer-GemRB-v<version>.zip` from the [Releases](https://github.com/aquasock/MiSTer-GemRB/releases) page
    and unzip it onto the root of the MiSTer's SD card, merging with what is there. This creates `/media/fat/gemrb`
    plus software-renderer launchers in `/media/fat/Scripts`, the silent `noodles-launcher.sh` watcher and Noodles game
-   entries under `/media/fat/_Utility/Noodles Games`. The location matters: the programs find their libraries under
+   entries under `/media/fat/_Utility`. The location matters: the programs find their libraries under
    `/media/fat/gemrb`.
 2. Copy your game files into `/media/fat/gemrb/games/<game>`, one folder per game (the table under
    [Supported games](#supported-games) says which folder is which). For the GOG releases, unpack the installer with
@@ -117,8 +117,8 @@ Notes on the GOG installers, after unpacking them with innoextract:
    back.
 
    For Noodles acceleration, run `noodles-launcher.sh` from the OSD Scripts menu. It returns immediately and waits silently
-   for 30 seconds. During that interval return to the core browser and select **_Utility > Noodles Games > Baldurs Gate II
-   (GemRB)**. The MGL loads the timing-qualified protocol 1.5 core; the watcher validates the selected RBF and `CHITIN.KEY`,
+   for 30 seconds. During that interval return to the core browser and select **Utility > Baldurs Gate II (GemRB)**. The
+   MGL loads the timing-qualified protocol 1.5 core; the watcher validates the selected RBF and `CHITIN.KEY`,
    releases stock Main's exclusive input grabs while preserving the core display, and starts GemRB. The same process
    supervises the game and restores Main's grabs on exit. The renderer can attach to protocol 1.4, but only protocol 1.5 provides the
    multi-table sprite-batch path. The matching `gemrb-<game>.sh` launcher remains the software-renderer fallback.
@@ -147,7 +147,7 @@ and checksums.
 The SD card is mounted synchronously, so copying the game data takes a long time: about half an hour for 2.6 GB.
 
 To remove it, delete `/media/fat/gemrb`, `/media/fat/Scripts/gemrb-*.sh`, `/media/fat/Scripts/noodles-launcher.sh` and
-`/media/fat/_Utility/Noodles Games`.
+`/media/fat/_Utility/Baldurs Gate II (GemRB).mgl`.
 
 ## Configuration
 

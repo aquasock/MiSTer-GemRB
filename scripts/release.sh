@@ -143,7 +143,7 @@ MiSTer-GemRB v$VERSION: installing
    resolution (your display scales it to fill the screen). Quit from the game's own menu; the display is switched back
    to 1080p60. To skip the question, set MISTER_RESOLUTION=640x480 (or 800x600) in /media/fat/gemrb/env.sh. For Noodles
    acceleration, run "noodles-launcher" from Scripts, return to the core browser within 30 seconds and select
-   _Utility/Noodles Games/Baldurs Gate II (GemRB). Main loads Noodles and the waiting launcher starts GemRB.
+   Utility/Baldurs Gate II (GemRB). Main loads Noodles and the waiting launcher starts GemRB.
 
 The launcher needs a USB drive for swap memory: the MiSTer has little RAM, and the game needs more than it has (a big
 fight, or loading a new area), so a swap file is used to keep the game from being killed. Plug the drive in before you
@@ -159,7 +159,7 @@ first run and never overwritten); saves are in /media/fat/gemrb/saves/<game>.
 If you installed version 0.1.0, the first run moves its game folder, saves and settings into this layout for you.
 
 To remove: delete /media/fat/gemrb, /media/fat/Scripts/gemrb-*.sh, /media/fat/Scripts/noodles-launcher.sh and
-/media/fat/_Utility/Noodles Games.
+/media/fat/_Utility/Baldurs Gate II (GemRB).mgl.
 More: README.md, and the license texts in LICENSES/ (see ATTRIBUTIONS.md).
 TXT
 

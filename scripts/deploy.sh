@@ -26,7 +26,8 @@ code() {
 	for f in "$BUNDLE"/Scripts/*.sh; do
 		"${SSH[@]}" "mkdir -p /media/fat/Scripts && cat > /media/fat/Scripts/$(basename "$f") && chmod +x /media/fat/Scripts/$(basename "$f")" < "$f"
 	done
-	tar -C "$BUNDLE" -cf - "_Utility/Noodles Games" | "${SSH[@]}" "tar --no-same-owner -C /media/fat -xf -"
+	"${SSH[@]}" "rm -f '/media/fat/_Utility/Noodles Games/Baldurs Gate II (GemRB).mgl'; rmdir '/media/fat/_Utility/Noodles Games' 2>/dev/null || true"
+	tar -C "$BUNDLE" -cf - "_Utility/Baldurs Gate II (GemRB).mgl" | "${SSH[@]}" "tar --no-same-owner -C /media/fat -xf -"
 }
 
 data() {
