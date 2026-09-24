@@ -27,7 +27,8 @@ Heart of Winter and Trials of the Luremaster), Icewind Dale II and Planescape: T
   [Performance](#performance).
 - **Optional MiSTer-Noodles acceleration** — the parallel Noodles launchers keep textures and render targets in FPGA
   memory and accelerate sprite copies, modulation, SDL blend modes, opaque fills and blended rectangle fills. The
-  renderer uses the protocol 1.5 descriptor ring so it can queue later sprite batches while earlier batches execute,
+  renderer uses the protocol 1.5 descriptor ring so it can queue later sprite batches while earlier batches execute.
+  When protocol 1.6 is loaded, it also combines up to 64 consecutive opaque fills into one ordered descriptor batch,
   releases redundant CPU shadows while texture contents are current in FPGA memory, retains a recreated shadow for
   textures that return to CPU updates, and falls back to SDL only for operations the core does not implement. Protocol
   1.4 remains compatible, with its original single in-flight descriptor table.
@@ -184,17 +185,18 @@ SDL command-queue time, FPGA presentation time, and the remaining per-frame time
 sprite batches, synchronization, the full-screen presentation copy and vertical-blank waiting. While statistics are
 enabled, the renderer waits for the presentation copy before submitting the present command so those two costs can be
 measured independently; the normal disabled path remains asynchronous. The summary also reports accelerated opaque-fill,
-blended-fill, plain-draw and flagged-draw counts and pixels, sprite-batch counts and maximum size, submission stalls,
+blended-fill, plain-draw and flagged-draw counts and pixels, fill- and sprite-batch counts and maximum sizes, submission stalls,
 CPU fallback work, uploads, readbacks, evictions, drains and current FPGA texture residency. The instrumentation is
 disabled otherwise.
 Opaque points and simple lines use the FPGA fill engine. Operations that still need SDL's software rasterizer keep the
 FPGA result coherent by reading and uploading only the affected target region.
-Consecutive accelerated copies to the same target share the core's 64-entry sprite batches. Fills, software fallbacks,
-target changes and resource synchronization flush pending copies to preserve SDL command order. The SDL default target
+Consecutive accelerated copies to the same target share the core's 64-entry sprite batches. On protocol 1.6,
+consecutive opaque fills similarly share 64-entry fill batches. Switching between fills and copies, software fallbacks,
+target changes and resource synchronization flushes the pending batch to preserve SDL command order. The SDL default target
 is the core's current hardware back buffer, so presentation does not copy an intermediate 800x600 composition surface;
-textures and explicit render targets remain managed surfaces. With protocol 1.5 and SDK 0.9, each flushed batch uses a
-free descriptor table with its own completion fence, allowing consecutive batches to remain queued without overwriting
-each other's descriptors.
+textures and explicit render targets remain managed surfaces. With protocol 1.5+ and SDK 0.10, each flushed sprite or
+fill batch uses a free descriptor table with its own completion fence, allowing consecutive batches to remain queued
+without overwriting each other's descriptors. Protocol 1.6 batches opaque fills; older cores retain scalar fills.
 
 ### The swap file
 

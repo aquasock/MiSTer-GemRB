@@ -172,6 +172,7 @@ int main(int argc, char **argv)
     const uint32_t p4 = rgba(240, 230, 50, 64);
     const uint32_t modulation = rgba(128, 64, 255, 128);
     const uint32_t batch_fill = rgba(5, 101, 207, 255);
+    const uint32_t fill_batch_second = rgba(193, 47, 83, 255);
     uint32_t source[16 * 16];
     uint32_t result[WIDTH * HEIGHT];
     uint32_t display_pixel;
@@ -392,6 +393,36 @@ int main(int argc, char **argv)
         }
     }
 
+    /* Cross the 64-entry fill-batch boundary, then interleave a draw, a
+       second fill run and another draw to verify both ordering boundaries. */
+    {
+        SDL_Rect fills[70];
+        SDL_Rect source_rect = { 0, 0, 1, 1 };
+        SDL_Rect destination = { 10, 110, 1, 1 };
+        for (i = 0; i < 70; ++i) {
+            fills[i] = (SDL_Rect){ i, 110, 1, 1 };
+        }
+        if (SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE) < 0 ||
+            SDL_SetRenderDrawColor(renderer, 5, 101, 207, 255) < 0 ||
+            SDL_RenderFillRects(renderer, fills, 70) < 0 ||
+            SDL_RenderCopy(renderer, texture, &source_rect, &destination) < 0) {
+            fprintf(stderr, "fill-batch boundary setup: %s\n", SDL_GetError());
+            goto done;
+        }
+        rect = (SDL_Rect){ 20, 110, 10, 1 };
+        if (SDL_SetRenderDrawColor(renderer, 193, 47, 83, 255) < 0 ||
+            SDL_RenderFillRect(renderer, &rect) < 0) {
+            fprintf(stderr, "post-draw fill ordering setup: %s\n", SDL_GetError());
+            goto done;
+        }
+        source_rect.x = 8;
+        destination.x = 25;
+        if (SDL_RenderCopy(renderer, texture, &source_rect, &destination) < 0) {
+            fprintf(stderr, "post-fill draw ordering setup: %s\n", SDL_GetError());
+            goto done;
+        }
+    }
+
     /* Three 4 MiB textures plus the pinned composition exceed the 12 MiB
        test budget. Reusing the first texture verifies eviction restoration. */
     for (i = 0; i < 3; ++i) {
@@ -525,6 +556,16 @@ int main(int argc, char **argv)
     failures += check_pixel(result, 25, 100, p2, "draw after batch fill") != 0;
     failures += check_pixel(result, 29, 100, batch_fill, "batch fill end") != 0;
     failures += check_pixel(result, 69, 100, p1, "batch last") != 0;
+    failures += check_pixel(result, 0, 110, batch_fill, "fill batch first") != 0;
+    failures += check_pixel(result, 9, 110, batch_fill, "fill before draw") != 0;
+    failures += check_pixel(result, 10, 110, p1, "draw after fill batch") != 0;
+    failures += check_pixel(result, 19, 110, batch_fill, "fill batch boundary") != 0;
+    failures += check_pixel(result, 20, 110, fill_batch_second,
+                            "fill after draw") != 0;
+    failures += check_pixel(result, 25, 110, p2, "draw after second fill") != 0;
+    failures += check_pixel(result, 29, 110, fill_batch_second,
+                            "second fill end") != 0;
+    failures += check_pixel(result, 69, 110, batch_fill, "fill batch last") != 0;
     failures += check_pixel(result, 0, 80, rgba(40, 210, 30, 255),
                             "resident texture zero") != 0;
     failures += check_pixel(result, 4, 80, rgba(110, 150, 110, 255),
