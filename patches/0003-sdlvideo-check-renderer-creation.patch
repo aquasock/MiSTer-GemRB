@@ -14,3 +14,17 @@ index 9d91b84..55457ef 100644
  	// Moved this here to fix a weird rendering issue
  
  	// we set logical size so that platforms where the window can be a different size then requested
+diff --git a/gemrb/plugins/SDLVideo/SDLVideo.cpp b/gemrb/plugins/SDLVideo/SDLVideo.cpp
+index e504ad3..5fce797 100644
+--- a/gemrb/plugins/SDLVideo/SDLVideo.cpp
++++ b/gemrb/plugins/SDLVideo/SDLVideo.cpp
+@@ -49,6 +49,9 @@ int SDLVideoDriver::Init(void)
+ int SDLVideoDriver::CreateDriverDisplay(const char* title, bool vsync)
+ {
+ 	int ret = CreateSDLDisplay(title, vsync);
++	if (ret == GEM_ERROR) {
++		return ret;
++	}
+ 	scratchBuffer = CreateBuffer(Region(Point(), screenSize), BufferFormat::DISPLAY_ALPHA);
+ 	scratchBuffer->Clear();
+ 	return ret;
