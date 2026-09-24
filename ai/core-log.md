@@ -91,3 +91,33 @@ None.
 - [x] Passed
 
 ---
+
+## 4 COMMIT Unreleased ??? 2026-09-24T01:12:00-07:00
+
+#### Coming From:
+
+Unreleased e2fb908
+
+#### Purpose:
+
+Bound SDL texture residency in the Noodles managed-surface arena so GemRB can retain more decoded textures than fit in FPGA-addressable memory.
+
+#### Outcome:
+
+The planned change will create texture shadows without immediately allocating a managed Noodles surface, track resident bytes and least-recently-used access, preserve GPU-only contents before eviction, and restore a texture from its CPU shadow when hardware next needs it. The 800x600 composition surface will remain pinned, the active render target and current copy source will remain resident together, and a configurable budget below the SDK's 224 MiB arena will leave deterministic headroom. The diagnostic will lower that budget, cycle enough large textures to force eviction, revisit an evicted texture and verify its restored pixels.
+
+#### Next Steps:
+
+Implement and qualify lazy residency and eviction, then add an isolated Noodles GemRB launcher and run a real installed-game smoke test before changing any default launcher.
+
+#### Files Modified:
+
+- sdl-renderer/noodles/SDL_render_noodles.c
+- tools/noodles-render-test.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
