@@ -506,7 +506,7 @@ Reduce HPS memory pressure by releasing redundant CPU texture shadows while thei
 
 ---
 
-## 17 COMMIT Unreleased ??? 2026-09-24T19:18:00-07:00
+## 17 COMMIT Unreleased 564c25c 2026-09-24T19:18:00-07:00
 
 #### Coming From:
 
@@ -518,11 +518,11 @@ Eliminate redundant HPS texture shadows that forced the live Baldur's Gate II co
 
 #### Outcome:
 
-The approved change will make CPU shadows demand-allocated and release a non-pinned, non-target shadow once the same current pixels are safely resident in an FPGA surface. Width and height will remain independent of shadow lifetime; updates and locks will recreate and synchronize a shadow as needed, CPU fallbacks will read current pixels back before access, and eviction will preserve current FPGA contents before destroying residency. The composition surface and active render target will retain their shadows to avoid repeated allocation and regional synchronization within a frame. Shadow allocation and release totals will be added to opt-in renderer statistics, and the diagnostic will exercise upload, hardware use, later CPU access and eviction restoration across the new lifetime transitions.
+Sources `fb089f2` and `564c25c` make texture dimensions independent of CPU-shadow lifetime, release a non-pinned source shadow once the same current pixels are resident in FPGA memory, recreate current contents for later updates or locks, and retain that recreated shadow after repeated CPU access. Eviction still reads current FPGA contents before destroying residency, while the composition surface and active target retain their shadows. Renderer statistics now report current and peak shadow bytes plus allocation and release counts, and the diagnostic covers upload, release, partial update, later lock and eviction restoration. Fresh SDL, diagnostic, GemRB and bundle builds passed; the diagnostic binary SHA256 is `ed88d719b1de2fc56baa7364f6aacb9000591fc64893b68c0b8baef7b14e4219`, its SDL SHA256 is `be6b57e1a87483f1a17dab3a00604a70d091e78fd43cf20bdbafbdf2fa91708a`, and the deployed bundle SDL SHA256 is `6d8ab7ae560b9e399d4f4eeacfd42dbb52d494e0ac3451a56b4390ad551a7f4e`. On the protocol-1.5 seed-13 core the exact-pixel diagnostic passed with hash `fbd286bf` and its HDMI audio test passed. An initial release-after-every-upload policy held shadows at 1.8-2.0MiB and eliminated active swap traffic, but repeated dynamic-texture access caused hundreds of allocations and readbacks per interval and raised GemRB to 53.5% of one Cortex-A9 core. The adaptive policy stabilized shadows at 12.3-12.9MiB and reduced settled intervals to negligible allocation and readback traffic. With USB swap completely disabled, the Throne of Bhaal save loaded, sustained combat, played the game-over video and reached the game-over screen. Observed RSS peaked at 374MiB, Linux retained at least 107MiB available, process swap stayed zero, and no OOM occurred; a final mixed combat/video sample used 35.3% of one Cortex-A9 core. Combat ranged from 11.5 to 15.5fps as effects and game load varied, and the 12fps game-over video held its source rate. Two intervening runs reproduced the existing Kobold Commando projectile heap fault with exits 134 and 139, but both occurred with ample available RAM and clean launcher input restoration, independently of the renderer memory policy.
 
 #### Next Steps:
 
-Rebuild SDL, the renderer diagnostic, GemRB and the bundle, run exact-pixel diagnostics on the protocol-1.5 core, then repeat the same Throne of Bhaal combat path and compare shadow memory, RSS, swap traffic, CPU use and frame rate with the measured 434 MiB anonymous footprint and active swap baseline.
+Make no-swap operation the default for the tested Noodles MGL launch while retaining an explicit USB-swap override, then repeat the save and one area transition with statistics disabled. After that, profile a spell-heavy interval and address the largest remaining renderer or core cost rather than the resolved HPS shadow footprint.
 
 #### Files Modified:
 
@@ -532,7 +532,7 @@ Rebuild SDL, the renderer diagnostic, GemRB and the bundle, run exact-pixel diag
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
