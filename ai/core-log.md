@@ -219,3 +219,34 @@ Accelerate opaque points and lines with the existing solid-fill command, and mak
 - [x] Passed
 
 ---
+
+## 8 COMMIT Unreleased ??? 2026-09-24T07:26:33-07:00
+
+#### Coming From:
+
+Unreleased 64e3f54
+
+#### Purpose:
+
+Eliminate full-surface CPU and FPGA synchronization around small fallback primitives in the Noodles SDL renderer.
+
+#### Outcome:
+
+The planned renderer change will submit opaque points and lines through the existing FPGA solid-fill path and will constrain blended fill and remaining primitive fallback readbacks and uploads to the pixels' affected regions. Command order and surface coherence will remain exact, while the regional path will avoid the approximately 402MiB of full-screen synchronization measured per gameplay frame without requiring a protocol or RTL change.
+
+#### Next Steps:
+
+Implement regional synchronization and opaque primitive submission, extend the deterministic diagnostic with interleaved accelerated and regional-fallback operations, run fresh SDL and GemRB cross-builds, verify pixel readback on hardware, and repeat the same Throne of Bhaal AR4000 save with timing and transfer totals recorded.
+
+#### Files Modified:
+
+- README.md
+- sdl-renderer/noodles/SDL_render_noodles.c
+- tools/noodles-render-test.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
