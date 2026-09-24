@@ -568,3 +568,32 @@ Capture a spell-heavy interval with statistics enabled to identify whether flagg
 - [x] Passed
 
 ---
+
+## 19 COMMIT Unreleased ??? 2026-09-24T13:37:50-07:00
+
+#### Coming From:
+
+Unreleased e7245ec
+
+#### Purpose:
+
+Measure the statistics-enabled Noodles workload during the visible Throne of Bhaal spell-animation slowdown before selecting another shared accelerator feature.
+
+#### Outcome:
+
+The qualified protocol-1.5 seed-13 RBF and GemRB source `e7245ec` will be profiled without swap during the same autosave combat path, separating command-queue, presentation and remaining frame time while counting flagged and plain sprites, scaling fallbacks, fills, uploads, readbacks, drains and shadow activity.
+
+#### Next Steps:
+
+Capture stable pre-spell, spell-heavy and post-effect intervals plus process CPU and memory samples, identify the dominant reusable cost from evidence, and open the smallest corresponding MiSTer-Noodles or renderer implementation cycle before rebuilding hardware.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
