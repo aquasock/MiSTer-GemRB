@@ -34,6 +34,8 @@ Run `/media/fat/gemrb-noodles-test/run.sh` while the timing-qualified Noodles pr
 ---
 
 
+
+
 ## 3 COMMIT Unreleased e2fb908 2026-09-24T00:52:47-07:00
 
 #### Coming From:
@@ -630,5 +632,35 @@ Keep protocol 1.6 as the accepted Noodles baseline and investigate the spell-spe
 
 - [x] Built
 - [x] Passed
+
+---
+
+## 21 COMMIT Unreleased ??? 2026-09-24T14:48:41-07:00
+
+#### Coming From:
+
+Unreleased 4a41cb0
+
+#### Purpose:
+
+Separate texture synchronization and SDL command-construction costs from GemRB's spell-heavy frame time before choosing another accelerator change.
+
+#### Outcome:
+
+Instrument the Noodles renderer's texture updates, locks, readbacks, target changes and command-building callbacks with five-second timing and call-volume summaries, retaining the existing opt-in statistics path and normal behavior when disabled.
+
+#### Next Steps:
+
+Build and deploy the instrumented SDL library, repeat the AR4000 spell interval with statistics enabled, then repeat it with statistics disabled to check whether measurement overhead affects pacing; use the evidence to select a targeted GemRB, SDL or reusable Noodles optimization.
+
+#### Files Modified:
+
+- README.md
+- sdl-renderer/noodles/SDL_render_noodles.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
 
 ---
