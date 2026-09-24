@@ -188,7 +188,7 @@ Add opt-in per-frame counts and pixel totals for accelerated fills, copies and b
 
 ---
 
-## 7 COMMIT Unreleased ??? 2026-09-24T07:18:00-07:00
+## 7 COMMIT Unreleased 64e3f54 2026-09-24T07:25:48-07:00
 
 #### Coming From:
 
@@ -200,11 +200,13 @@ Measure the rendering workload responsible for the multi-second Noodles command 
 
 #### Outcome:
 
-The Noodles SDL backend will extend its disabled-by-default periodic statistics with operation counts and pixel or byte totals for accelerated fills and draws, software fallbacks, surface uploads and readbacks, and residency evictions. The instrumentation will preserve normal runtime behavior and provide enough evidence to distinguish command-count overhead, blend or copy pixel throughput, CPU/GPU synchronization and residency churn before selecting an optimization.
+Source `64e3f54` extends the disabled-by-default five-second statistics with command and pixel totals for accelerated fills, plain and flagged draws, software copies and blended fills, primitive and geometry counts, submission stalls, upload and readback counts and bytes, evictions, drains and current FPGA residency. Fresh SDL, diagnostic and complete GemRB cross-builds passed. The deployed SDL library SHA256 is `571a12f459403ce488f0cc7fd01af8b47a41d3a7d656b27657176a2bf58a80bf`; the diagnostic binary retained SHA256 `301012988ea8329ae5da329d2fba162a474a8f8f5819e40e88d9f79a24b686d7` and passed on the timing-qualified protocol-1.3 core with hash `b656c299`.
+
+The BG2 start screen held about 18.3fps while processing approximately 2.9 million accelerated pixels and seven queue drains per frame, with no CPU fallback, readback, eviction or swap activity. In the same Throne of Bhaal AR4000 save, steady gameplay fell to 0.14-0.20fps while each frame contained only 1.04 million fill pixels, 0.40 million plain-draw pixels and 1.27 million flagged-draw pixels. The actual bottleneck was 98 software primitive commands and 19 blended software fills interleaved with accelerated draws: each transition invalidated the whole 800x600 CPU or FPGA copy and produced about 110 full-surface readbacks plus 110 full-surface uploads, reaching 201MiB in each direction per frame. Queue time reached 6.83 seconds while presentation remained 39ms, memory remained healthy at 144MB RSS with 333MB available, and swap remained unused. The workload therefore does not require greater blit pixel throughput; it requires eliminating full-surface synchronization around small fallback primitives.
 
 #### Next Steps:
 
-Implement and document the counters, run fresh SDL and GemRB cross-builds plus the renderer diagnostic, deploy the hash-verified bundle, and repeat the same Throne of Bhaal AR4000 save on hardware. Use the observed workload to propose the smallest host batching or RTL optimization as a separate cycle.
+Accelerate opaque points and lines with the existing solid-fill command, and make blended fill and remaining primitive fallbacks read and upload only their affected region while preserving command order and surface coherence. Validate mixed accelerated and regional-fallback ordering in the diagnostic before repeating the same AR4000 save. Defer new RTL primitive opcodes unless the regional path remains a measured bottleneck.
 
 #### Files Modified:
 
@@ -213,7 +215,7 @@ Implement and document the counters, run fresh SDL and GemRB cross-builds plus t
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
