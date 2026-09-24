@@ -38,6 +38,7 @@
 #define NOODLES_REQUIRED_PROTOCOL 0x00010003u
 #define NOODLES_DEFAULT_RESIDENT_MB 192u
 #define NOODLES_MAX_RESIDENT_MB 220u
+#define NOODLES_DRAW_BATCH_MAX 64u
 
 typedef struct NOODLES_TextureData
 {
@@ -62,6 +63,9 @@ typedef struct NOODLES_RenderData
     size_t resident_bytes;
     size_t resident_budget;
     Uint64 use_clock;
+    noodles_surface_t *pending_draw_target;
+    noodles_surface_draw_t pending_draws[NOODLES_DRAW_BATCH_MAX];
+    size_t pending_draw_count;
     SDL_bool stats_enabled;
     Uint64 stats_start;
     Uint64 stats_frames;
@@ -77,6 +81,8 @@ typedef struct NOODLES_RenderData
     Uint64 stats_flagged_draws;
     Uint64 stats_flagged_draw_pixels;
     Uint64 stats_draw_stalls;
+    Uint64 stats_draw_batches;
+    Uint64 stats_draw_batch_max;
     Uint64 stats_software_copies;
     Uint64 stats_software_copy_pixels;
     Uint64 stats_software_fills;
@@ -127,6 +133,8 @@ static Uint32 NOODLES_PackRGBA(Uint8 r, Uint8 g, Uint8 b, Uint8 a)
     return (Uint32)r | ((Uint32)g << 8) | ((Uint32)b << 16) | ((Uint32)a << 24);
 }
 
+static int NOODLES_FlushDraws(NOODLES_RenderData *data);
+
 static int NOODLES_DrainLink(NOODLES_RenderData *data)
 {
     if (data->stats_enabled) {
@@ -173,6 +181,7 @@ static void NOODLES_FreeSurface(NOODLES_RenderData *data,
                                 NOODLES_TextureData *surface)
 {
     NOODLES_TextureData **cursor = &data->surfaces;
+    (void)NOODLES_FlushDraws(data);
     while (*cursor && *cursor != surface) {
         cursor = &(*cursor)->next;
     }
@@ -190,6 +199,9 @@ static void NOODLES_FreeSurface(NOODLES_RenderData *data,
 static int NOODLES_EnsureCPU(NOODLES_RenderData *data, NOODLES_TextureData *surface)
 {
     noodles_rect_t rect;
+    if (NOODLES_FlushDraws(data) < 0) {
+        return -1;
+    }
     if (surface->cpu_valid) {
         return 0;
     }
@@ -271,6 +283,9 @@ static int NOODLES_MakeResident(NOODLES_RenderData *data,
         NOODLES_TouchSurface(data, surface);
         return 0;
     }
+    if (NOODLES_FlushDraws(data) < 0) {
+        return -1;
+    }
 
     while (data->resident_bytes + surface->resident_bytes > data->resident_budget) {
         candidate = NOODLES_FindEvictionCandidate(data, surface);
@@ -317,6 +332,10 @@ static int NOODLES_MakeResident(NOODLES_RenderData *data,
 static int NOODLES_EnsureGPU(NOODLES_RenderData *data, NOODLES_TextureData *surface)
 {
     noodles_rect_t rect;
+    if ((!surface->surface || !surface->gpu_valid) &&
+        NOODLES_FlushDraws(data) < 0) {
+        return -1;
+    }
     if (NOODLES_MakeResident(data, surface) < 0) {
         return -1;
     }
@@ -349,6 +368,9 @@ static int NOODLES_PrepareCPURegion(NOODLES_RenderData *data,
 {
     noodles_rect_t rect;
     void *pixels;
+    if (NOODLES_FlushDraws(data) < 0) {
+        return -1;
+    }
     if (NOODLES_EnsureGPU(data, surface) < 0) {
         return -1;
     }
@@ -415,6 +437,9 @@ static void NOODLES_MarkCPUWrite(NOODLES_TextureData *surface)
 static int NOODLES_SubmitFill(NOODLES_RenderData *data, noodles_surface_t *target,
                               const noodles_rect_t *rect, Uint32 color)
 {
+    if (NOODLES_FlushDraws(data) < 0) {
+        return -1;
+    }
     if (noodles_surface_fill(target, rect, color) == 0) {
         if (data->stats_enabled) {
             data->stats_fill_commands++;
@@ -440,12 +465,38 @@ static int NOODLES_SubmitFill(NOODLES_RenderData *data, noodles_surface_t *targe
     return NOODLES_SetErrno("fill");
 }
 
-static int NOODLES_SubmitDraw(NOODLES_RenderData *data, noodles_surface_t *target,
-                              const noodles_surface_draw_t *draw)
+static int NOODLES_FlushDraws(NOODLES_RenderData *data)
 {
-    if (noodles_surface_draw_batch(data->link, target, draw, 1) == 0) {
+    size_t i;
+    const size_t count = data->pending_draw_count;
+
+    if (!count) {
+        return 0;
+    }
+    if (noodles_surface_draw_batch(data->link, data->pending_draw_target,
+                                   data->pending_draws, count) < 0) {
+        if (errno != EAGAIN) {
+            return NOODLES_SetErrno("draw batch");
+        }
         if (data->stats_enabled) {
-            const Uint64 pixels = (Uint64)draw->source_rect.width * draw->source_rect.height;
+            data->stats_draw_stalls++;
+        }
+        if (NOODLES_DrainLink(data) < 0) {
+            return -1;
+        }
+        if (noodles_surface_draw_batch(data->link, data->pending_draw_target,
+                                       data->pending_draws, count) < 0) {
+            return NOODLES_SetErrno("draw batch");
+        }
+    }
+    if (data->stats_enabled) {
+        data->stats_draw_batches++;
+        data->stats_draw_batch_max = SDL_max(data->stats_draw_batch_max,
+                                             (Uint64)count);
+        for (i = 0; i < count; ++i) {
+            const noodles_surface_draw_t *draw = &data->pending_draws[i];
+            const Uint64 pixels = (Uint64)draw->source_rect.width *
+                                  draw->source_rect.height;
             if (draw->flags) {
                 data->stats_flagged_draws++;
                 data->stats_flagged_draw_pixels += pixels;
@@ -454,30 +505,27 @@ static int NOODLES_SubmitDraw(NOODLES_RenderData *data, noodles_surface_t *targe
                 data->stats_plain_draw_pixels += pixels;
             }
         }
-        return 0;
     }
-    if (errno == EAGAIN) {
-        if (data->stats_enabled) {
-            data->stats_draw_stalls++;
-        }
-        if (NOODLES_DrainLink(data) < 0) {
-            return -1;
-        }
-        if (noodles_surface_draw_batch(data->link, target, draw, 1) == 0) {
-            if (data->stats_enabled) {
-                const Uint64 pixels = (Uint64)draw->source_rect.width * draw->source_rect.height;
-                if (draw->flags) {
-                    data->stats_flagged_draws++;
-                    data->stats_flagged_draw_pixels += pixels;
-                } else {
-                    data->stats_plain_draws++;
-                    data->stats_plain_draw_pixels += pixels;
-                }
-            }
-            return 0;
-        }
+    data->pending_draw_count = 0;
+    data->pending_draw_target = NULL;
+    return 0;
+}
+
+static int NOODLES_SubmitDraw(NOODLES_RenderData *data, noodles_surface_t *target,
+                              const noodles_surface_draw_t *draw)
+{
+    if (data->pending_draw_count && data->pending_draw_target != target &&
+        NOODLES_FlushDraws(data) < 0) {
+        return -1;
     }
-    return NOODLES_SetErrno("draw");
+    if (!data->pending_draw_count) {
+        data->pending_draw_target = target;
+    }
+    data->pending_draws[data->pending_draw_count++] = *draw;
+    if (data->pending_draw_count == NOODLES_DRAW_BATCH_MAX) {
+        return NOODLES_FlushDraws(data);
+    }
+    return 0;
 }
 
 static int NOODLES_GetOutputSize(SDL_Renderer *renderer, int *w, int *h)
@@ -662,6 +710,9 @@ static void NOODLES_SetTextureScaleMode(SDL_Renderer *renderer, SDL_Texture *tex
 static int NOODLES_SetRenderTarget(SDL_Renderer *renderer, SDL_Texture *texture)
 {
     NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
+    if (NOODLES_FlushDraws(data) < 0) {
+        return -1;
+    }
     if (texture) {
         NOODLES_TextureData *texturedata = (NOODLES_TextureData *)texture->driverdata;
         data->target = texturedata;
@@ -1474,6 +1525,9 @@ static int NOODLES_RunCommandQueue(SDL_Renderer *renderer, SDL_RenderCommand *cm
         start = SDL_GetPerformanceCounter();
     }
     result = NOODLES_RunCommandQueueImpl(renderer, cmd, vertices, vertsize);
+    if (result == 0) {
+        result = NOODLES_FlushDraws(data);
+    }
     if (data->stats_enabled) {
         const Uint64 elapsed = SDL_GetPerformanceCounter() - start;
         data->stats_queue_ticks += elapsed;
@@ -1515,6 +1569,9 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
     source.y = 0;
     source.width = NOODLES_BUFFER_WIDTH;
     source.height = NOODLES_BUFFER_HEIGHT;
+    if (NOODLES_FlushDraws(data) < 0) {
+        return -1;
+    }
     if (NOODLES_EnsureGPU(data, &data->composition) < 0) {
         return -1;
     }
@@ -1555,7 +1612,7 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
                     (double)data->stats_present_ticks * milliseconds / frame_count,
                     (double)data->stats_present_max_ticks * milliseconds,
                     other_ticks * milliseconds / frame_count);
-            SDL_Log("Noodles work: fill=%llu/%.3fMpx stalls=%llu plain=%llu/%.3fMpx flagged=%llu/%.3fMpx draw-stalls=%llu CPU-copy=%llu/%.3fMpx CPU-fill=%llu/%.3fMpx primitives=%llu/%llu vertices geometry=%llu/%llu triangles",
+            SDL_Log("Noodles work: fill=%llu/%.3fMpx stalls=%llu plain=%llu/%.3fMpx flagged=%llu/%.3fMpx batches=%llu max-batch=%llu draw-stalls=%llu CPU-copy=%llu/%.3fMpx CPU-fill=%llu/%.3fMpx primitives=%llu/%llu vertices geometry=%llu/%llu triangles",
                     (unsigned long long)data->stats_fill_commands,
                     (double)data->stats_fill_pixels / 1000000.0,
                     (unsigned long long)data->stats_fill_stalls,
@@ -1563,6 +1620,8 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
                     (double)data->stats_plain_draw_pixels / 1000000.0,
                     (unsigned long long)data->stats_flagged_draws,
                     (double)data->stats_flagged_draw_pixels / 1000000.0,
+                    (unsigned long long)data->stats_draw_batches,
+                    (unsigned long long)data->stats_draw_batch_max,
                     (unsigned long long)data->stats_draw_stalls,
                     (unsigned long long)data->stats_software_copies,
                     (double)data->stats_software_copy_pixels / 1000000.0,
@@ -1594,6 +1653,8 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
             data->stats_flagged_draws = 0;
             data->stats_flagged_draw_pixels = 0;
             data->stats_draw_stalls = 0;
+            data->stats_draw_batches = 0;
+            data->stats_draw_batch_max = 0;
             data->stats_software_copies = 0;
             data->stats_software_copy_pixels = 0;
             data->stats_software_fills = 0;

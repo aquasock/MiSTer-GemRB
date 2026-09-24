@@ -161,10 +161,12 @@ sets `SDL_MISTER_FORMAT=xrgb` (an alpha-less screen, which lets SDL use its fast
 `SDL_RENDER_DRIVER=software`; the parallel Noodles launchers select `SDL_RENDER_DRIVER=noodles`.
 Set `SDL_RENDER_NOODLES_STATS=1` when starting a Noodles launcher to log a five-second summary of observed frame rate,
 SDL command-queue time, FPGA presentation time, and the remaining per-frame time. The summary also reports accelerated
-fill, plain-draw and flagged-draw counts and pixels, submission stalls, CPU fallback work, uploads, readbacks, evictions,
-drains and current FPGA texture residency. The instrumentation is disabled otherwise.
+fill, plain-draw and flagged-draw counts and pixels, sprite-batch counts and maximum size, submission stalls, CPU fallback
+work, uploads, readbacks, evictions, drains and current FPGA texture residency. The instrumentation is disabled otherwise.
 Opaque points and simple lines use the FPGA fill engine. Operations that still need SDL's software rasterizer keep the
 FPGA result coherent by reading and uploading only the affected target region.
+Consecutive accelerated copies to the same target share the core's 64-entry sprite batches. Fills, software fallbacks,
+target changes and resource synchronization flush pending copies to preserve SDL command order.
 
 ### The swap file
 
