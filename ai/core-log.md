@@ -155,7 +155,7 @@ Move GemRB's null-renderer check immediately after `SDL_CreateRenderer` so a bus
 
 ---
 
-## 6 COMMIT Unreleased ??? 2026-09-24T01:35:00-07:00
+## 6 COMMIT Unreleased cfb7985 2026-09-24T07:15:38-07:00
 
 #### Coming From:
 
@@ -167,11 +167,13 @@ Harden GemRB renderer startup and add opt-in Noodles frame timing for qualificat
 
 #### Outcome:
 
-The planned GemRB patch will check the result of `SDL_CreateRenderer` before any renderer API is called so an unavailable or stale Noodles session produces a controlled startup failure. The Noodles SDL backend will gain disabled-by-default periodic statistics covering observed frame rate, command-queue time and presentation time, allowing the remaining frame interval to be attributed to GemRB and other SDL work without changing normal runtime behavior.
+Source `466325b` adds disabled-by-default five-second Noodles statistics for observed frame rate, SDL command-queue execution, presentation and remaining frame work, and moves GemRB's renderer-null check immediately after `SDL_CreateRenderer`. A busy-session hardware test exposed a second caller that continued after `CreateSDLDisplay` returned `GEM_ERROR`; source `cfb7985` propagates that error from `CreateDriverDisplay`. Fresh SDL and GemRB cross-builds passed, and a deliberately refused Noodles open then exited with status 255 and a controlled `Cannot initialize shaders` fatal error instead of dereferencing the absent renderer. The deployed diagnostic retained SHA256 `301012988ea8329ae5da329d2fba162a474a8f8f5819e40e88d9f79a24b686d7` and passed on hardware with hash `b656c299`; the deployed SDL bundle has SHA256 `1b74f86a45d6f196a81442efa533aa1577ad5c4535a8f5da954337cae7789a5e`, GemRB has SHA256 `5b2b535182fb1d2cd8ed814d4ba5a5141184f446fa3531c990315ada6218a46d`, and the final `SDLVideo.so` has SHA256 `5d76ce7c30287bd55734cd63aa126406cc6bbd2d77bfc8c376f8dfa6547e00ba`.
+
+The BG2 start screen ran at 18-19fps with approximately 24.5ms in queue execution and 28-30ms in presentation. After loading the Throne of Bhaal AR4000 autosave, the user confirmed correct colours, tiles and sprites with no visible corruption, but performance fell below 1fps. Queue execution rose progressively to 7.1 seconds per frame while presentation remained 27-37ms and non-renderer work remained mostly 7-15ms; GemRB used 148MB RSS, had 329MB available system memory and used no swap. This isolates the gameplay failure to submitted rendering work rather than presentation, CPU game logic or memory pressure. Direct SSH launches also established that Main retains exclusive physical-input grabs unless they are explicitly released after its video-mode switch; after releasing Main's actual event-device descriptors, GemRB received the physical keyboard and mouse correctly. GemRB opened `/dev/MrAudio` and loaded and played the area music resources, but the user heard no audio, confirming that the remaining core-audio path is separate from application audio initialization.
 
 #### Next Steps:
 
-Apply the GemRB error-path patch during reproducible builds, add and document the statistics control, run clean cross-builds, verify the diagnostic on hardware, deliberately test a refused Noodles open, and collect measurements from an installed BG2 gameplay area through both Noodles and software launchers.
+Add opt-in per-frame counts and pixel totals for accelerated fills, copies and blends, CPU fallbacks, uploads, readbacks and residency events, then repeat the AR4000 test to identify the operation class responsible for the seven-second queue. Use that measurement to scope SDL draw batching or the smallest required core change. Integrate a supported Main input handoff into the OSD launch path and implement core audio in separate bounded cycles after rendering throughput is understood.
 
 #### Files Modified:
 
@@ -181,7 +183,7 @@ Apply the GemRB error-path patch during reproducible builds, add and document th
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
