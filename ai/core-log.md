@@ -664,3 +664,32 @@ Replace GemRB's one-`SDL_RenderDrawLine`-per-wall-span path with one exact `SDL_
 - [x] Passed
 
 ---
+
+## 22 COMMIT Unreleased ??? 2026-09-24T15:26:00-07:00
+
+#### Coming From:
+
+Unreleased ebaa9e5
+
+#### Purpose:
+
+Batch each GemRB wall-stencil polygon's horizontal spans into one SDL fill call to eliminate redundant command construction during viewport movement.
+
+#### Outcome:
+
+The proposed change replaces the repeated `SDL_RenderDrawLine` calls in GemRB's existing filled-polygon raster path with an exact rectangle list submitted through one `SDL_RenderFillRects` call per polygon, while retaining the existing behavior for polygon outlines and leaving the Noodles SDL renderer, ARM launcher and RBF unchanged.
+
+#### Next Steps:
+
+Apply the localized GemRB patch, cross-build and deploy the engine, verify equivalent stencil pixels and draw ordering, and repeat the same paused stationary and continuous-panning measurements before profiling the remaining stationary spell-animation cost.
+
+#### Files Modified:
+
+- patches/0004-sdlvideo-batch-polygon-spans.patch
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
