@@ -108,6 +108,61 @@ static int render_copy(SDL_Renderer *renderer, SDL_Texture *texture, int x,
     return SDL_RenderCopyEx(renderer, texture, NULL, &destination, 0.0, NULL, flip);
 }
 
+static SDL_AudioDeviceID queue_tone(void)
+{
+    enum { TONE_RATE = 48000, TONE_FRAMES = 48000, TONE_AMPLITUDE = 9000 };
+    SDL_AudioSpec wanted;
+    SDL_AudioSpec obtained;
+    SDL_AudioDeviceID device;
+    Sint16 *samples;
+    uint32_t phase = 0;
+    int i;
+
+    SDL_zero(wanted);
+    wanted.freq = TONE_RATE;
+    wanted.format = AUDIO_S16SYS;
+    wanted.channels = 2;
+    wanted.samples = 1024;
+    device = SDL_OpenAudioDevice(NULL, 0, &wanted, &obtained, 0);
+    if (!device) {
+        fprintf(stderr, "SDL_OpenAudioDevice: %s\n", SDL_GetError());
+        return 0;
+    }
+    if (obtained.freq != TONE_RATE || obtained.format != AUDIO_S16SYS ||
+        obtained.channels != 2) {
+        fprintf(stderr, "unexpected audio format: %d Hz format=%04x channels=%u\n",
+                obtained.freq, obtained.format, obtained.channels);
+        SDL_CloseAudioDevice(device);
+        return 0;
+    }
+    samples = (Sint16 *)SDL_malloc(TONE_FRAMES * 2u * sizeof(*samples));
+    if (!samples) {
+        fprintf(stderr, "tone allocation: %s\n", SDL_GetError());
+        SDL_CloseAudioDevice(device);
+        return 0;
+    }
+    for (i = 0; i < TONE_FRAMES; ++i) {
+        int32_t triangle = phase < 24000u ? (int32_t)phase : 48000 - (int32_t)phase;
+        Sint16 sample = (Sint16)((triangle * (TONE_AMPLITUDE * 2) / 24000) -
+                                TONE_AMPLITUDE);
+        samples[i * 2] = sample;
+        samples[i * 2 + 1] = sample;
+        phase = (phase + 440u) % 48000u;
+    }
+    if (SDL_QueueAudio(device, samples,
+                       TONE_FRAMES * 2u * sizeof(*samples)) < 0) {
+        fprintf(stderr, "SDL_QueueAudio: %s\n", SDL_GetError());
+        SDL_free(samples);
+        SDL_CloseAudioDevice(device);
+        return 0;
+    }
+    SDL_free(samples);
+    SDL_PauseAudioDevice(device, 0);
+    printf("SDL audio diagnostic: queued 1.000 s, 48000 Hz stereo S16, driver=%s\n",
+           SDL_GetCurrentAudioDriver());
+    return device;
+}
+
 int main(int argc, char **argv)
 {
     const uint32_t background = rgba(11, 23, 37, 201);
@@ -122,6 +177,7 @@ int main(int argc, char **argv)
     uint32_t display_pixel;
     SDL_Window *window = NULL;
     SDL_Renderer *renderer = NULL;
+    SDL_AudioDeviceID audio = 0;
     SDL_Texture *texture = NULL;
     SDL_Texture *target = NULL;
     SDL_Texture *residency[3] = { NULL, NULL, NULL };
@@ -145,8 +201,12 @@ int main(int argc, char **argv)
         }
     }
 
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
+        goto done;
+    }
+    audio = queue_tone();
+    if (!audio) {
         goto done;
     }
     if (SDL_SetHint("SDL_RENDER_NOODLES_RESIDENT_MB", "12") != SDL_TRUE) {
@@ -247,6 +307,13 @@ int main(int argc, char **argv)
         SDL_SetRenderDrawColor(renderer, 100, 50, 200, 128) < 0 ||
         SDL_RenderFillRect(renderer, &rect) < 0) {
         fprintf(stderr, "blended fill setup: %s\n", SDL_GetError());
+        goto done;
+    }
+    rect = (SDL_Rect){ 80, 60, 8, 8 };
+    if (SDL_SetRenderDrawBlendMode(renderer, stencil) < 0 ||
+        SDL_SetRenderDrawColor(renderer, 220, 80, 40, 128) < 0 ||
+        SDL_RenderFillRect(renderer, &rect) < 0) {
+        fprintf(stderr, "custom blended fill setup: %s\n", SDL_GetError());
         goto done;
     }
     line[0] = (SDL_Point){ 64, 36 };
@@ -401,6 +468,11 @@ int main(int argc, char **argv)
                   REF_SRC_ALPHA, REF_ONE_MINUS_SRC_ALPHA, REF_ADD,
                   REF_ONE, REF_ONE_MINUS_SRC_ALPHA, REF_ADD, 0),
                   "regional blended fill") != 0;
+    failures += check_pixel(result, 83, 63,
+        reference(rgba(220, 80, 40, 128), background, 0xffffffffu,
+                  REF_ZERO, REF_ONE, REF_ADD, REF_ZERO,
+                  REF_ONE_MINUS_SRC_ALPHA, REF_ADD, 0),
+                  "managed custom blended fill") != 0;
     failures += check_pixel(result, 219, 40, background,
                             "regional boundary") != 0;
     failures += check_pixel(result, 222, 42, p3,
@@ -477,12 +549,27 @@ int main(int argc, char **argv)
         fprintf(stderr, "display present: %s\n", SDL_GetError());
         goto done;
     }
+    {
+        Uint32 start = SDL_GetTicks();
+        while (SDL_GetQueuedAudioSize(audio) != 0 && SDL_GetTicks() - start < 3000u) {
+            SDL_Delay(10);
+        }
+        if (SDL_GetQueuedAudioSize(audio) != 0) {
+            fprintf(stderr, "SDL audio diagnostic: queue did not drain\n");
+            goto done;
+        }
+        SDL_Delay(100);
+    }
     printf("Noodles renderer diagnostic: PASS (renderer=%s, hash=%08x)\n", info.name, hash);
+    printf("SDL audio diagnostic: PASS\n");
     fflush(stdout);
     SDL_Delay(hold_ms);
     rc = 0;
 
 done:
+    if (audio) {
+        SDL_CloseAudioDevice(audio);
+    }
     for (i = 0; i < 3; ++i) {
         SDL_DestroyTexture(residency[i]);
     }

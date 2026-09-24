@@ -21,7 +21,7 @@ cat >"$OUT/run.sh" <<'EOF'
 #!/bin/bash
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"
-export SDL_VIDEODRIVER=mister SDL_RENDER_DRIVER=noodles SDL_MISTER_FORMAT=xrgb
+export SDL_VIDEODRIVER=mister SDL_AUDIODRIVER=mister SDL_RENDER_DRIVER=noodles SDL_MISTER_FORMAT=xrgb
 exec "$D/libs/ld-linux-armhf.so.3" --library-path "$D/libs" "$D/noodles-render-test" "$@"
 EOF
 chmod +x "$OUT/run.sh" "$OUT/noodles-render-test"

@@ -25,6 +25,10 @@ Heart of Winter and Trials of the Luremaster), Icewind Dale II and Planescape: T
   The bundled SDL enables its NEON alpha blitter (restricted to destinations without alpha, where it is correct),
   fills translucent rectangles with NEON, and draws gradient triangles without per-pixel 64-bit divisions. See
   [Performance](#performance).
+- **Optional MiSTer-Noodles acceleration** — the parallel Noodles launchers keep textures and render targets in FPGA
+  memory and accelerate sprite copies, modulation, SDL blend modes, opaque fills and blended rectangle fills. The
+  renderer requires the timing-qualified protocol 1.4 core and falls back to SDL only for operations the core does not
+  implement.
 - **Fixes to GemRB's SDL plugins** — a lock-order deadlock in the audio plugin that froze the game while walking, a
   music conversion bug that played every other chunk as noise when the sound device does not run at the music's
   sample rate, and a fallback for SDL's software renderer, which lacks the custom blend modes GemRB's wall-occlusion
@@ -103,7 +107,7 @@ Notes on the GOG installers, after unpacking them with innoextract:
    blinks as the output switches to that resolution. Quit from the game's own menu; the launcher switches your display
    back.
 
-   To use a `gemrb-noodles-<game>.sh` launcher, load the timing-qualified MiSTer-Noodles protocol 1.3 core first. The
+   To use a `gemrb-noodles-<game>.sh` launcher, load the timing-qualified MiSTer-Noodles protocol 1.4 core first. The
    matching `gemrb-<game>.sh` launcher remains available as the software-renderer fallback.
 
 If you installed version 0.1.0, the first run moves its game folder, saves and settings into this layout for you.
@@ -163,9 +167,10 @@ Set `SDL_RENDER_NOODLES_STATS=1` when starting a Noodles launcher to log a five-
 SDL command-queue time, FPGA presentation time, and the remaining per-frame time. Detailed timing separates fills,
 sprite batches, synchronization, the full-screen presentation copy and vertical-blank waiting. While statistics are
 enabled, the renderer waits for the presentation copy before submitting the present command so those two costs can be
-measured independently; the normal disabled path remains asynchronous. The summary also reports accelerated
-fill, plain-draw and flagged-draw counts and pixels, sprite-batch counts and maximum size, submission stalls, CPU fallback
-work, uploads, readbacks, evictions, drains and current FPGA texture residency. The instrumentation is disabled otherwise.
+measured independently; the normal disabled path remains asynchronous. The summary also reports accelerated opaque-fill,
+blended-fill, plain-draw and flagged-draw counts and pixels, sprite-batch counts and maximum size, submission stalls,
+CPU fallback work, uploads, readbacks, evictions, drains and current FPGA texture residency. The instrumentation is
+disabled otherwise.
 Opaque points and simple lines use the FPGA fill engine. Operations that still need SDL's software rasterizer keep the
 FPGA result coherent by reading and uploading only the affected target region.
 Consecutive accelerated copies to the same target share the core's 64-entry sprite batches. Fills, software fallbacks,
