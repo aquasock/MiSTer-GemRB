@@ -47,11 +47,19 @@ Measured on a DE10-Nano MiSTer at 800x600. The figures depend on the scene, so t
 | Main menu | about 29 fps (the game caps at 30) |
 | In game, busy forest scene, first build | 8 to 12 fps, depending on the scene |
 | In game, after the fog-of-war and blending changes | about 20 fps in the same scenes; later speed-ups felt smoother but were not measured |
+| Noodles protocol 1.4, Throne of Bhaal AR4000 combat | 13.93 fps settled, with 24.1–26.5 ms per frame in the hardware command queue |
+| Noodles protocol 1.5, same AR4000 combat | 15.9–17.8 fps in active-combat samples, with 14.4–15.2 ms per frame in the hardware command queue |
 | Videos | play, but stutter: the CPU cannot keep up |
 | Memory | about 200 MB after loading a game, up to about 380 MB in a large fight |
 
 What made the difference, in order: drawing the fog of war with sprites instead of blended triangles
 (`SpriteFogOfWar=1`), the NEON alpha blit and fill, and the triangle-fill change.
+
+The protocol 1.5 comparison used the same statistics-enabled path as the
+protocol 1.4 baseline. Its descriptor ring eliminated measured sprite-batch
+submission stalls and reduced command-queue drains from about 25–27 per frame
+to about one per frame. A 15-second combat sample used 41.8% of one Cortex-A9
+core, compared with 48–50.5% in the protocol 1.4 sample.
 
 ## Requirements
 
