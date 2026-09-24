@@ -252,3 +252,34 @@ Group consecutive compatible draws to the same target into the core's existing 6
 - [x] Passed
 
 ---
+
+## 9 COMMIT Unreleased ??? 2026-09-24T07:35:37-07:00
+
+#### Coming From:
+
+Unreleased 9ced707
+
+#### Purpose:
+
+Reduce Noodles command-queue stalls by grouping consecutive SDL draws into the core's existing sprite-batch operation.
+
+#### Outcome:
+
+The planned renderer change will accumulate up to 64 compatible managed-surface draws to the same target and submit them as one ordered sprite batch. Pending draws will flush before fills, regional software fallbacks, surface transfers, residency changes, queue completion and presentation so batching cannot reorder visible operations or outlive referenced surfaces. Disabled-by-default statistics will report batch count, draw count and maximum batch size.
+
+#### Next Steps:
+
+Implement ordered accumulation and flush boundaries, extend the diagnostic with interleaved draw, fill and regional-fallback ordering, run fresh SDL and GemRB cross-builds, verify pixel readback on hardware, and repeat the same Throne of Bhaal AR4000 save with batch and timing measurements.
+
+#### Files Modified:
+
+- README.md
+- sdl-renderer/noodles/SDL_render_noodles.c
+- tools/noodles-render-test.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
