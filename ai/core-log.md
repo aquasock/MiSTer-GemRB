@@ -380,7 +380,7 @@ Repeat AR4000 once with statistics disabled to quantify instrumentation overhead
 
 ---
 
-## 13 COMMIT Unreleased ??? 2026-09-24T10:21:35-07:00
+## 13 COMMIT Unreleased 50cf286 2026-09-24T10:21:35-07:00
 
 #### Coming From:
 
@@ -392,11 +392,11 @@ Integrate MiSTer-Noodles protocol 1.5 and SDK 0.9 so GemRB sprite batches can us
 
 #### Outcome:
 
-The approved change will pin MiSTer-Noodles source `513f218`, verify its archive hash, rebuild the SDK, SDL renderer, exact-pixel diagnostic and GemRB bundle, and document protocol 1.5 as the preferred core while retaining protocol 1.4 as the compatible minimum for blended fills. The renderer's batching logic and command order will remain unchanged because SDK 0.9 provides descriptor-table selection and fence ownership below that interface.
+Source `50cf286` pins MiSTer-Noodles `513f218` and its GitHub archive SHA256 `cd8bf87cec9e7168364dab2dbd5fd3c0df43373c324a4dff368f982fa56b8814`, rebuilds the renderer against SDK 0.9 and documents protocol 1.5 as preferred while retaining protocol 1.4 compatibility. No renderer batching change was required because SDK 0.9 selects and fence-protects descriptor tables below the existing interface. Fresh SDK, SDL, diagnostic, GemRB and bundle builds passed. The deployed diagnostic binary SHA256 is `fe8153e4f4279dba13c7d7e0293a5945b73c02cdf22d9c45fb69e04ae77f49cb`, its SDL SHA256 is `f5d4439886e7c348e4eb50801779ebf165e972622d1756d6dd4b3c3317640530`, and the deployed bundle SDL SHA256 is `7396d3a8cd2f3ce0ad012856fa59e34c2dfd58bed5e2e4ab9f66028d5eeff45d`. On the protocol-1.5 seed-13 core the diagnostic retained exact-pixel hash `64d5728e` and drained its audio tone. A four-batch core stress held 60.4fps. In the same Throne of Bhaal AR4000 combat workload, command-queue time fell from 24.1-26.5ms to 14.4-15.2ms per frame, sprite-batch stalls were zero and drains fell from approximately 25-27 per frame to about one. Active-combat intervals reached 15.9-17.8fps and GemRB used 41.8% of one Cortex-A9 core over 15 seconds versus the prior 48-50.5%. The user reached game over without a renderer fault; RSS was 371MiB, process swap stayed zero and 109MiB system memory remained available. The captured run log has SHA256 `35be51c2cb944b891f2e2a4932af4eb68879a2af222ccbdd68ac3b2e5bf38c0e`.
 
 #### Next Steps:
 
-Deploy the rebuilt diagnostic and bundle against the timing-qualified protocol-1.5 seed-13 core, repeat exact-pixel and audio checks, then load the Throne of Bhaal AR4000 save and compare sprite-batch stalls, drains, command-queue time and frame rate with the protocol-1.4 baseline.
+Repeat AR4000 once with statistics disabled to quantify instrumentation overhead, add a supported Main input handoff so OSD access cannot strand GemRB without mouse and keyboard input, and capture a spell-heavy interval before deciding whether scaling or another shared drawing primitive is the next Noodles feature.
 
 #### Files Modified:
 
@@ -405,7 +405,7 @@ Deploy the rebuilt diagnostic and bundle against the timing-qualified protocol-1
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
