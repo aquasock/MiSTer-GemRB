@@ -569,7 +569,7 @@ Capture a spell-heavy interval with statistics enabled to identify whether flagg
 
 ---
 
-## 19 COMMIT Unreleased ??? 2026-09-24T13:37:50-07:00
+## 19 COMMIT Unreleased e7245ec 2026-09-24T13:37:50-07:00
 
 #### Coming From:
 
@@ -581,11 +581,11 @@ Measure the statistics-enabled Noodles workload during the visible Throne of Bha
 
 #### Outcome:
 
-The qualified protocol-1.5 seed-13 RBF and GemRB source `e7245ec` will be profiled without swap during the same autosave combat path, separating command-queue, presentation and remaining frame time while counting flagged and plain sprites, scaling fallbacks, fills, uploads, readbacks, drains and shadow activity.
+The qualified protocol-1.5 seed-13 RBF and GemRB source `e7245ec` were profiled without swap during the same autosave combat path. Stable combat reached 18.9-19.4fps with 14.2-14.5ms in hardware queue submission, 30.9-31.4ms in statistics-serialized presentation and 6.5-7.0ms elsewhere. The user-marked spell interval fell to 11.4-11.5fps, but queue time increased by only 1.6-2.1ms while non-renderer time rose to 38.5-39.6ms, proving that most of the spell-specific dip is CPU-side GemRB animation or game work. Hardware still has a large reusable cost: every sampled frame spent approximately 11.5-11.9ms submitting roughly 500-560 opaque fills, and the single fill-command path caused one command-queue drain per frame. Draw submission took only 1.2-2.4ms, sprite-table stalls and CPU drawing fallbacks stayed zero, and texture synchronization during the marked interval used 3.1-3.5ms per frame. Over the 20-second marked sample GemRB used 49.7% of one Cortex-A9 core, RSS rose from 321MiB to 354MiB, Linux retained 111MiB available, and process and system swap remained zero. Forced test shutdown returned status 137 as expected, restored all four Main input grabs and removed the temporary statistics environment.
 
 #### Next Steps:
 
-Capture stable pre-spell, spell-heavy and post-effect intervals plus process CPU and memory samples, identify the dominant reusable cost from evidence, and open the smallest corresponding MiSTer-Noodles or renderer implementation cycle before rebuilding hardware.
+Add ordered descriptor batches for opaque fills using the proven multi-table ownership model so the host can submit consecutive rectangles without one bridge transaction per fill, preserve exact interleaving with sprite batches and blended fills, and qualify the change with no more than two Quartus builds before repeating the same combat comparison. Treat the extra approximately 32ms of spell-only non-renderer time as a separate GemRB CPU investigation rather than attributing it to Noodles hardware.
 
 #### Files Modified:
 
@@ -593,7 +593,7 @@ None.
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
