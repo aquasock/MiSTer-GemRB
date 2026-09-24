@@ -116,9 +116,10 @@ Notes on the GOG installers, after unpacking them with innoextract:
    blinks as the output switches to that resolution. Quit from the game's own menu; the launcher switches your display
    back.
 
-   To use a `gemrb-noodles-<game>.sh` launcher, load the timing-qualified MiSTer-Noodles protocol 1.5 core first. The
-   renderer can attach to protocol 1.4, but only protocol 1.5 provides the multi-table sprite-batch path. The matching
-   `gemrb-<game>.sh` launcher remains available as the software-renderer fallback.
+   The `gemrb-noodles-<game>.sh` launcher loads the timing-qualified MiSTer-Noodles protocol 1.5 core itself before
+   starting the game. Loading the core through Main provides a clean hardware session and releases Main's mouse and
+   keyboard grabs. The renderer can attach to protocol 1.4, but only protocol 1.5 provides the multi-table sprite-batch
+   path. The matching `gemrb-<game>.sh` launcher remains available as the software-renderer fallback.
 
 If you installed version 0.1.0, the first run moves its game folder, saves and settings into this layout for you.
 
@@ -153,6 +154,7 @@ Local settings go in `/media/fat/gemrb/env.sh`, which the launcher reads if it e
 | --- | --- |
 | `MISTER_RESOLUTION=640x480` (or `800x600`) | Skip the resolution question and always use this. Without it the launcher asks every time |
 | `MISTER_OUTPUT_MODE=off` | Do not change the HDMI mode. Otherwise the launcher switches to the resolution you chose |
+| `MISTER_NOODLES_RBF=/media/fat/pet/Noodles_descriptor_ring_seed13.rbf` | Protocol 1.5 RBF loaded by every Noodles launcher; this path is the default |
 | `MISTER_RESTORE_MODE="<modeline>"` | Mode to switch back to afterwards. Default is 1080p60 |
 | `MISTER_USB=/media/usb0` | Which USB drive holds the swap file when several are plugged in (skips the question) |
 | `MISTER_SWAP_MB=384` | Size of the swap file in MB |

@@ -331,8 +331,37 @@ chmod +x "$OUT/run.sh"
 
 # Parallel hardware-renderer entry point. The standard run.sh keeps its
 # software default so this path can be selected and qualified independently.
-printf '#!/bin/sh\nexport SDL_RENDER_DRIVER=noodles\nexec %s/run.sh "$@"\n' \
-	"$DEVICE_DIR" > "$OUT/run-noodles.sh"
+cat > "$OUT/run-noodles.sh" <<'RUN_NOODLES'
+#!/bin/sh
+set -e
+D=/media/fat/gemrb
+[ -f "$D/env.sh" ] && . "$D/env.sh"
+RBF="${MISTER_NOODLES_RBF:-/media/fat/pet/Noodles_descriptor_ring_seed13.rbf}"
+case "$RBF" in
+    /*) ;;
+    *) echo "MISTER_NOODLES_RBF must be an absolute path: $RBF"; exit 1 ;;
+esac
+if [ ! -r "$RBF" ]; then
+    echo "MiSTer-Noodles RBF not found: $RBF"
+    echo "Copy the protocol 1.5 seed-13 RBF there or set MISTER_NOODLES_RBF in $D/env.sh."
+    exit 1
+fi
+if [ ! -p /dev/MiSTer_cmd ]; then
+    echo "/dev/MiSTer_cmd is unavailable; cannot load MiSTer-Noodles or release Main input."
+    exit 1
+fi
+
+# Main's supported core-load path resets Noodles and relinquishes its evdev
+# grabs. This gives every game a clean hardware session without debugger-based
+# input manipulation. The core owns its fixed 800x600 output, so do not ask
+# Main to switch the separate Linux framebuffer/output mode around it.
+printf 'load_core %s\n' "$RBF" > /dev/MiSTer_cmd
+sleep 3
+export SDL_RENDER_DRIVER=noodles
+export MISTER_RESOLUTION=800x600
+export MISTER_OUTPUT_MODE=off
+exec "$D/run.sh" "$@"
+RUN_NOODLES
 chmod +x "$OUT/run-noodles.sh"
 
 # One entry per game for the OSD Scripts menu (F12 > Scripts).
