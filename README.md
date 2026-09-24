@@ -89,8 +89,9 @@ Notes on the GOG installers, after unpacking them with innoextract:
 
 1. Download `MiSTer-GemRB-v<version>.zip` from the [Releases](https://github.com/aquasock/MiSTer-GemRB/releases) page
    and unzip it onto the root of the MiSTer's SD card, merging with what is there. This creates `/media/fat/gemrb`
-   and one launcher per game in `/media/fat/Scripts` (`gemrb-bg2.sh`, `gemrb-bg1.sh`, `gemrb-pst.sh`, `gemrb-iwd.sh`, `gemrb-iwd2.sh`). The location matters: the programs
-   find their libraries under `/media/fat/gemrb`.
+   and two launchers per game in `/media/fat/Scripts`. The normal `gemrb-<game>.sh` launchers use SDL's software
+   renderer. The parallel `gemrb-noodles-<game>.sh` launchers select the MiSTer-Noodles hardware renderer. The location
+   matters: the programs find their libraries under `/media/fat/gemrb`.
 2. Copy your game files into `/media/fat/gemrb/games/<game>`, one folder per game (the table under
    [Supported games](#supported-games) says which folder is which). For the GOG releases, unpack the installer with
    [innoextract](https://constexpr.org/innoextract/) and copy the game folder it makes. The installer's programs (`.exe`,
@@ -101,6 +102,9 @@ Notes on the GOG installers, after unpacking them with innoextract:
    always uses 800x600. Try both sizes on the others and keep the one your display and the game prefer. The screen then
    blinks as the output switches to that resolution. Quit from the game's own menu; the launcher switches your display
    back.
+
+   To use a `gemrb-noodles-<game>.sh` launcher, load the timing-qualified MiSTer-Noodles protocol 1.3 core first. The
+   matching `gemrb-<game>.sh` launcher remains available as the software-renderer fallback.
 
 If you installed version 0.1.0, the first run moves its game folder, saves and settings into this layout for you.
 
@@ -141,6 +145,7 @@ Local settings go in `/media/fat/gemrb/env.sh`, which the launcher reads if it e
 | `MISTER_DEBUG=1` | Developer: run the game under gdb and write `crash.log` (call stacks of all threads, plus a raw stack dump) if it crashes. Needs the unstripped files from `scripts/debug-symbols.sh` and `scripts/deploy.sh debug`, which are not in the release zip |
 | `MISTER_MALLOC_CHECK=1` | Developer, with `MISTER_DEBUG`: also use glibc's heap-checking allocator (slower) |
 | `MISTER_SWAP=none` | Developer: run without swap (the game can be killed when memory runs out) |
+| `SDL_RENDER_NOODLES_RESIDENT_MB=192` | FPGA texture-residency budget used by the Noodles renderer; valid overrides are clamped to 8–220 MiB |
 
 GemRB's own settings for each game are in `/media/fat/gemrb/GemRB-<game>.cfg`, which the launcher creates from
 `GemRB-<game>.cfg.default` on the first run and never overwrites, so updating keeps your edits. The defaults are the SDL
@@ -152,8 +157,8 @@ also ran correctly at 800x600, with the interface panels at the screen edges. Ea
 
 The drivers read the `SDL_MISTER_*` environment variables described in the
 [MiSTer-VCMI README](https://github.com/aquasock/MiSTer-VCMI#configuration); in `env.sh` they need `export`. The launcher
-sets `SDL_MISTER_FORMAT=xrgb` (an alpha-less screen, which lets SDL use its fast blitter) and
-`SDL_RENDER_DRIVER=software`.
+sets `SDL_MISTER_FORMAT=xrgb` (an alpha-less screen, which lets SDL use its fast blitter). Normal launchers select
+`SDL_RENDER_DRIVER=software`; the parallel Noodles launchers select `SDL_RENDER_DRIVER=noodles`.
 
 ### The swap file
 

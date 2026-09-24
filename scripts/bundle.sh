@@ -324,9 +324,17 @@ exit $rc
 RUN
 chmod +x "$OUT/run.sh"
 
+# Parallel hardware-renderer entry point. The standard run.sh keeps its
+# software default so this path can be selected and qualified independently.
+printf '#!/bin/sh\nexport SDL_RENDER_DRIVER=noodles\nexec %s/run.sh "$@"\n' \
+	"$DEVICE_DIR" > "$OUT/run-noodles.sh"
+chmod +x "$OUT/run-noodles.sh"
+
 # One entry per game for the OSD Scripts menu (F12 > Scripts).
 for g in bg2 bg1 pst iwd iwd2; do
 	printf '#!/bin/bash\nexec %s/run.sh %s "$@"\n' "$DEVICE_DIR" "$g" > "$WORK/bundle/Scripts/gemrb-$g.sh"
+	printf '#!/bin/bash\nexec %s/run-noodles.sh %s "$@"\n' "$DEVICE_DIR" "$g" > "$WORK/bundle/Scripts/gemrb-noodles-$g.sh"
 	chmod +x "$WORK/bundle/Scripts/gemrb-$g.sh"
+	chmod +x "$WORK/bundle/Scripts/gemrb-noodles-$g.sh"
 done
 du -sh "$WORK/bundle"; du -sh "$OUT"/*

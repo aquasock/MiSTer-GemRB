@@ -20,9 +20,9 @@ SSH=(ssh -o StrictHostKeyChecking=accept-new -o PubkeyAuthentication=no "root@$H
 code() {
 	# Replaces the program, libraries and scripts. Keeps games/, saves/, cache/, the swap file, env.sh and every
 	# GemRB-<game>.cfg you may have edited (the bundle only carries GemRB-<game>.cfg.default).
-	"${SSH[@]}" "mkdir -p $DEVICE_DIR && cd $DEVICE_DIR && rm -rf gemrb libgemrb_core.so* plugins GUIScripts unhardcoded override libs python run.sh GemRB-*.cfg.default GemRB.cfg.default"
+	"${SSH[@]}" "mkdir -p $DEVICE_DIR && cd $DEVICE_DIR && rm -rf gemrb libgemrb_core.so* plugins GUIScripts unhardcoded override libs python run.sh run-noodles.sh GemRB-*.cfg.default GemRB.cfg.default"
 	tar -C "$BUNDLE/gemrb" -cf - . | "${SSH[@]}" "tar --no-same-owner -C $DEVICE_DIR -xf -"
-	"${SSH[@]}" "rm -f /media/fat/Scripts/gemrb.sh"     # the launcher's name before it was per game
+	"${SSH[@]}" "rm -f /media/fat/Scripts/gemrb.sh /media/fat/Scripts/gemrb-noodles-*.sh"     # remove obsolete launchers
 	for f in "$BUNDLE"/Scripts/*.sh; do
 		"${SSH[@]}" "mkdir -p /media/fat/Scripts && cat > /media/fat/Scripts/$(basename "$f") && chmod +x /media/fat/Scripts/$(basename "$f")" < "$f"
 	done
