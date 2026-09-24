@@ -673,19 +673,22 @@ Unreleased ebaa9e5
 
 #### Purpose:
 
-Batch each GemRB wall-stencil polygon's horizontal spans into one SDL fill call to eliminate redundant command construction during viewport movement.
+Coalesce compatible consecutive fill commands inside the Noodles SDL renderer to eliminate redundant command construction without changing GemRB.
 
 #### Outcome:
 
-The proposed change replaces the repeated `SDL_RenderDrawLine` calls in GemRB's existing filled-polygon raster path with an exact rectangle list submitted through one `SDL_RenderFillRects` call per polygon, while retaining the existing behavior for polygon outlines and leaving the Noodles SDL renderer, ARM launcher and RBF unchanged.
+The revised proposal leaves GemRB unchanged and gives only the Noodles SDL backend an internal opt-in path that appends consecutive rectangles to one compatible fill command when target, color, blend, viewport and clip state are unchanged, while every intervening state or drawing command remains an ordering boundary and protocol-1.6 fill descriptors remain the hardware submission path.
 
 #### Next Steps:
 
-Apply the localized GemRB patch, cross-build and deploy the engine, verify equivalent stencil pixels and draw ordering, and repeat the same paused stationary and continuous-panning measurements before profiling the remaining stationary spell-animation cost.
+Implement the SDL-only coalescing path, extend the renderer diagnostic for inclusive horizontal-line endpoints, clipping and state and ordering boundaries, rebuild and deploy only `libSDL2-2.0.so.0`, and repeat the same paused stationary and continuous-panning measurements before profiling the remaining stationary spell-animation cost.
 
 #### Files Modified:
 
-- patches/0004-sdlvideo-batch-polygon-spans.patch
+- README.md
+- patches/sdl2/noodles-renderer.patch
+- sdl-renderer/noodles/SDL_render_noodles.c
+- tools/noodles-render-test.c
 
 #### Status:
 
