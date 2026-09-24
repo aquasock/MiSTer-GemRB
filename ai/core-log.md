@@ -379,3 +379,33 @@ Repeat AR4000 once with statistics disabled to quantify instrumentation overhead
 - [x] Passed
 
 ---
+
+## 13 COMMIT Unreleased ??? 2026-09-24T10:21:35-07:00
+
+#### Coming From:
+
+Unreleased 7eb7efd
+
+#### Purpose:
+
+Integrate MiSTer-Noodles protocol 1.5 and SDK 0.9 so GemRB sprite batches can use independent descriptor tables without draining the previous batch first.
+
+#### Outcome:
+
+The approved change will pin MiSTer-Noodles source `513f218`, verify its archive hash, rebuild the SDK, SDL renderer, exact-pixel diagnostic and GemRB bundle, and document protocol 1.5 as the preferred core while retaining protocol 1.4 as the compatible minimum for blended fills. The renderer's batching logic and command order will remain unchanged because SDK 0.9 provides descriptor-table selection and fence ownership below that interface.
+
+#### Next Steps:
+
+Deploy the rebuilt diagnostic and bundle against the timing-qualified protocol-1.5 seed-13 core, repeat exact-pixel and audio checks, then load the Throne of Bhaal AR4000 save and compare sprite-batch stalls, drains, command-queue time and frame rate with the protocol-1.4 baseline.
+
+#### Files Modified:
+
+- README.md
+- scripts/env.sh
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
