@@ -122,6 +122,7 @@ int main(int argc, char **argv)
     SDL_Renderer *renderer = NULL;
     SDL_Texture *texture = NULL;
     SDL_Texture *target = NULL;
+    SDL_Texture *residency[3] = { NULL, NULL, NULL };
     SDL_RendererInfo info;
     SDL_BlendMode stencil;
     SDL_Rect rect;
@@ -129,7 +130,7 @@ int main(int argc, char **argv)
     SDL_Vertex triangle[3];
     uint32_t hash = 2166136261u;
     int failures = 0;
-    int x, y;
+    int i, x, y;
     int rc = 1;
     unsigned hold_ms = 1500;
 
@@ -144,6 +145,10 @@ int main(int argc, char **argv)
 
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
+        goto done;
+    }
+    if (SDL_SetHint("SDL_RENDER_NOODLES_RESIDENT_MB", "12") != SDL_TRUE) {
+        fprintf(stderr, "residency hint was rejected\n");
         goto done;
     }
     window = SDL_CreateWindow("Noodles renderer test", SDL_WINDOWPOS_UNDEFINED,
@@ -272,6 +277,34 @@ int main(int argc, char **argv)
         goto done;
     }
 
+    /* Three 4 MiB textures plus the pinned composition exceed the 12 MiB
+       test budget. Reusing the first texture verifies eviction restoration. */
+    for (i = 0; i < 3; ++i) {
+        const uint32_t resident_color = rgba((uint8_t)(40 + i * 70),
+                                             (uint8_t)(210 - i * 60),
+                                             (uint8_t)(30 + i * 80), 255);
+        SDL_Rect update = { 0, 0, 1, 1 };
+        SDL_Rect source_rect = { 0, 0, 1, 1 };
+        SDL_Rect destination = { i * 4, 80, 1, 1 };
+        residency[i] = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
+                                         SDL_TEXTUREACCESS_STATIC, 1024, 1024);
+        if (!residency[i] ||
+            SDL_UpdateTexture(residency[i], &update, &resident_color, 4) < 0 ||
+            SDL_SetTextureBlendMode(residency[i], SDL_BLENDMODE_NONE) < 0 ||
+            SDL_RenderCopy(renderer, residency[i], &source_rect, &destination) < 0) {
+            fprintf(stderr, "residency texture %d setup: %s\n", i, SDL_GetError());
+            goto done;
+        }
+    }
+    rect = (SDL_Rect){ 12, 80, 1, 1 };
+    {
+        SDL_Rect source_rect = { 0, 0, 1, 1 };
+        if (SDL_RenderCopy(renderer, residency[0], &source_rect, &rect) < 0) {
+            fprintf(stderr, "evicted texture restore setup: %s\n", SDL_GetError());
+            goto done;
+        }
+    }
+
     if (SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_ABGR8888,
                              result, WIDTH * 4) < 0) {
         fprintf(stderr, "readback: %s\n", SDL_GetError());
@@ -316,6 +349,14 @@ int main(int argc, char **argv)
     failures += check_pixel(result, 142, 42, p3, "post-fallback hardware copy") != 0;
     failures += check_pixel(result, 180, 32, rgba(231, 17, 99, 211),
                             "post-hardware point") != 0;
+    failures += check_pixel(result, 0, 80, rgba(40, 210, 30, 255),
+                            "resident texture zero") != 0;
+    failures += check_pixel(result, 4, 80, rgba(110, 150, 110, 255),
+                            "resident texture one") != 0;
+    failures += check_pixel(result, 8, 80, rgba(180, 90, 190, 255),
+                            "resident texture two") != 0;
+    failures += check_pixel(result, 12, 80, rgba(40, 210, 30, 255),
+                            "evicted texture restore") != 0;
 
     for (y = 0; y < HEIGHT; ++y) {
         for (x = 0; x < WIDTH; ++x) {
@@ -355,6 +396,9 @@ int main(int argc, char **argv)
     rc = 0;
 
 done:
+    for (i = 0; i < 3; ++i) {
+        SDL_DestroyTexture(residency[i]);
+    }
     SDL_DestroyTexture(target);
     SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);
