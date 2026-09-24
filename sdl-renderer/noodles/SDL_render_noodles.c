@@ -343,6 +343,63 @@ static int NOODLES_EnsureGPU(NOODLES_RenderData *data, NOODLES_TextureData *surf
     return 0;
 }
 
+static int NOODLES_PrepareCPURegion(NOODLES_RenderData *data,
+                                    NOODLES_TextureData *surface,
+                                    const SDL_Rect *region)
+{
+    noodles_rect_t rect;
+    void *pixels;
+    if (NOODLES_EnsureGPU(data, surface) < 0) {
+        return -1;
+    }
+    if (surface->cpu_valid) {
+        return 0;
+    }
+    rect.x = region->x;
+    rect.y = region->y;
+    rect.width = (Uint32)region->w;
+    rect.height = (Uint32)region->h;
+    pixels = (Uint8 *)surface->shadow->pixels +
+             region->y * surface->shadow->pitch + region->x * 4;
+    if (noodles_surface_read(surface->surface, &rect, pixels,
+                             (size_t)surface->shadow->pitch,
+                             NOODLES_DEFAULT_TIMEOUT_MS) < 0) {
+        return NOODLES_SetErrno("regional readback");
+    }
+    if (data->stats_enabled) {
+        data->stats_readbacks++;
+        data->stats_readback_bytes += (Uint64)rect.width * rect.height * 4u;
+    }
+    NOODLES_TouchSurface(data, surface);
+    return 0;
+}
+
+static int NOODLES_CommitCPURegion(NOODLES_RenderData *data,
+                                   NOODLES_TextureData *surface,
+                                   const SDL_Rect *region)
+{
+    noodles_rect_t rect;
+    const void *pixels;
+    rect.x = region->x;
+    rect.y = region->y;
+    rect.width = (Uint32)region->w;
+    rect.height = (Uint32)region->h;
+    pixels = (const Uint8 *)surface->shadow->pixels +
+             region->y * surface->shadow->pitch + region->x * 4;
+    if (noodles_surface_update(surface->surface, &rect, pixels,
+                               (size_t)surface->shadow->pitch,
+                               NOODLES_DEFAULT_TIMEOUT_MS) < 0) {
+        return NOODLES_SetErrno("regional upload");
+    }
+    if (data->stats_enabled) {
+        data->stats_uploads++;
+        data->stats_upload_bytes += (Uint64)rect.width * rect.height * 4u;
+    }
+    surface->gpu_valid = SDL_TRUE;
+    NOODLES_TouchSurface(data, surface);
+    return 0;
+}
+
 static void NOODLES_MarkGPUWrite(NOODLES_TextureData *surface)
 {
     surface->gpu_valid = SDL_TRUE;
@@ -992,6 +1049,125 @@ static int NOODLES_RunCopy(NOODLES_RenderData *data, NOODLES_TextureData *target
     return 0;
 }
 
+static SDL_bool NOODLES_PrimitiveRegion(const SDL_Point *points, int count,
+                                        const SDL_Rect *clip, SDL_Rect *region)
+{
+    SDL_Rect bounds;
+    int min_x, min_y, max_x, max_y;
+    int i;
+    if (count <= 0) {
+        return SDL_FALSE;
+    }
+    min_x = max_x = points[0].x;
+    min_y = max_y = points[0].y;
+    for (i = 1; i < count; ++i) {
+        min_x = SDL_min(min_x, points[i].x);
+        min_y = SDL_min(min_y, points[i].y);
+        max_x = SDL_max(max_x, points[i].x);
+        max_y = SDL_max(max_y, points[i].y);
+    }
+    bounds.x = min_x;
+    bounds.y = min_y;
+    bounds.w = max_x - min_x + 1;
+    bounds.h = max_y - min_y + 1;
+    return SDL_IntersectRect(&bounds, clip, region);
+}
+
+static SDL_bool NOODLES_CanFillLines(const SDL_Point *points, int count,
+                                     const SDL_Rect *clip)
+{
+    int i;
+    for (i = 1; i < count; ++i) {
+        int x1 = points[i - 1].x;
+        int y1 = points[i - 1].y;
+        int x2 = points[i].x;
+        int y2 = points[i].y;
+        if (!SDL_IntersectRectAndLine(clip, &x1, &y1, &x2, &y2)) {
+            continue;
+        }
+        if (x1 != x2 && y1 != y2 && SDL_abs(x2 - x1) != SDL_abs(y2 - y1)) {
+            return SDL_FALSE;
+        }
+    }
+    return SDL_TRUE;
+}
+
+static int NOODLES_SubmitOpaquePrimitives(NOODLES_RenderData *data,
+                                          NOODLES_TextureData *target,
+                                          SDL_RenderCommandType command,
+                                          const SDL_Point *points, int count,
+                                          const SDL_Rect *clip, Uint32 color)
+{
+    SDL_bool drew = SDL_FALSE;
+    int i;
+    if (NOODLES_EnsureGPU(data, target) < 0) {
+        return -1;
+    }
+    if (command == SDL_RENDERCMD_DRAW_POINTS) {
+        for (i = 0; i < count; ++i) {
+            noodles_rect_t fill;
+            if (!SDL_PointInRect(&points[i], clip)) {
+                continue;
+            }
+            fill.x = points[i].x;
+            fill.y = points[i].y;
+            fill.width = 1;
+            fill.height = 1;
+            if (NOODLES_SubmitFill(data, target->surface, &fill, color) < 0) {
+                return -1;
+            }
+            drew = SDL_TRUE;
+        }
+    } else {
+        for (i = 1; i < count; ++i) {
+            int x1 = points[i - 1].x;
+            int y1 = points[i - 1].y;
+            int x2 = points[i].x;
+            int y2 = points[i].y;
+            noodles_rect_t fill;
+            if (!SDL_IntersectRectAndLine(clip, &x1, &y1, &x2, &y2)) {
+                continue;
+            }
+            if (y1 == y2) {
+                fill.x = SDL_min(x1, x2);
+                fill.y = y1;
+                fill.width = (Uint32)(SDL_abs(x2 - x1) + 1);
+                fill.height = 1;
+                if (NOODLES_SubmitFill(data, target->surface, &fill, color) < 0) {
+                    return -1;
+                }
+            } else if (x1 == x2) {
+                fill.x = x1;
+                fill.y = SDL_min(y1, y2);
+                fill.width = 1;
+                fill.height = (Uint32)(SDL_abs(y2 - y1) + 1);
+                if (NOODLES_SubmitFill(data, target->surface, &fill, color) < 0) {
+                    return -1;
+                }
+            } else {
+                const int step_x = x2 > x1 ? 1 : -1;
+                const int step_y = y2 > y1 ? 1 : -1;
+                const int steps = SDL_abs(x2 - x1);
+                int step;
+                fill.width = 1;
+                fill.height = 1;
+                for (step = 0; step <= steps; ++step) {
+                    fill.x = x1 + step * step_x;
+                    fill.y = y1 + step * step_y;
+                    if (NOODLES_SubmitFill(data, target->surface, &fill, color) < 0) {
+                        return -1;
+                    }
+                }
+            }
+            drew = SDL_TRUE;
+        }
+    }
+    if (drew) {
+        NOODLES_MarkGPUWrite(target);
+    }
+    return 0;
+}
+
 static int NOODLES_RunCommandQueueImpl(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
                                        void *vertices, size_t vertsize)
 {
@@ -1041,10 +1217,29 @@ static int NOODLES_RunCommandQueueImpl(SDL_Renderer *renderer, SDL_RenderCommand
             }
             if (cmd->data.draw.blend != SDL_BLENDMODE_NONE) {
                 Uint64 pixels = 0;
+                SDL_Rect dirty = { 0, 0, 0, 0 };
+                SDL_bool have_dirty = SDL_FALSE;
                 if (!NOODLES_SoftwareBlendMode(cmd->data.draw.blend)) {
                     return SDL_SetError("Noodles CPU fill fallback cannot apply a custom blend mode");
                 }
-                if (NOODLES_EnsureCPU(data, target) < 0) {
+                for (i = 0; i < cmd->data.draw.count; ++i) {
+                    SDL_Rect destination = rects[i];
+                    SDL_Rect visible;
+                    destination.x += viewport.x;
+                    destination.y += viewport.y;
+                    if (SDL_IntersectRect(&destination, &effective_clip, &visible)) {
+                        if (have_dirty) {
+                            SDL_UnionRect(&dirty, &visible, &dirty);
+                        } else {
+                            dirty = visible;
+                            have_dirty = SDL_TRUE;
+                        }
+                    }
+                }
+                if (!have_dirty) {
+                    break;
+                }
+                if (NOODLES_PrepareCPURegion(data, target, &dirty) < 0) {
                     return -1;
                 }
                 SDL_SetClipRect(target->shadow, &effective_clip);
@@ -1067,7 +1262,9 @@ static int NOODLES_RunCommandQueueImpl(SDL_Renderer *renderer, SDL_RenderCommand
                     data->stats_software_fills += cmd->data.draw.count;
                     data->stats_software_fill_pixels += pixels;
                 }
-                NOODLES_MarkCPUWrite(target);
+                if (NOODLES_CommitCPURegion(data, target, &dirty) < 0) {
+                    return -1;
+                }
                 break;
             }
             if (NOODLES_EnsureGPU(data, target) < 0) {
@@ -1099,24 +1296,39 @@ static int NOODLES_RunCommandQueueImpl(SDL_Renderer *renderer, SDL_RenderCommand
         case SDL_RENDERCMD_DRAW_LINES: {
             SDL_Point *points = (SDL_Point *)((Uint8 *)vertices + cmd->data.draw.first);
             SDL_Rect effective_clip;
+            SDL_Rect dirty;
             const int count = (int)cmd->data.draw.count;
             int i;
             int result;
             if (!NOODLES_SoftwareBlendMode(cmd->data.draw.blend)) {
                 return SDL_SetError("Noodles CPU primitive fallback cannot apply a custom blend mode");
             }
-            if (NOODLES_EnsureCPU(data, target) < 0) {
-                return -1;
-            }
             if (!NOODLES_EffectiveClip(target, &viewport, &clip, clip_enabled,
                                        &effective_clip)) {
                 break;
             }
-            SDL_SetClipRect(target->shadow, &effective_clip);
             for (i = 0; i < count; ++i) {
                 points[i].x += viewport.x;
                 points[i].y += viewport.y;
             }
+            if (cmd->data.draw.blend == SDL_BLENDMODE_NONE &&
+                (cmd->command == SDL_RENDERCMD_DRAW_POINTS ||
+                 NOODLES_CanFillLines(points, count, &effective_clip))) {
+                if (NOODLES_SubmitOpaquePrimitives(data, target, cmd->command,
+                        points, count, &effective_clip,
+                        NOODLES_PackRGBA(cmd->data.draw.r, cmd->data.draw.g,
+                                         cmd->data.draw.b, cmd->data.draw.a)) < 0) {
+                    return -1;
+                }
+                break;
+            }
+            if (!NOODLES_PrimitiveRegion(points, count, &effective_clip, &dirty)) {
+                break;
+            }
+            if (NOODLES_PrepareCPURegion(data, target, &dirty) < 0) {
+                return -1;
+            }
+            SDL_SetClipRect(target->shadow, &effective_clip);
             if (cmd->command == SDL_RENDERCMD_DRAW_POINTS) {
                 result = cmd->data.draw.blend == SDL_BLENDMODE_NONE
                        ? SDL_DrawPoints(target->shadow, points, count,
@@ -1145,7 +1357,9 @@ static int NOODLES_RunCommandQueueImpl(SDL_Renderer *renderer, SDL_RenderCommand
                 data->stats_primitive_commands++;
                 data->stats_primitive_vertices += cmd->data.draw.count;
             }
-            NOODLES_MarkCPUWrite(target);
+            if (NOODLES_CommitCPURegion(data, target, &dirty) < 0) {
+                return -1;
+            }
             break;
         }
         case SDL_RENDERCMD_COPY: {

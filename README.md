@@ -163,6 +163,8 @@ Set `SDL_RENDER_NOODLES_STATS=1` when starting a Noodles launcher to log a five-
 SDL command-queue time, FPGA presentation time, and the remaining per-frame time. The summary also reports accelerated
 fill, plain-draw and flagged-draw counts and pixels, submission stalls, CPU fallback work, uploads, readbacks, evictions,
 drains and current FPGA texture residency. The instrumentation is disabled otherwise.
+Opaque points and simple lines use the FPGA fill engine. Operations that still need SDL's software rasterizer keep the
+FPGA result coherent by reading and uploading only the affected target region.
 
 ### The swap file
 

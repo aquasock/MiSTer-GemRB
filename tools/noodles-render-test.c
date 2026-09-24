@@ -277,6 +277,24 @@ int main(int argc, char **argv)
         goto done;
     }
 
+    /* A small blended fallback between accelerated draws must synchronize only
+       its region without losing pixels elsewhere in the target. */
+    rect = (SDL_Rect){ 200, 32, 8, 8 };
+    if (SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND) < 0 ||
+        SDL_SetRenderDrawColor(renderer, 180, 60, 20, 128) < 0 ||
+        SDL_RenderFillRect(renderer, &rect) < 0) {
+        fprintf(stderr, "regional blended fill setup: %s\n", SDL_GetError());
+        goto done;
+    }
+    rect = (SDL_Rect){ 220, 32, 16, 16 };
+    if (SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE) < 0 ||
+        SDL_SetTextureColorMod(texture, 255, 255, 255) < 0 ||
+        SDL_SetTextureAlphaMod(texture, 255) < 0 ||
+        SDL_RenderCopy(renderer, texture, NULL, &rect) < 0) {
+        fprintf(stderr, "post-regional hardware copy setup: %s\n", SDL_GetError());
+        goto done;
+    }
+
     /* Three 4 MiB textures plus the pinned composition exceed the 12 MiB
        test budget. Reusing the first texture verifies eviction restoration. */
     for (i = 0; i < 3; ++i) {
@@ -349,6 +367,15 @@ int main(int argc, char **argv)
     failures += check_pixel(result, 142, 42, p3, "post-fallback hardware copy") != 0;
     failures += check_pixel(result, 180, 32, rgba(231, 17, 99, 211),
                             "post-hardware point") != 0;
+    failures += check_pixel(result, 203, 35,
+        reference(rgba(180, 60, 20, 128), background, 0xffffffffu,
+                  REF_SRC_ALPHA, REF_ONE_MINUS_SRC_ALPHA, REF_ADD,
+                  REF_ONE, REF_ONE_MINUS_SRC_ALPHA, REF_ADD, 0),
+                  "regional blended fill") != 0;
+    failures += check_pixel(result, 219, 40, background,
+                            "regional boundary") != 0;
+    failures += check_pixel(result, 222, 42, p3,
+                            "post-regional hardware copy") != 0;
     failures += check_pixel(result, 0, 80, rgba(40, 210, 30, 255),
                             "resident texture zero") != 0;
     failures += check_pixel(result, 4, 80, rgba(110, 150, 110, 255),
