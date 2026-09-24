@@ -22,6 +22,8 @@ LIBOGG_VER=1.3.5
 LIBVORBIS_VER=1.3.7
 SDL2_VER=2.32.10
 SDL2_MIXER_VER=2.8.1
+NOODLES_COMMIT=2075eb13f5a70bb4ebc1bf127cac014fb134f860
+NOODLES_ARCHIVE_SHA256=5cfa00c6d56ad4b974ad239502c39dadced2c86b2bd070fd18b45bf5145e4e71
 
 ARCH_FLAGS="-mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard"
 # The MiSTer SDL2 video and audio drivers and their patches come from MiSTer-VCMI.

@@ -1,0 +1,66 @@
+diff -ruN SDL2-2.32.10.orig/CMakeLists.txt SDL2-2.32.10/CMakeLists.txt
+--- SDL2-2.32.10.orig/CMakeLists.txt	2026-09-24 00:00:00.000000000 -0700
++++ SDL2-2.32.10/CMakeLists.txt	2026-09-24 00:00:00.000000000 -0700
+@@ -491,6 +491,7 @@
+ set_option(SDL_OFFSCREEN           "Use offscreen video driver" ON)
+ set_option(SDL_MISTER              "Use MiSTer framebuffer video driver" OFF)
+ set_option(SDL_MISTERAUDIO         "Use MiSTer audio driver (/dev/MrAudio)" OFF)
++set_option(SDL_RENDER_NOODLES      "Use MiSTer-Noodles 2D render driver" OFF)
+ option_string(SDL_BACKGROUNDING_SIGNAL "number to use for magic backgrounding signal or 'OFF'" OFF)
+ option_string(SDL_FOREGROUNDING_SIGNAL "number to use for magic foregrounding signal or 'OFF'" OFF)
+ set_option(SDL_HIDAPI              "Enable the HIDAPI subsystem" ON)
+@@ -1271,6 +1272,19 @@
+     set(HAVE_MISTER TRUE)
+     set(HAVE_SDL_VIDEO TRUE)
+   endif()
++  if(SDL_RENDER_NOODLES)
++    set(SDL_VIDEO_RENDER_NOODLES 1)
++    file(GLOB RENDER_NOODLES_SOURCES ${SDL2_SOURCE_DIR}/src/render/noodles/*.c)
++    list(APPEND SOURCE_FILES ${RENDER_NOODLES_SOURCES})
++    find_path(NOODLES_INCLUDE_DIR noodles_link.h HINTS ${NOODLES_ROOT}/include)
++    find_library(NOODLES_LIBRARY noodles HINTS ${NOODLES_ROOT}/lib)
++    if(NOT NOODLES_INCLUDE_DIR OR NOT NOODLES_LIBRARY)
++      message(FATAL_ERROR "SDL_RENDER_NOODLES needs the MiSTer-Noodles SDK")
++    endif()
++    include_directories(${NOODLES_INCLUDE_DIR})
++    list(APPEND EXTRA_LIBS ${NOODLES_LIBRARY})
++    set(HAVE_RENDER_NOODLES TRUE)
++  endif()
+   if(SDL_OFFSCREEN)
+     set(SDL_VIDEO_DRIVER_OFFSCREEN 1)
+     file(GLOB VIDEO_OFFSCREEN_SOURCES ${SDL2_SOURCE_DIR}/src/video/offscreen/*.c)
+diff -ruN SDL2-2.32.10.orig/include/SDL_config.h.cmake SDL2-2.32.10/include/SDL_config.h.cmake
+--- SDL2-2.32.10.orig/include/SDL_config.h.cmake	2026-09-24 00:00:00.000000000 -0700
++++ SDL2-2.32.10/include/SDL_config.h.cmake	2026-09-24 00:00:00.000000000 -0700
+@@ -469,6 +469,7 @@
+ #cmakedefine SDL_VIDEO_RENDER_METAL @SDL_VIDEO_RENDER_METAL@
+ #cmakedefine SDL_VIDEO_RENDER_VITA_GXM @SDL_VIDEO_RENDER_VITA_GXM@
+ #cmakedefine SDL_VIDEO_RENDER_PS2 @SDL_VIDEO_RENDER_PS2@
++#cmakedefine SDL_VIDEO_RENDER_NOODLES @SDL_VIDEO_RENDER_NOODLES@
+ #cmakedefine SDL_VIDEO_RENDER_PSP @SDL_VIDEO_RENDER_PSP@
+ 
+ /* Enable OpenGL support */
+diff -ruN SDL2-2.32.10.orig/src/render/SDL_render.c SDL2-2.32.10/src/render/SDL_render.c
+--- SDL2-2.32.10.orig/src/render/SDL_render.c	2026-09-24 00:00:00.000000000 -0700
++++ SDL2-2.32.10/src/render/SDL_render.c	2026-09-24 00:00:00.000000000 -0700
+@@ -131,6 +131,9 @@
+ #if SDL_VIDEO_RENDER_VITA_GXM
+     &VITA_GXM_RenderDriver,
+ #endif
++#if SDL_VIDEO_RENDER_NOODLES
++    &NOODLES_RenderDriver,
++#endif
+ #if SDL_VIDEO_RENDER_SW
+     &SW_RenderDriver
+ #endif
+diff -ruN SDL2-2.32.10.orig/src/render/SDL_sysrender.h SDL2-2.32.10/src/render/SDL_sysrender.h
+--- SDL2-2.32.10.orig/src/render/SDL_sysrender.h	2026-09-24 00:00:00.000000000 -0700
++++ SDL2-2.32.10/src/render/SDL_sysrender.h	2026-09-24 00:00:00.000000000 -0700
+@@ -307,6 +307,7 @@
+ extern SDL_RenderDriver METAL_RenderDriver;
+ extern SDL_RenderDriver PS2_RenderDriver;
+ extern SDL_RenderDriver PSP_RenderDriver;
++extern SDL_RenderDriver NOODLES_RenderDriver;
+ extern SDL_RenderDriver SW_RenderDriver;
+ extern SDL_RenderDriver VITA_GXM_RenderDriver;
+ 

@@ -62,6 +62,22 @@ step_vorbis() {
 	cm vorbis "$SRC/libvorbis-$LIBVORBIS_VER" -DBUILD_SHARED_LIBS=ON -DOGG_ROOT="$PREFIX" -DCMAKE_PREFIX_PATH="$PREFIX"
 }
 
+step_noodles() {
+	local archive="MiSTer-Noodles-$NOODLES_COMMIT.tar.gz"
+	local source="MiSTer-Noodles-$NOODLES_COMMIT"
+	fetch "https://github.com/aquasock/MiSTer-Noodles/archive/$NOODLES_COMMIT.tar.gz" "$archive"
+	printf '%s  %s\n' "$NOODLES_ARCHIVE_SHA256" "$DL/$archive" | sha256sum -c -
+	extract "$archive" "$source"
+	[ -e "$STAMPS/noodles" ] && { echo "noodles: already built"; return; }
+	say "noodles SDK"
+	(
+		make -C "$SRC/$source" sdk CROSS="$CROSS-" \
+			CFLAGS="-std=c99 -O2 -fPIC -Wall -Wextra -Wno-unused-parameter"
+		make -C "$SRC/$source" install-sdk CROSS="$CROSS-" SDK_TARGET=arm PREFIX="$PREFIX"
+	) >"$LOGS/noodles.log" 2>&1 || { echo "noodles FAILED, see $LOGS/noodles.log"; tail -25 "$LOGS/noodles.log"; exit 1; }
+	touch "$STAMPS/noodles"
+}
+
 step_sdl2() {
 	fetch "https://github.com/libsdl-org/SDL/releases/download/release-$SDL2_VER/SDL2-$SDL2_VER.tar.gz" "SDL2-$SDL2_VER.tar.gz"
 	extract "SDL2-$SDL2_VER.tar.gz" "SDL2-$SDL2_VER"
@@ -72,6 +88,7 @@ step_sdl2() {
 		rm -rf "$d"; extract "SDL2-$SDL2_VER.tar.gz" "SDL2-$SDL2_VER"
 		patch -s -d "$d" -p1 <"$dd/sdl2-mister-hooks.patch"
 	fi
+	grep -q SDL_VIDEO_RENDER_NOODLES "$d/CMakeLists.txt" || patch -s -d "$d" -p1 <"$ROOT/patches/sdl2/noodles-renderer.patch"
 	grep -q "division-free resampler" "$d/src/audio/SDL_audiocvt.c" || patch -s -d "$d" -p1 <"$dd/sdl2-resampler.patch"
 	# NEON alpha blitter only for destinations without alpha (see the patch).
 	grep -q "opaque destination" "$d/src/video/SDL_blit_A.c" || patch -s -d "$d" -p1 <"$ROOT/patches/sdl2/neon-blit-opaque-dst.patch"
@@ -79,12 +96,13 @@ step_sdl2() {
 	grep -q "triangle_div" "$d/src/render/software/SDL_triangle.c" || patch -s -d "$d" -p1 <"$ROOT/patches/sdl2/triangle-no-int64-divide.patch"
 	# NEON version of the translucent rectangle fill (see the patch).
 	grep -q "BlendFillRect_ARGB8888_BlendNEON" "$d/src/render/software/SDL_blendfillrect.c" || patch -s -d "$d" -p1 <"$ROOT/patches/sdl2/blendfillrect-neon.patch"
-	mkdir -p "$d/src/video/mister" "$d/src/audio/mister"
+	mkdir -p "$d/src/video/mister" "$d/src/audio/mister" "$d/src/render/noodles"
 	cp "$dd"/mister/* "$d/src/video/mister/"; cp "$dd"/mister-audio/* "$d/src/audio/mister/"
-	local h; h=$(cat "$dd"/mister/* "$dd"/mister-audio/* "$dd"/*.patch "$ROOT/patches/sdl2/neon-blit-opaque-dst.patch" "$ROOT/patches/sdl2/triangle-no-int64-divide.patch" "$ROOT/patches/sdl2/blendfillrect-neon.patch" | md5sum | cut -d' ' -f1)
+	cp "$ROOT"/sdl-renderer/noodles/* "$d/src/render/noodles/"
+	local h; h=$(cat "$dd"/mister/* "$dd"/mister-audio/* "$dd"/*.patch "$ROOT/patches/sdl2/neon-blit-opaque-dst.patch" "$ROOT/patches/sdl2/triangle-no-int64-divide.patch" "$ROOT/patches/sdl2/blendfillrect-neon.patch" "$ROOT/patches/sdl2/noodles-renderer.patch" "$ROOT"/sdl-renderer/noodles/* | md5sum | cut -d' ' -f1)
 	[ "$(cat "$STAMPS/sdl2.driver" 2>/dev/null)" = "$h" ] || { rm -f "$STAMPS/sdl2"; echo "$h" >"$STAMPS/sdl2.driver"; }
 	# Shared, so the drivers can be updated without relinking GemRB. Other audio backends stay off.
-	cm sdl2 "$d" -DSDL_MISTER=ON -DSDL_MISTERAUDIO=ON -DSDL_ARMNEON=ON -DARMNEON_FOUND=1 -DCMAKE_PROJECT_SDL2_INCLUDE="$ROOT/scripts/enable-asm.cmake" \
+	cm sdl2 "$d" -DSDL_MISTER=ON -DSDL_MISTERAUDIO=ON -DSDL_RENDER_NOODLES=ON -DNOODLES_ROOT="$PREFIX" -DSDL_ARMNEON=ON -DARMNEON_FOUND=1 -DCMAKE_PROJECT_SDL2_INCLUDE="$ROOT/scripts/enable-asm.cmake" \
 		-DCMAKE_ASM_COMPILER=$CROSS-gcc \
 		-DBUILD_SHARED_LIBS=ON -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_TEST=OFF \
 		-DSDL_X11=OFF -DSDL_WAYLAND=OFF -DSDL_KMSDRM=OFF -DSDL_VULKAN=OFF -DSDL_OPENGL=OFF \
@@ -134,6 +152,6 @@ step_python() {
 	touch "$STAMPS/python"
 }
 
-ALL=(zlib libpng freetype ogg vorbis sdl2 sdl2_mixer python)
+ALL=(zlib libpng freetype ogg vorbis noodles sdl2 sdl2_mixer python)
 for s in "${@:-${ALL[@]}}"; do "step_$s"; done
 say "done: $PREFIX"
