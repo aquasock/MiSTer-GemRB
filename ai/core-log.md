@@ -647,11 +647,11 @@ Separate texture synchronization and SDL command-construction costs from GemRB's
 
 #### Outcome:
 
-Source `ebaa9e5` adds opt-in five-second timing and call-volume summaries for Noodles texture creation, updates, locks, target changes, explicit readback and destruction plus SDL command-building callbacks. It also corrects the statistics documentation: presentation fence time includes completion of queued FPGA rendering and the vertical-blank handoff, while statistics-disabled operation uses the same synchronization with performance-clock reads and counters disabled. The SDL cross-build, renderer diagnostic build and complete bundle build passed; the diagnostic remains SHA256 `21595f3d89ef0542407d9059c0ecf06df4d1cb1ba69f54b66089ff430bf10a0e` and the instrumented SDL library SHA256 is `c3cbaad9c4113711106b78ee8cd08f23952b1a7d5b66cd0c15e54afddc8b233a`.
+Source `ebaa9e5` adds opt-in five-second timing and call-volume summaries for Noodles texture creation, updates, locks, target changes, explicit readback and destruction plus SDL command-building callbacks. It also corrects the statistics documentation: presentation fence time includes completion of queued FPGA rendering and the vertical-blank handoff, while statistics-disabled operation uses the same synchronization with performance-clock reads and counters disabled. The SDL cross-build, renderer diagnostic build and complete bundle build passed; the diagnostic remains SHA256 `21595f3d89ef0542407d9059c0ecf06df4d1cb1ba69f54b66089ff430bf10a0e`, the unstripped SDL SHA256 is `c3cbaad9c4113711106b78ee8cd08f23952b1a7d5b66cd0c15e54afddc8b233a`, and the hash-verified deployed library SHA256 is `78c6ea2cd6d23951e9139d546eda676c4e967aa4a01586b8d9afa79ca20ee18d`. Spell-heavy AR4000 samples ran at 9.3-11.5fps: SDL command construction stayed at 1.08-1.27ms per frame, texture updates used 4.17-14.32ms, explicit texture locks and readbacks were absent, and creation, target changes and destruction were negligible except one 0.71ms destruction burst. After subtracting measured callbacks, 36-57ms per frame remained in GemRB and SDL's front end. Renderer submission varied from 5.75-15.02ms as heavy frames produced command-stream backpressure and 33-54 drains per five-second window, while presentation fence time was 27.8-30.0ms. The user reported unchanged stutter with statistics disabled, confirming profiler overhead is not causal. Two later live-debug attempts were discarded: the known kobold projectile fault exited GemRB with signal 11 before attachment, and stopping a healthy process under GDB caused repeated fill-batch `EINVAL` errors until a clean core reload; normal untraced operation recovered with no renderer error.
 
 #### Next Steps:
 
-Deploy the instrumented SDL library, repeat the AR4000 spell interval with statistics enabled, then repeat it with statistics disabled to check whether measurement overhead affects pacing; use the evidence to select a targeted GemRB, SDL or reusable Noodles optimization.
+Add opt-in frame-phase timing inside the pinned GemRB source so the main loop separates timers, GUI handling, game/script update, window drawing, SDL buffer rendering, presentation and event polling without ptrace. Use the same AR4000 interval to localize the remaining 36-57ms CPU cost before changing engine behavior or selecting another reusable FPGA operation.
 
 #### Files Modified:
 
@@ -661,6 +661,6 @@ Deploy the instrumented SDL library, repeat the AR4000 spell interval with stati
 #### Status:
 
 - [x] Built
-- [ ] Passed
+- [x] Passed
 
 ---
