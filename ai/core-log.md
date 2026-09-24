@@ -121,3 +121,34 @@ Add an isolated Noodles GemRB launcher and run a real installed-game smoke test 
 - [x] Passed
 
 ---
+
+## 5 COMMIT Unreleased ??? 2026-09-24T01:30:00-07:00
+
+#### Coming From:
+
+Unreleased 28e1a83
+
+#### Purpose:
+
+Add isolated Noodles launchers for the installed GemRB games without changing the accepted software-renderer launchers.
+
+#### Outcome:
+
+Before modifying the bundle, the installed Baldur's Gate II binary was run for 25 seconds with only its SDL library path and renderer selection redirected to the qualified Noodles package. Its log selected `Renderer: noodles`, completed core initialization, loaded the start GUI and title assets, began menu music, and remained alive until the deliberate SIGKILL, with no renderer error, out-of-memory event or kernel fault. The planned bundle change will add a `run-noodles.sh` wrapper and one explicit `gemrb-noodles-*` OSD script per installed game while leaving `run.sh` and the existing `gemrb-*` scripts on their software default. Documentation and deployment cleanup will include the parallel launch path.
+
+#### Next Steps:
+
+Build and deploy the parallel launchers with the qualified SDL library, run Baldur's Gate II through the installed Noodles launcher, and record renderer selection, startup behavior and clean launcher recovery before considering any default change.
+
+#### Files Modified:
+
+- README.md
+- scripts/bundle.sh
+- scripts/deploy.sh
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
