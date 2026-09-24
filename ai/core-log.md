@@ -599,7 +599,7 @@ None.
 
 ---
 
-## 20 COMMIT Unreleased ??? 2026-09-24T13:58:32-07:00
+## 20 COMMIT Unreleased 4be9ddd 2026-09-24T13:58:32-07:00
 
 #### Coming From:
 
@@ -611,22 +611,22 @@ Use protocol-1.6 fill descriptors to collapse consecutive SDL opaque fills while
 
 #### Outcome:
 
-The renderer will pin MiSTer-Noodles source `d1702b4`, detect `NOODLES_CAP_FILL_BATCH`, buffer up to 64 consecutive opaque rectangles for one target, and flush them before draws, blends, synchronization, target changes and presentation. Existing scalar fills will remain the fallback on older cores, and statistics will distinguish submitted rectangles from fill batches and table-pressure stalls.
+Source `4be9ddd` pins MiSTer-Noodles `d1702b4` and its GitHub archive SHA256 `672fb6e71fd069bc7bd876527ad3e491fa3c937eb16297c5761976bfce5a7004`, detects `NOODLES_CAP_FILL_BATCH`, buffers up to 64 consecutive opaque rectangles for one target, and flushes them at draw, blend, synchronization, target and presentation boundaries. Existing scalar fills remain the fallback on older cores, and statistics distinguish submitted rectangles from fill batches and table-pressure stalls. Fresh SDK, SDL, diagnostic, GemRB and bundle builds passed; the diagnostic SHA256 is `21595f3d89ef0542407d9059c0ecf06df4d1cb1ba69f54b66089ff430bf10a0e` and its SDL SHA256 is `0649af787553741604acf5220ed1d3d0c55a40b053d1eaa8ae1cd25a08e57e40`. On the accepted protocol-1.5 RBF, the extended 64-fill-boundary and mixed-order diagnostic passed through the scalar fallback with exact-pixel hash `787b0fbd` and its audio queue drained. Protocol-1.6 hardware validation remains pending.
 
 #### Next Steps:
 
-Implement and test mixed fill, sprite and blend ordering, clipping, 64-entry boundaries, retry behavior and old-core fallback; rebuild the SDL diagnostic, GemRB and bundle; then validate exact pixels on the protocol-1.6 hardware candidate and repeat the same AR4000 combat workload against the 11.5-11.9ms fill baseline.
+Perform exactly two Quartus fits of MiSTer-Noodles `d1702b4` using seeds 13 and 7, deploy the stronger passing image, and validate protocol identity, exact pixels, fill-batch statistics and HDMI audio. Then update the MGL launcher to the accepted RBF and repeat the same AR4000 combat workload against the 11.5-11.9ms fill baseline.
 
 #### Files Modified:
 
+- README.md
 - scripts/env.sh
 - sdl-renderer/noodles/SDL_render_noodles.c
 - tools/noodles-render-test.c
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
-
