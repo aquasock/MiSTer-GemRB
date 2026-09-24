@@ -120,10 +120,11 @@ Notes on the GOG installers, after unpacking them with innoextract:
 
    For Noodles acceleration, run `noodles-launcher.sh` from the OSD Scripts menu. It returns immediately and waits silently
    for 30 seconds. During that interval return to the core browser and select **Utility > Baldurs Gate II (GemRB)**. The
-   MGL loads the timing-qualified protocol 1.5 core; the watcher validates the selected RBF and `CHITIN.KEY`,
+   MGL loads the timing-qualified protocol 1.6 core; the watcher validates the selected RBF and `CHITIN.KEY`,
    releases stock Main's exclusive input grabs while preserving the core display, and starts GemRB. The same process
-   supervises the game and restores Main's grabs on exit. The renderer can attach to protocol 1.4, but only protocol 1.5 provides the
-   multi-table sprite-batch path. The matching `gemrb-<game>.sh` launcher remains the software-renderer fallback.
+   supervises the game and restores Main's grabs on exit. The renderer can attach to protocol 1.4, protocol 1.5 adds the
+   multi-table sprite-batch path, and protocol 1.6 also batches opaque fills. The matching `gemrb-<game>.sh` launcher remains
+   the software-renderer fallback.
 
 If you installed version 0.1.0, the first run moves its game folder, saves and settings into this layout for you.
 

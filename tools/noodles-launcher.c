@@ -40,7 +40,7 @@
 #define GAME_LOG_PATH "/media/fat/gemrb/noodles-game.log"
 #define LOCK_PATH "/tmp/noodles-launcher.lock"
 #define CONTROL_NAME "Noodles launcher control"
-#define EXPECTED_RBF "/media/fat/pet/Noodles_descriptor_ring_seed13.rbf"
+#define EXPECTED_RBF "/media/fat/pet/Noodles_fill_batch_seed13.rbf"
 #define MAX_MGL_BYTES (64 * 1024)
 
 struct manifest {
