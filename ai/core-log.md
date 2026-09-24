@@ -33,6 +33,36 @@ Run `/media/fat/gemrb-noodles-test/run.sh` while the timing-qualified Noodles pr
 
 ---
 
+## 3 COMMIT Unreleased ??? 2026-09-24T00:52:47-07:00
+
+#### Coming From:
+
+Unreleased 35f1d20
+
+#### Purpose:
+
+Add coherent CPU fallbacks for the SDL operations GemRB needs but Noodles protocol 1.3 does not accelerate.
+
+#### Outcome:
+
+The planned change will give every managed render target a CPU shadow with explicit CPU-valid and FPGA-valid state, drain and read back before a CPU fallback, and upload current contents before later accelerated access. It will use SDL's software raster helpers for scaled copies, blended fills, points, lines and geometry while preserving the accelerated unscaled copy, blend, mirror and present paths. The diagnostic will interleave accelerated and CPU operations on the same targets and verify the final pixels so ordering and ownership transitions are tested directly; texture eviction remains outside this boundary.
+
+#### Next Steps:
+
+Implement the coherence state machine and GemRB-required fallbacks, rebuild SDL and GemRB, and run the expanded diagnostic twice on hardware before enabling the renderer in a GemRB launcher.
+
+#### Files Modified:
+
+- sdl-renderer/noodles/SDL_render_noodles.c
+- tools/noodles-render-test.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
+
 ## 2 COMMIT Unreleased 35f1d20 2026-09-24T00:51:40-07:00
 
 #### Coming From:
