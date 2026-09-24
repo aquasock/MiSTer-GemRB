@@ -122,6 +122,31 @@ typedef struct NOODLES_RenderData
     Uint64 stats_drains;
     Uint64 stats_shadow_allocations;
     Uint64 stats_shadow_releases;
+    Uint64 stats_build_ticks;
+    Uint64 stats_build_calls;
+    Uint64 stats_build_state_calls;
+    Uint64 stats_build_primitive_calls;
+    Uint64 stats_build_fill_calls;
+    Uint64 stats_build_copy_calls;
+    Uint64 stats_build_copy_ex_calls;
+    Uint64 stats_build_geometry_calls;
+    Uint64 stats_create_ticks;
+    Uint64 stats_create_calls;
+    Uint64 stats_update_ticks;
+    Uint64 stats_update_calls;
+    Uint64 stats_update_bytes;
+    Uint64 stats_lock_ticks;
+    Uint64 stats_lock_calls;
+    Uint64 stats_lock_bytes;
+    Uint64 stats_unlock_ticks;
+    Uint64 stats_unlock_calls;
+    Uint64 stats_target_ticks;
+    Uint64 stats_target_calls;
+    Uint64 stats_read_pixels_ticks;
+    Uint64 stats_read_pixels_calls;
+    Uint64 stats_read_pixels_bytes;
+    Uint64 stats_destroy_ticks;
+    Uint64 stats_destroy_calls;
 } NOODLES_RenderData;
 
 typedef struct NOODLES_CopyExData
@@ -837,7 +862,7 @@ static SDL_bool NOODLES_SupportsBlendMode(SDL_Renderer *renderer, SDL_BlendMode 
            NOODLES_ValidOperation(SDL_GetBlendModeAlphaOperation(blend));
 }
 
-static int NOODLES_CreateTexture(SDL_Renderer *renderer, SDL_Texture *texture)
+static int NOODLES_CreateTextureImpl(SDL_Renderer *renderer, SDL_Texture *texture)
 {
     NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
     NOODLES_TextureData *texturedata;
@@ -860,7 +885,19 @@ static int NOODLES_CreateTexture(SDL_Renderer *renderer, SDL_Texture *texture)
     return 0;
 }
 
-static int NOODLES_UpdateTexture(SDL_Renderer *renderer, SDL_Texture *texture,
+static int NOODLES_CreateTexture(SDL_Renderer *renderer, SDL_Texture *texture)
+{
+    NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
+    const Uint64 start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
+    const int result = NOODLES_CreateTextureImpl(renderer, texture);
+    if (data->stats_enabled) {
+        data->stats_create_ticks += SDL_GetPerformanceCounter() - start;
+        data->stats_create_calls++;
+    }
+    return result;
+}
+
+static int NOODLES_UpdateTextureImpl(SDL_Renderer *renderer, SDL_Texture *texture,
                                  const SDL_Rect *rect, const void *pixels, int pitch)
 {
     NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
@@ -908,7 +945,21 @@ static int NOODLES_UpdateTexture(SDL_Renderer *renderer, SDL_Texture *texture,
     return 0;
 }
 
-static int NOODLES_LockTexture(SDL_Renderer *renderer, SDL_Texture *texture,
+static int NOODLES_UpdateTexture(SDL_Renderer *renderer, SDL_Texture *texture,
+                                 const SDL_Rect *rect, const void *pixels, int pitch)
+{
+    NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
+    const Uint64 start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
+    const int result = NOODLES_UpdateTextureImpl(renderer, texture, rect, pixels, pitch);
+    if (data->stats_enabled) {
+        data->stats_update_ticks += SDL_GetPerformanceCounter() - start;
+        data->stats_update_calls++;
+        data->stats_update_bytes += (Uint64)rect->w * rect->h * 4u;
+    }
+    return result;
+}
+
+static int NOODLES_LockTextureImpl(SDL_Renderer *renderer, SDL_Texture *texture,
                                const SDL_Rect *rect, void **pixels, int *pitch)
 {
     NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
@@ -931,7 +982,21 @@ static int NOODLES_LockTexture(SDL_Renderer *renderer, SDL_Texture *texture,
     return 0;
 }
 
-static void NOODLES_UnlockTexture(SDL_Renderer *renderer, SDL_Texture *texture)
+static int NOODLES_LockTexture(SDL_Renderer *renderer, SDL_Texture *texture,
+                               const SDL_Rect *rect, void **pixels, int *pitch)
+{
+    NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
+    const Uint64 start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
+    const int result = NOODLES_LockTextureImpl(renderer, texture, rect, pixels, pitch);
+    if (data->stats_enabled) {
+        data->stats_lock_ticks += SDL_GetPerformanceCounter() - start;
+        data->stats_lock_calls++;
+        data->stats_lock_bytes += (Uint64)rect->w * rect->h * 4u;
+    }
+    return result;
+}
+
+static void NOODLES_UnlockTextureImpl(SDL_Renderer *renderer, SDL_Texture *texture)
 {
     NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
     NOODLES_TextureData *texturedata = (NOODLES_TextureData *)texture->driverdata;
@@ -980,6 +1045,17 @@ static void NOODLES_UnlockTexture(SDL_Renderer *renderer, SDL_Texture *texture)
     }
 }
 
+static void NOODLES_UnlockTexture(SDL_Renderer *renderer, SDL_Texture *texture)
+{
+    NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
+    const Uint64 start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
+    NOODLES_UnlockTextureImpl(renderer, texture);
+    if (data->stats_enabled) {
+        data->stats_unlock_ticks += SDL_GetPerformanceCounter() - start;
+        data->stats_unlock_calls++;
+    }
+}
+
 static void NOODLES_SetTextureScaleMode(SDL_Renderer *renderer, SDL_Texture *texture,
                                         SDL_ScaleMode scaleMode)
 {
@@ -988,7 +1064,7 @@ static void NOODLES_SetTextureScaleMode(SDL_Renderer *renderer, SDL_Texture *tex
     (void)scaleMode;
 }
 
-static int NOODLES_SetRenderTarget(SDL_Renderer *renderer, SDL_Texture *texture)
+static int NOODLES_SetRenderTargetImpl(SDL_Renderer *renderer, SDL_Texture *texture)
 {
     NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
     NOODLES_TextureData *old_target = data->target;
@@ -1007,14 +1083,26 @@ static int NOODLES_SetRenderTarget(SDL_Renderer *renderer, SDL_Texture *texture)
     return 0;
 }
 
-static int NOODLES_QueueNoOp(SDL_Renderer *renderer, SDL_RenderCommand *cmd)
+static int NOODLES_SetRenderTarget(SDL_Renderer *renderer, SDL_Texture *texture)
+{
+    NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
+    const Uint64 start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
+    const int result = NOODLES_SetRenderTargetImpl(renderer, texture);
+    if (data->stats_enabled) {
+        data->stats_target_ticks += SDL_GetPerformanceCounter() - start;
+        data->stats_target_calls++;
+    }
+    return result;
+}
+
+static int NOODLES_QueueNoOpImpl(SDL_Renderer *renderer, SDL_RenderCommand *cmd)
 {
     (void)renderer;
     (void)cmd;
     return 0;
 }
 
-static int NOODLES_QueueDrawPoints(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
+static int NOODLES_QueueDrawPointsImpl(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
                                    const SDL_FPoint *points, int count)
 {
     SDL_Point *queued = (SDL_Point *)SDL_AllocateRenderVertices(
@@ -1031,7 +1119,7 @@ static int NOODLES_QueueDrawPoints(SDL_Renderer *renderer, SDL_RenderCommand *cm
     return 0;
 }
 
-static int NOODLES_QueueFillRects(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
+static int NOODLES_QueueFillRectsImpl(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
                                   const SDL_FRect *rects, int count)
 {
     SDL_Rect *queued = (SDL_Rect *)SDL_AllocateRenderVertices(renderer,
@@ -1051,7 +1139,7 @@ static int NOODLES_QueueFillRects(SDL_Renderer *renderer, SDL_RenderCommand *cmd
     return 0;
 }
 
-static int NOODLES_QueueCopy(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
+static int NOODLES_QueueCopyImpl(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
                              SDL_Texture *texture, const SDL_Rect *srcrect,
                              const SDL_FRect *dstrect)
 {
@@ -1070,7 +1158,7 @@ static int NOODLES_QueueCopy(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
     return 0;
 }
 
-static int NOODLES_QueueCopyEx(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
+static int NOODLES_QueueCopyExImpl(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
                                SDL_Texture *texture, const SDL_Rect *srcrect,
                                const SDL_FRect *dstrect, double angle,
                                const SDL_FPoint *center, SDL_RendererFlip flip,
@@ -1096,7 +1184,7 @@ static int NOODLES_QueueCopyEx(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
     return 0;
 }
 
-static int NOODLES_QueueGeometry(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
+static int NOODLES_QueueGeometryImpl(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
                                  SDL_Texture *texture, const float *xy,
                                  int xy_stride, const SDL_Color *color,
                                  int color_stride, const float *uv, int uv_stride,
@@ -1145,6 +1233,90 @@ static int NOODLES_QueueGeometry(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
         }
     }
     return 0;
+}
+
+static void NOODLES_RecordBuild(NOODLES_RenderData *data, Uint64 start,
+                                Uint64 *category)
+{
+    if (data->stats_enabled) {
+        data->stats_build_ticks += SDL_GetPerformanceCounter() - start;
+        data->stats_build_calls++;
+        (*category)++;
+    }
+}
+
+static int NOODLES_QueueNoOp(SDL_Renderer *renderer, SDL_RenderCommand *cmd)
+{
+    NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
+    const Uint64 start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
+    const int result = NOODLES_QueueNoOpImpl(renderer, cmd);
+    NOODLES_RecordBuild(data, start, &data->stats_build_state_calls);
+    return result;
+}
+
+static int NOODLES_QueueDrawPoints(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
+                                   const SDL_FPoint *points, int count)
+{
+    NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
+    const Uint64 start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
+    const int result = NOODLES_QueueDrawPointsImpl(renderer, cmd, points, count);
+    NOODLES_RecordBuild(data, start, &data->stats_build_primitive_calls);
+    return result;
+}
+
+static int NOODLES_QueueFillRects(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
+                                  const SDL_FRect *rects, int count)
+{
+    NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
+    const Uint64 start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
+    const int result = NOODLES_QueueFillRectsImpl(renderer, cmd, rects, count);
+    NOODLES_RecordBuild(data, start, &data->stats_build_fill_calls);
+    return result;
+}
+
+static int NOODLES_QueueCopy(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
+                             SDL_Texture *texture, const SDL_Rect *srcrect,
+                             const SDL_FRect *dstrect)
+{
+    NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
+    const Uint64 start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
+    const int result = NOODLES_QueueCopyImpl(renderer, cmd, texture, srcrect, dstrect);
+    NOODLES_RecordBuild(data, start, &data->stats_build_copy_calls);
+    return result;
+}
+
+static int NOODLES_QueueCopyEx(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
+                               SDL_Texture *texture, const SDL_Rect *srcrect,
+                               const SDL_FRect *dstrect, double angle,
+                               const SDL_FPoint *center, SDL_RendererFlip flip,
+                               float scale_x, float scale_y)
+{
+    NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
+    const Uint64 start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
+    const int result = NOODLES_QueueCopyExImpl(renderer, cmd, texture, srcrect,
+                                               dstrect, angle, center, flip,
+                                               scale_x, scale_y);
+    NOODLES_RecordBuild(data, start, &data->stats_build_copy_ex_calls);
+    return result;
+}
+
+static int NOODLES_QueueGeometry(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
+                                 SDL_Texture *texture, const float *xy,
+                                 int xy_stride, const SDL_Color *color,
+                                 int color_stride, const float *uv, int uv_stride,
+                                 int num_vertices, const void *indices,
+                                 int num_indices, int size_indices,
+                                 float scale_x, float scale_y)
+{
+    NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
+    const Uint64 start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
+    const int result = NOODLES_QueueGeometryImpl(renderer, cmd, texture, xy,
+                                                 xy_stride, color, color_stride,
+                                                 uv, uv_stride, num_vertices,
+                                                 indices, num_indices, size_indices,
+                                                 scale_x, scale_y);
+    NOODLES_RecordBuild(data, start, &data->stats_build_geometry_calls);
+    return result;
 }
 
 static SDL_bool NOODLES_EffectiveClip(const NOODLES_TextureData *target,
@@ -1841,7 +2013,7 @@ static int NOODLES_RunCommandQueue(SDL_Renderer *renderer, SDL_RenderCommand *cm
     return result;
 }
 
-static int NOODLES_RenderReadPixels(SDL_Renderer *renderer, const SDL_Rect *rect,
+static int NOODLES_RenderReadPixelsImpl(SDL_Renderer *renderer, const SDL_Rect *rect,
                                     Uint32 format, void *pixels, int pitch)
 {
     NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
@@ -1863,6 +2035,21 @@ static int NOODLES_RenderReadPixels(SDL_Renderer *renderer, const SDL_Rect *rect
                    (size_t)rect->w * 4u);
     }
     return 0;
+}
+
+static int NOODLES_RenderReadPixels(SDL_Renderer *renderer, const SDL_Rect *rect,
+                                    Uint32 format, void *pixels, int pitch)
+{
+    NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
+    const Uint64 start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
+    const int result = NOODLES_RenderReadPixelsImpl(renderer, rect, format,
+                                                    pixels, pitch);
+    if (data->stats_enabled) {
+        data->stats_read_pixels_ticks += SDL_GetPerformanceCounter() - start;
+        data->stats_read_pixels_calls++;
+        data->stats_read_pixels_bytes += (Uint64)rect->w * rect->h * 4u;
+    }
+    return result;
 }
 
 static int NOODLES_RenderPresent(SDL_Renderer *renderer)
@@ -1967,6 +2154,32 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
                     (double)data->shadow_peak_bytes / (1024.0 * 1024.0),
                     (unsigned long long)data->stats_shadow_allocations,
                     (unsigned long long)data->stats_shadow_releases);
+            SDL_Log("Noodles callbacks: build=%.3fms/%llu calls (state=%llu primitive=%llu fill=%llu copy=%llu copyex=%llu geometry=%llu) create=%.3fms/%llu update=%.3fms/%llu/%.3fMiB lock=%.3fms/%llu/%.3fMiB unlock=%.3fms/%llu target=%.3fms/%llu read=%.3fms/%llu/%.3fMiB destroy=%.3fms/%llu avg/frame",
+                    (double)data->stats_build_ticks * milliseconds / frame_count,
+                    (unsigned long long)data->stats_build_calls,
+                    (unsigned long long)data->stats_build_state_calls,
+                    (unsigned long long)data->stats_build_primitive_calls,
+                    (unsigned long long)data->stats_build_fill_calls,
+                    (unsigned long long)data->stats_build_copy_calls,
+                    (unsigned long long)data->stats_build_copy_ex_calls,
+                    (unsigned long long)data->stats_build_geometry_calls,
+                    (double)data->stats_create_ticks * milliseconds / frame_count,
+                    (unsigned long long)data->stats_create_calls,
+                    (double)data->stats_update_ticks * milliseconds / frame_count,
+                    (unsigned long long)data->stats_update_calls,
+                    (double)data->stats_update_bytes / (1024.0 * 1024.0),
+                    (double)data->stats_lock_ticks * milliseconds / frame_count,
+                    (unsigned long long)data->stats_lock_calls,
+                    (double)data->stats_lock_bytes / (1024.0 * 1024.0),
+                    (double)data->stats_unlock_ticks * milliseconds / frame_count,
+                    (unsigned long long)data->stats_unlock_calls,
+                    (double)data->stats_target_ticks * milliseconds / frame_count,
+                    (unsigned long long)data->stats_target_calls,
+                    (double)data->stats_read_pixels_ticks * milliseconds / frame_count,
+                    (unsigned long long)data->stats_read_pixels_calls,
+                    (double)data->stats_read_pixels_bytes / (1024.0 * 1024.0),
+                    (double)data->stats_destroy_ticks * milliseconds / frame_count,
+                    (unsigned long long)data->stats_destroy_calls);
             data->stats_start = now;
             data->stats_frames = 0;
             data->stats_queue_ticks = 0;
@@ -2010,6 +2223,31 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
             data->stats_drains = 0;
             data->stats_shadow_allocations = 0;
             data->stats_shadow_releases = 0;
+            data->stats_build_ticks = 0;
+            data->stats_build_calls = 0;
+            data->stats_build_state_calls = 0;
+            data->stats_build_primitive_calls = 0;
+            data->stats_build_fill_calls = 0;
+            data->stats_build_copy_calls = 0;
+            data->stats_build_copy_ex_calls = 0;
+            data->stats_build_geometry_calls = 0;
+            data->stats_create_ticks = 0;
+            data->stats_create_calls = 0;
+            data->stats_update_ticks = 0;
+            data->stats_update_calls = 0;
+            data->stats_update_bytes = 0;
+            data->stats_lock_ticks = 0;
+            data->stats_lock_calls = 0;
+            data->stats_lock_bytes = 0;
+            data->stats_unlock_ticks = 0;
+            data->stats_unlock_calls = 0;
+            data->stats_target_ticks = 0;
+            data->stats_target_calls = 0;
+            data->stats_read_pixels_ticks = 0;
+            data->stats_read_pixels_calls = 0;
+            data->stats_read_pixels_bytes = 0;
+            data->stats_destroy_ticks = 0;
+            data->stats_destroy_calls = 0;
             data->shadow_peak_bytes = data->shadow_bytes;
         }
     }
@@ -2020,7 +2258,7 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
     return 0;
 }
 
-static void NOODLES_DestroyTexture(SDL_Renderer *renderer, SDL_Texture *texture)
+static void NOODLES_DestroyTextureImpl(SDL_Renderer *renderer, SDL_Texture *texture)
 {
     NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
     NOODLES_TextureData *texturedata = (NOODLES_TextureData *)texture->driverdata;
@@ -2033,6 +2271,17 @@ static void NOODLES_DestroyTexture(SDL_Renderer *renderer, SDL_Texture *texture)
     NOODLES_FreeSurface(data, texturedata);
     SDL_free(texturedata);
     texture->driverdata = NULL;
+}
+
+static void NOODLES_DestroyTexture(SDL_Renderer *renderer, SDL_Texture *texture)
+{
+    NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
+    const Uint64 start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
+    NOODLES_DestroyTextureImpl(renderer, texture);
+    if (data->stats_enabled) {
+        data->stats_destroy_ticks += SDL_GetPerformanceCounter() - start;
+        data->stats_destroy_calls++;
+    }
 }
 
 static void NOODLES_DestroyRenderer(SDL_Renderer *renderer)
