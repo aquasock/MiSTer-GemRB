@@ -4,10 +4,10 @@
  * An OSD script starts this program, which detaches and waits briefly for Main
  * to restart with a Noodles MGL.  The MGL's <noodles> record selects a known
  * engine adapter and its data.  A short-lived uinput keyboard sends Main's
- * supported Ctrl+Alt+F9 framebuffer toggle after the restart; Main therefore
- * releases evdev through its normal video_fb_enable() path before the game is
- * started.  This program then waits for the foreground adapter and restores
- * Main on exit.
+ * supported F12, Ctrl+Alt+F9 framebuffer sequence after the restart; Main
+ * therefore releases evdev through its normal video_fb_enable() path before
+ * the game is started.  This program then waits for the foreground adapter
+ * and restores Main with F12 on exit.
  */
 #define _GNU_SOURCE
 
@@ -339,7 +339,8 @@ static int create_control_keyboard(char *event_path, size_t event_size)
     int fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK | O_CLOEXEC);
     if (fd < 0) return -1;
     if (ioctl(fd, UI_SET_EVBIT, EV_KEY) || ioctl(fd, UI_SET_KEYBIT, KEY_LEFTCTRL) ||
-        ioctl(fd, UI_SET_KEYBIT, KEY_LEFTALT) || ioctl(fd, UI_SET_KEYBIT, KEY_F9)) {
+        ioctl(fd, UI_SET_KEYBIT, KEY_LEFTALT) || ioctl(fd, UI_SET_KEYBIT, KEY_F9) ||
+        ioctl(fd, UI_SET_KEYBIT, KEY_F12)) {
         close(fd); return -1;
     }
     struct uinput_user_dev dev;
@@ -411,6 +412,12 @@ static int emit_key(int fd, uint16_t code, int value)
 
 static int send_handoff_key(int fd)
 {
+    /* An MGL leaves Main's OSD closed, where F9 is forwarded to the core.
+     * Open the OSD first so Main consumes the framebuffer hotkey itself. */
+    if (emit_key(fd, KEY_F12, 1)) return -1;
+    sleep_ms(100);
+    if (emit_key(fd, KEY_F12, 0)) return -1;
+    sleep_ms(500);
     if (emit_key(fd, KEY_LEFTCTRL, 1)) return -1;
     sleep_ms(40);
     if (emit_key(fd, KEY_LEFTALT, 1)) return -1;
@@ -424,6 +431,16 @@ static int send_handoff_key(int fd)
     if (emit_key(fd, KEY_LEFTALT, 0)) return -1;
     sleep_ms(40);
     if (emit_key(fd, KEY_LEFTCTRL, 0)) return -1;
+    return 0;
+}
+
+static int send_restore_key(int fd)
+{
+    /* While Main's framebuffer terminal is active, F12 returns to the core
+     * and video_fb_enable(0) restores Main's physical input grabs. */
+    if (emit_key(fd, KEY_F12, 1)) return -1;
+    sleep_ms(100);
+    if (emit_key(fd, KEY_F12, 0)) return -1;
     return 0;
 }
 
@@ -469,7 +486,7 @@ static int handoff_main(pid_t pid, int *uinput_fd)
         log_line("handoff: physical input remained grabbed (probe=%d)", busy);
         ioctl(fd, UI_DEV_DESTROY); close(fd); return -1;
     }
-    log_line("handoff: Main %ld released physical input via Ctrl-Alt-F9", (long)pid);
+    log_line("handoff: Main %ld released physical input via F12 and Ctrl-Alt-F9", (long)pid);
     *uinput_fd = fd;
     return 0;
 }
@@ -479,7 +496,7 @@ static void restore_main(int uinput_fd)
     if (uinput_fd < 0) return;
     int busy = physical_input_busy();
     if (busy == 0) {
-        send_handoff_key(uinput_fd);
+        send_restore_key(uinput_fd);
         int64_t until = monotonic_ms() + 3000;
         do { sleep_ms(50); busy = physical_input_busy(); } while (busy == 0 && monotonic_ms() < until);
         log_line("restore: Main input probe=%d", busy);
