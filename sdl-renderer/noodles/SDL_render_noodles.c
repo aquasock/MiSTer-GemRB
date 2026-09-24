@@ -69,6 +69,28 @@ typedef struct NOODLES_RenderData
     Uint64 stats_queue_max_ticks;
     Uint64 stats_present_ticks;
     Uint64 stats_present_max_ticks;
+    Uint64 stats_fill_commands;
+    Uint64 stats_fill_pixels;
+    Uint64 stats_fill_stalls;
+    Uint64 stats_plain_draws;
+    Uint64 stats_plain_draw_pixels;
+    Uint64 stats_flagged_draws;
+    Uint64 stats_flagged_draw_pixels;
+    Uint64 stats_draw_stalls;
+    Uint64 stats_software_copies;
+    Uint64 stats_software_copy_pixels;
+    Uint64 stats_software_fills;
+    Uint64 stats_software_fill_pixels;
+    Uint64 stats_primitive_commands;
+    Uint64 stats_primitive_vertices;
+    Uint64 stats_geometry_commands;
+    Uint64 stats_geometry_triangles;
+    Uint64 stats_uploads;
+    Uint64 stats_upload_bytes;
+    Uint64 stats_readbacks;
+    Uint64 stats_readback_bytes;
+    Uint64 stats_evictions;
+    Uint64 stats_drains;
 } NOODLES_RenderData;
 
 typedef struct NOODLES_CopyExData
@@ -107,6 +129,9 @@ static Uint32 NOODLES_PackRGBA(Uint8 r, Uint8 g, Uint8 b, Uint8 a)
 
 static int NOODLES_DrainLink(NOODLES_RenderData *data)
 {
+    if (data->stats_enabled) {
+        data->stats_drains++;
+    }
     if (noodles_link_drain(data->link, NOODLES_DEFAULT_TIMEOUT_MS) < 0) {
         return NOODLES_SetErrno("drain");
     }
@@ -186,6 +211,10 @@ static int NOODLES_EnsureCPU(NOODLES_RenderData *data, NOODLES_TextureData *surf
                              NOODLES_DEFAULT_TIMEOUT_MS) < 0) {
         return NOODLES_SetErrno("fallback readback");
     }
+    if (data->stats_enabled) {
+        data->stats_readbacks++;
+        data->stats_readback_bytes += (Uint64)rect.width * rect.height * 4u;
+    }
     surface->cpu_valid = SDL_TRUE;
     NOODLES_TouchSurface(data, surface);
     return 0;
@@ -224,6 +253,9 @@ static int NOODLES_EvictSurface(NOODLES_RenderData *data,
     surface->surface = NULL;
     surface->gpu_valid = SDL_FALSE;
     data->resident_bytes -= surface->resident_bytes;
+    if (data->stats_enabled) {
+        data->stats_evictions++;
+    }
     if (noodles_surface_collect(data->link, &collected) < 0) {
         return NOODLES_SetErrno("surface collection");
     }
@@ -303,6 +335,10 @@ static int NOODLES_EnsureGPU(NOODLES_RenderData *data, NOODLES_TextureData *surf
                                NOODLES_DEFAULT_TIMEOUT_MS) < 0) {
         return NOODLES_SetErrno("fallback upload");
     }
+    if (data->stats_enabled) {
+        data->stats_uploads++;
+        data->stats_upload_bytes += (Uint64)rect.width * rect.height * 4u;
+    }
     surface->gpu_valid = SDL_TRUE;
     return 0;
 }
@@ -323,13 +359,24 @@ static int NOODLES_SubmitFill(NOODLES_RenderData *data, noodles_surface_t *targe
                               const noodles_rect_t *rect, Uint32 color)
 {
     if (noodles_surface_fill(target, rect, color) == 0) {
+        if (data->stats_enabled) {
+            data->stats_fill_commands++;
+            data->stats_fill_pixels += (Uint64)rect->width * rect->height;
+        }
         return 0;
     }
     if (errno == EAGAIN) {
+        if (data->stats_enabled) {
+            data->stats_fill_stalls++;
+        }
         if (NOODLES_DrainLink(data) < 0) {
             return -1;
         }
         if (noodles_surface_fill(target, rect, color) == 0) {
+            if (data->stats_enabled) {
+                data->stats_fill_commands++;
+                data->stats_fill_pixels += (Uint64)rect->width * rect->height;
+            }
             return 0;
         }
     }
@@ -340,13 +387,36 @@ static int NOODLES_SubmitDraw(NOODLES_RenderData *data, noodles_surface_t *targe
                               const noodles_surface_draw_t *draw)
 {
     if (noodles_surface_draw_batch(data->link, target, draw, 1) == 0) {
+        if (data->stats_enabled) {
+            const Uint64 pixels = (Uint64)draw->source_rect.width * draw->source_rect.height;
+            if (draw->flags) {
+                data->stats_flagged_draws++;
+                data->stats_flagged_draw_pixels += pixels;
+            } else {
+                data->stats_plain_draws++;
+                data->stats_plain_draw_pixels += pixels;
+            }
+        }
         return 0;
     }
     if (errno == EAGAIN) {
+        if (data->stats_enabled) {
+            data->stats_draw_stalls++;
+        }
         if (NOODLES_DrainLink(data) < 0) {
             return -1;
         }
         if (noodles_surface_draw_batch(data->link, target, draw, 1) == 0) {
+            if (data->stats_enabled) {
+                const Uint64 pixels = (Uint64)draw->source_rect.width * draw->source_rect.height;
+                if (draw->flags) {
+                    data->stats_flagged_draws++;
+                    data->stats_flagged_draw_pixels += pixels;
+                } else {
+                    data->stats_plain_draws++;
+                    data->stats_plain_draw_pixels += pixels;
+                }
+            }
             return 0;
         }
     }
@@ -446,6 +516,10 @@ static int NOODLES_UpdateTexture(SDL_Renderer *renderer, SDL_Texture *texture,
                                    (size_t)pitch, NOODLES_DEFAULT_TIMEOUT_MS) < 0) {
             return NOODLES_SetErrno("texture update");
         }
+        if (data->stats_enabled) {
+            data->stats_uploads++;
+            data->stats_upload_bytes += (Uint64)update_rect.width * update_rect.height * 4u;
+        }
         texturedata->gpu_valid = SDL_TRUE;
         NOODLES_TouchSurface(data, texturedata);
     }
@@ -509,6 +583,10 @@ static void NOODLES_UnlockTexture(SDL_Renderer *renderer, SDL_Texture *texture)
     }
     if (noodles_surface_update(texturedata->surface, &rect, pixels, pitch,
                                NOODLES_DEFAULT_TIMEOUT_MS) == 0) {
+        if (data->stats_enabled) {
+            data->stats_uploads++;
+            data->stats_upload_bytes += (Uint64)rect.width * rect.height * 4u;
+        }
         texturedata->gpu_valid = SDL_TRUE;
         NOODLES_TouchSurface(data, texturedata);
     } else {
@@ -838,6 +916,13 @@ static int NOODLES_SoftwareCopy(NOODLES_RenderData *data, NOODLES_TextureData *t
     if (result < 0) {
         return -1;
     }
+    if (data->stats_enabled) {
+        SDL_Rect visible;
+        data->stats_software_copies++;
+        if (SDL_IntersectRect(&destination, &effective_clip, &visible)) {
+            data->stats_software_copy_pixels += (Uint64)visible.w * visible.h;
+        }
+    }
     NOODLES_MarkCPUWrite(target);
     return 0;
 }
@@ -955,6 +1040,7 @@ static int NOODLES_RunCommandQueueImpl(SDL_Renderer *renderer, SDL_RenderCommand
                 break;
             }
             if (cmd->data.draw.blend != SDL_BLENDMODE_NONE) {
+                Uint64 pixels = 0;
                 if (!NOODLES_SoftwareBlendMode(cmd->data.draw.blend)) {
                     return SDL_SetError("Noodles CPU fill fallback cannot apply a custom blend mode");
                 }
@@ -964,6 +1050,7 @@ static int NOODLES_RunCommandQueueImpl(SDL_Renderer *renderer, SDL_RenderCommand
                 SDL_SetClipRect(target->shadow, &effective_clip);
                 for (i = 0; i < cmd->data.draw.count; ++i) {
                     SDL_Rect destination = rects[i];
+                    SDL_Rect visible;
                     destination.x += viewport.x;
                     destination.y += viewport.y;
                     if (SDL_BlendFillRect(target->shadow, &destination,
@@ -972,6 +1059,13 @@ static int NOODLES_RunCommandQueueImpl(SDL_Renderer *renderer, SDL_RenderCommand
                                           cmd->data.draw.b, cmd->data.draw.a) < 0) {
                         return -1;
                     }
+                    if (SDL_IntersectRect(&destination, &effective_clip, &visible)) {
+                        pixels += (Uint64)visible.w * visible.h;
+                    }
+                }
+                if (data->stats_enabled) {
+                    data->stats_software_fills += cmd->data.draw.count;
+                    data->stats_software_fill_pixels += pixels;
                 }
                 NOODLES_MarkCPUWrite(target);
                 break;
@@ -1046,6 +1140,10 @@ static int NOODLES_RunCommandQueueImpl(SDL_Renderer *renderer, SDL_RenderCommand
             }
             if (result < 0) {
                 return -1;
+            }
+            if (data->stats_enabled) {
+                data->stats_primitive_commands++;
+                data->stats_primitive_vertices += cmd->data.draw.count;
             }
             NOODLES_MarkCPUWrite(target);
             break;
@@ -1138,6 +1236,10 @@ static int NOODLES_RunCommandQueueImpl(SDL_Renderer *renderer, SDL_RenderCommand
                         return -1;
                     }
                 }
+            }
+            if (data->stats_enabled) {
+                data->stats_geometry_commands++;
+                data->stats_geometry_triangles += cmd->data.draw.count / 3u;
             }
             NOODLES_MarkCPUWrite(target);
             break;
@@ -1239,12 +1341,59 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
                     (double)data->stats_present_ticks * milliseconds / frame_count,
                     (double)data->stats_present_max_ticks * milliseconds,
                     other_ticks * milliseconds / frame_count);
+            SDL_Log("Noodles work: fill=%llu/%.3fMpx stalls=%llu plain=%llu/%.3fMpx flagged=%llu/%.3fMpx draw-stalls=%llu CPU-copy=%llu/%.3fMpx CPU-fill=%llu/%.3fMpx primitives=%llu/%llu vertices geometry=%llu/%llu triangles",
+                    (unsigned long long)data->stats_fill_commands,
+                    (double)data->stats_fill_pixels / 1000000.0,
+                    (unsigned long long)data->stats_fill_stalls,
+                    (unsigned long long)data->stats_plain_draws,
+                    (double)data->stats_plain_draw_pixels / 1000000.0,
+                    (unsigned long long)data->stats_flagged_draws,
+                    (double)data->stats_flagged_draw_pixels / 1000000.0,
+                    (unsigned long long)data->stats_draw_stalls,
+                    (unsigned long long)data->stats_software_copies,
+                    (double)data->stats_software_copy_pixels / 1000000.0,
+                    (unsigned long long)data->stats_software_fills,
+                    (double)data->stats_software_fill_pixels / 1000000.0,
+                    (unsigned long long)data->stats_primitive_commands,
+                    (unsigned long long)data->stats_primitive_vertices,
+                    (unsigned long long)data->stats_geometry_commands,
+                    (unsigned long long)data->stats_geometry_triangles);
+            SDL_Log("Noodles sync: uploads=%llu/%.3fMiB readbacks=%llu/%.3fMiB evictions=%llu drains=%llu resident=%.1fMiB",
+                    (unsigned long long)data->stats_uploads,
+                    (double)data->stats_upload_bytes / (1024.0 * 1024.0),
+                    (unsigned long long)data->stats_readbacks,
+                    (double)data->stats_readback_bytes / (1024.0 * 1024.0),
+                    (unsigned long long)data->stats_evictions,
+                    (unsigned long long)data->stats_drains,
+                    (double)data->resident_bytes / (1024.0 * 1024.0));
             data->stats_start = now;
             data->stats_frames = 0;
             data->stats_queue_ticks = 0;
             data->stats_queue_max_ticks = 0;
             data->stats_present_ticks = 0;
             data->stats_present_max_ticks = 0;
+            data->stats_fill_commands = 0;
+            data->stats_fill_pixels = 0;
+            data->stats_fill_stalls = 0;
+            data->stats_plain_draws = 0;
+            data->stats_plain_draw_pixels = 0;
+            data->stats_flagged_draws = 0;
+            data->stats_flagged_draw_pixels = 0;
+            data->stats_draw_stalls = 0;
+            data->stats_software_copies = 0;
+            data->stats_software_copy_pixels = 0;
+            data->stats_software_fills = 0;
+            data->stats_software_fill_pixels = 0;
+            data->stats_primitive_commands = 0;
+            data->stats_primitive_vertices = 0;
+            data->stats_geometry_commands = 0;
+            data->stats_geometry_triangles = 0;
+            data->stats_uploads = 0;
+            data->stats_upload_bytes = 0;
+            data->stats_readbacks = 0;
+            data->stats_readback_bytes = 0;
+            data->stats_evictions = 0;
+            data->stats_drains = 0;
         }
     }
     return 0;
