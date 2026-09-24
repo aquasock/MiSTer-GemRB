@@ -253,7 +253,7 @@ Group consecutive compatible draws to the same target into the core's existing 6
 
 ---
 
-## 9 COMMIT Unreleased ??? 2026-09-24T07:35:37-07:00
+## 9 COMMIT Unreleased 09ccf56 2026-09-24T07:35:37-07:00
 
 #### Coming From:
 
@@ -265,11 +265,11 @@ Reduce Noodles command-queue stalls by grouping consecutive SDL draws into the c
 
 #### Outcome:
 
-The planned renderer change will accumulate up to 64 compatible managed-surface draws to the same target and submit them as one ordered sprite batch. Pending draws will flush before fills, regional software fallbacks, surface transfers, residency changes, queue completion and presentation so batching cannot reorder visible operations or outlive referenced surfaces. Disabled-by-default statistics will report batch count, draw count and maximum batch size.
+Source `09ccf56` accumulates up to 64 consecutive managed-surface draws to the same target and submits them through the existing ordered sprite-batch operation. Pending draws flush at target changes, fills, regional software fallbacks, surface transfers, residency changes, queue completion, destruction and presentation so batches cannot reorder visible operations or outlive referenced surfaces. The disabled-by-default statistics now report batch count and maximum occupancy, and the diagnostic crosses a full 64-entry batch before an ordered fill and following draw. Fresh SDL, diagnostic and complete GemRB cross-builds passed. The deployed stripped SDL library SHA256 is `1431fd7d2ea72a1e6b7493d2fbfed76eb936fe1ea87c63bc06a122a6982332f2`, the diagnostic binary SHA256 is `687ca9d94befe61f0131d5e826f9eef95a66746abae0adede516f56e2c80684e`, and its SDL library SHA256 is `59b1a87e85d9e7c7f8982684db2bcef36b3b747d93d14bf72fdabc3de9b95d9a`. The timing-qualified protocol-1.3 core passed the expanded hardware diagnostic with hash `a6d5728e`. In the same BG2 Throne of Bhaal AR4000 save, the user observed an improvement and steady gameplay rose from 6.5-6.8fps to 11.3-11.6fps. Queue execution fell from approximately 103-107ms to 37-39ms per frame while the comparable workload retained about 1.04 million fill pixels, 0.40 million plain-draw pixels and 1.28 million flagged-draw pixels per frame. Approximately 268 draws per frame became 22 sprite batches with a measured maximum of 64 entries; draw stalls fell from about 228 to 4.1 per frame, with total drains about 5.1 per frame including one fill stall. Presentation now accounts for approximately 41ms and other work remains 8-9ms per frame. Regional synchronization remains bounded, memory has 273MiB available, and swap remains unused.
 
 #### Next Steps:
 
-Implement ordered accumulation and flush boundaries, extend the diagnostic with interleaved draw, fill and regional-fallback ordering, run fresh SDL and GemRB cross-builds, verify pixel readback on hardware, and repeat the same Throne of Bhaal AR4000 save with batch and timing measurements.
+Instrument the full-screen composition-to-back-buffer copy separately from vertical-blank wait and split the remaining queue time among fill, sprite-batch and regional synchronization submissions. Use that measurement to choose between a direct or page-flipped presentation path and reducing residual batch or fill serialization, while keeping core audio and supported Main input handoff in separate cycles.
 
 #### Files Modified:
 
@@ -279,7 +279,7 @@ Implement ordered accumulation and flush boundaries, extend the diagnostic with 
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
