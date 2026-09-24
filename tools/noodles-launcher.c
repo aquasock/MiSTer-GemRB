@@ -3,11 +3,11 @@
  *
  * An OSD script starts this program, which detaches and waits briefly for Main
  * to restart with a Noodles MGL.  The MGL's <noodles> record selects a known
- * engine adapter and its data.  A short-lived uinput keyboard sends Main's
- * supported F12, Ctrl+Alt+F9 framebuffer sequence after the restart; Main
- * therefore releases evdev through its normal video_fb_enable() path before
- * the game is started.  This program then waits for the foreground adapter
- * and restores Main with F12 on exit.
+ * engine adapter and its data.  For a valid launch it duplicates Main's open
+ * evdev descriptors with pidfd_getfd and changes their exclusive grabs without
+ * switching away from the Noodles display.  This program then waits for the
+ * foreground adapter and restores Main's grabs on exit.  A temporary uinput
+ * keyboard uses Main's framebuffer path only to show validation errors.
  */
 #define _GNU_SOURCE
 
@@ -29,6 +29,7 @@
 #include <sys/file.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -464,7 +465,7 @@ static int physical_input_busy(void)
     return !found ? -1 : !!busy;
 }
 
-static int handoff_main(pid_t pid, int *uinput_fd)
+static int handoff_main_framebuffer(pid_t pid, int *uinput_fd)
 {
     char event_path[64] = {};
     int fd = create_control_keyboard(event_path, sizeof(event_path));
@@ -491,7 +492,7 @@ static int handoff_main(pid_t pid, int *uinput_fd)
     return 0;
 }
 
-static void restore_main(int uinput_fd)
+static void restore_main_framebuffer(int uinput_fd)
 {
     if (uinput_fd < 0) return;
     int busy = physical_input_busy();
@@ -510,14 +511,94 @@ static void restore_main(int uinput_fd)
 static void show_launch_error(pid_t pid, const char *message)
 {
     int uinput_fd = -1;
-    if (handoff_main(pid, &uinput_fd)) return;
+    if (handoff_main_framebuffer(pid, &uinput_fd)) return;
     int tty = open("/dev/tty1", O_WRONLY | O_NOCTTY | O_CLOEXEC);
     if (tty >= 0) {
         dprintf(tty, "\033[2J\033[H\n  Noodles launch failed\n\n  %s\n\n  Returning to MiSTer in 10 seconds.\n", message);
         close(tty);
     }
     for (int i = 0; i < 100 && !stop_requested; i++) sleep_ms(100);
-    restore_main(uinput_fd);
+    restore_main_framebuffer(uinput_fd);
+}
+
+static bool event_target(const char *path)
+{
+    static const char prefix[] = "/dev/input/event";
+    if (strncmp(path, prefix, sizeof(prefix) - 1)) return false;
+    return numeric_name(path + sizeof(prefix) - 1);
+}
+
+static int set_main_input_grabs(pid_t pid, int grab)
+{
+    int pidfd = (int)syscall(SYS_pidfd_open, pid, 0);
+    if (pidfd < 0) {
+        log_line("input: pidfd_open Main %ld failed: %s", (long)pid, strerror(errno));
+        return -1;
+    }
+
+    char dir_path[64];
+    snprintf(dir_path, sizeof(dir_path), "/proc/%ld/fd", (long)pid);
+    DIR *d = opendir(dir_path);
+    if (!d) {
+        log_line("input: cannot inspect Main %ld descriptors: %s", (long)pid, strerror(errno));
+        close(pidfd);
+        return -1;
+    }
+
+    int found = 0, changed = 0;
+    struct dirent *de;
+    while ((de = readdir(d))) {
+        if (!numeric_name(de->d_name)) continue;
+        char link[PATH_MAX], target[PATH_MAX];
+        snprintf(link, sizeof(link), "%s/%s", dir_path, de->d_name);
+        ssize_t n = readlink(link, target, sizeof(target) - 1);
+        if (n < 0) continue;
+        target[n] = '\0';
+        if (!event_target(target)) continue;
+        found++;
+
+        int main_fd = (int)strtol(de->d_name, NULL, 10);
+        int fd = (int)syscall(SYS_pidfd_getfd, pidfd, main_fd, 0);
+        if (fd < 0) {
+            log_line("input: pidfd_getfd Main %ld fd %d failed: %s", (long)pid, main_fd, strerror(errno));
+            continue;
+        }
+        if (!ioctl(fd, EVIOCGRAB, grab)) changed++;
+        else log_line("input: EVIOCGRAB(%d) %s failed: %s", grab, target, strerror(errno));
+        close(fd);
+    }
+    closedir(d);
+    close(pidfd);
+
+    if (!found || changed != found) {
+        log_line("input: Main %ld grab=%d changed=%d found=%d", (long)pid, grab, changed, found);
+        return -1;
+    }
+    log_line("input: Main %ld grab=%d changed=%d", (long)pid, grab, changed);
+    return 0;
+}
+
+static int release_main_input(pid_t pid)
+{
+    if (set_main_input_grabs(pid, 0)) return -1;
+    int64_t until = monotonic_ms() + 3000;
+    int busy;
+    do { sleep_ms(50); busy = physical_input_busy(); } while (busy == 1 && monotonic_ms() < until && !stop_requested);
+    if (busy != 0) {
+        log_line("input: physical input remained grabbed after direct release (probe=%d)", busy);
+        return -1;
+    }
+    log_line("input: Main %ld released physical input without framebuffer switch", (long)pid);
+    return 0;
+}
+
+static void restore_main_input(pid_t pid)
+{
+    if (kill(pid, 0)) {
+        log_line("input: Main %ld disappeared before grab restore", (long)pid);
+        return;
+    }
+    if (!set_main_input_grabs(pid, 1)) log_line("input: Main %ld physical grabs restored", (long)pid);
 }
 
 static int run_adapter(const struct manifest *m)
@@ -602,13 +683,12 @@ static int coordinator(unsigned wait_seconds)
     }
     log_line("validated: engine=%s game=%s data=%s require=%s", m.engine, m.game, m.data, m.require);
 
-    int uinput_fd = -1;
-    if (handoff_main(mi.pid, &uinput_fd)) {
+    if (release_main_input(mi.pid)) {
         close_log(); close(lock_fd); return 5;
     }
     int rc = run_adapter(&m);
     log_line("adapter: engine=%s game=%s exit=%d", m.engine, m.game, rc);
-    restore_main(uinput_fd);
+    restore_main_input(mi.pid);
     log_line("watch: finished");
     close_log();
     close(lock_fd);
