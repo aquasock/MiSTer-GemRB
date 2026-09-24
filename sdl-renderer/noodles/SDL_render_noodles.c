@@ -127,6 +127,7 @@ typedef struct NOODLES_RenderData
     Uint64 stats_build_state_calls;
     Uint64 stats_build_primitive_calls;
     Uint64 stats_build_fill_calls;
+    Uint64 stats_build_fill_merges;
     Uint64 stats_build_copy_calls;
     Uint64 stats_build_copy_ex_calls;
     Uint64 stats_build_geometry_calls;
@@ -1122,20 +1123,28 @@ static int NOODLES_QueueDrawPointsImpl(SDL_Renderer *renderer, SDL_RenderCommand
 static int NOODLES_QueueFillRectsImpl(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
                                   const SDL_FRect *rects, int count)
 {
+    const size_t old_count = cmd->data.draw.count;
+    size_t first;
     SDL_Rect *queued = (SDL_Rect *)SDL_AllocateRenderVertices(renderer,
                                                               (size_t)count * sizeof(*queued),
-                                                              0, &cmd->data.draw.first);
+                                                              0, &first);
     int i;
     if (!queued) {
         return -1;
     }
-    cmd->data.draw.count = (size_t)count;
+    if (old_count && first != cmd->data.draw.first + old_count * sizeof(*queued)) {
+        return SDL_SetError("Noodles fill command data is not contiguous");
+    }
+    if (!old_count) {
+        cmd->data.draw.first = first;
+    }
     for (i = 0; i < count; ++i) {
         queued[i].x = (int)rects[i].x;
         queued[i].y = (int)rects[i].y;
         queued[i].w = SDL_max((int)rects[i].w, 1);
         queued[i].h = SDL_max((int)rects[i].h, 1);
     }
+    cmd->data.draw.count = old_count + (size_t)count;
     return 0;
 }
 
@@ -1268,8 +1277,12 @@ static int NOODLES_QueueFillRects(SDL_Renderer *renderer, SDL_RenderCommand *cmd
                                   const SDL_FRect *rects, int count)
 {
     NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
+    const SDL_bool merged = cmd->data.draw.count != 0;
     const Uint64 start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
     const int result = NOODLES_QueueFillRectsImpl(renderer, cmd, rects, count);
+    if (data->stats_enabled && result == 0 && merged) {
+        data->stats_build_fill_merges++;
+    }
     NOODLES_RecordBuild(data, start, &data->stats_build_fill_calls);
     return result;
 }
@@ -2154,12 +2167,13 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
                     (double)data->shadow_peak_bytes / (1024.0 * 1024.0),
                     (unsigned long long)data->stats_shadow_allocations,
                     (unsigned long long)data->stats_shadow_releases);
-            SDL_Log("Noodles callbacks: build=%.3fms/%llu calls (state=%llu primitive=%llu fill=%llu copy=%llu copyex=%llu geometry=%llu) create=%.3fms/%llu update=%.3fms/%llu/%.3fMiB lock=%.3fms/%llu/%.3fMiB unlock=%.3fms/%llu target=%.3fms/%llu read=%.3fms/%llu/%.3fMiB destroy=%.3fms/%llu avg/frame",
+            SDL_Log("Noodles callbacks: build=%.3fms/%llu calls (state=%llu primitive=%llu fill=%llu merged=%llu copy=%llu copyex=%llu geometry=%llu) create=%.3fms/%llu update=%.3fms/%llu/%.3fMiB lock=%.3fms/%llu/%.3fMiB unlock=%.3fms/%llu target=%.3fms/%llu read=%.3fms/%llu/%.3fMiB destroy=%.3fms/%llu avg/frame",
                     (double)data->stats_build_ticks * milliseconds / frame_count,
                     (unsigned long long)data->stats_build_calls,
                     (unsigned long long)data->stats_build_state_calls,
                     (unsigned long long)data->stats_build_primitive_calls,
                     (unsigned long long)data->stats_build_fill_calls,
+                    (unsigned long long)data->stats_build_fill_merges,
                     (unsigned long long)data->stats_build_copy_calls,
                     (unsigned long long)data->stats_build_copy_ex_calls,
                     (unsigned long long)data->stats_build_geometry_calls,
@@ -2228,6 +2242,7 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
             data->stats_build_state_calls = 0;
             data->stats_build_primitive_calls = 0;
             data->stats_build_fill_calls = 0;
+            data->stats_build_fill_merges = 0;
             data->stats_build_copy_calls = 0;
             data->stats_build_copy_ex_calls = 0;
             data->stats_build_geometry_calls = 0;
@@ -2377,6 +2392,7 @@ static int NOODLES_CreateRenderer(SDL_Renderer *renderer, SDL_Window *window, Ui
     renderer->DestroyRenderer = NOODLES_DestroyRenderer;
     renderer->info = NOODLES_RenderDriver.info;
     renderer->always_batch = SDL_TRUE;
+    renderer->merge_fill_rects = SDL_TRUE;
     return 0;
 }
 

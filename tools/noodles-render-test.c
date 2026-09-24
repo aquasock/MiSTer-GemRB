@@ -207,9 +207,11 @@ int main(int argc, char **argv)
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         goto done;
     }
-    audio = queue_tone();
-    if (!audio) {
-        goto done;
+    if (!SDL_getenv("NOODLES_TEST_SKIP_AUDIO")) {
+        audio = queue_tone();
+        if (!audio) {
+            goto done;
+        }
     }
     if (SDL_SetHint("SDL_RENDER_NOODLES_RESIDENT_MB", "12") != SDL_TRUE) {
         fprintf(stderr, "residency hint was rejected\n");
@@ -220,6 +222,13 @@ int main(int argc, char **argv)
     if (!window) {
         fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
         goto done;
+    }
+    for (i = 0; i < SDL_GetNumRenderDrivers(); ++i) {
+        SDL_RendererInfo available;
+        if (SDL_GetRenderDriverInfo(i, &available) == 0) {
+            printf("SDL render driver %d: %s flags=%08x\n", i, available.name,
+                   available.flags);
+        }
     }
     renderer = SDL_CreateRenderer(window, -1,
                                   SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE |
@@ -423,6 +432,73 @@ int main(int argc, char **argv)
         }
     }
 
+    /* Repeated one-line calls exercise SDL's Noodles-only fill-command merge.
+       Verify inclusive endpoints in both directions and every state or draw
+       boundary that must stop a merge. */
+    {
+        SDL_Rect clip = { 30, 120, 3, 1 };
+        SDL_Rect viewport = { 60, 120, 16, 2 };
+        SDL_Rect source_rect = { 0, 0, 1, 1 };
+        SDL_Rect destination = { 45, 120, 1, 1 };
+        SDL_Point span[2];
+#define DRAW_SPAN(x1, y1, x2, y2) \
+        do { \
+            span[0] = (SDL_Point){ (x1), (y1) }; \
+            span[1] = (SDL_Point){ (x2), (y2) }; \
+            if (SDL_RenderDrawLine(renderer, span[0].x, span[0].y, \
+                                   span[1].x, span[1].y) < 0) { \
+                fprintf(stderr, "merged span setup: %s\n", SDL_GetError()); \
+                goto done; \
+            } \
+        } while (0)
+        if (SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE) < 0 ||
+            SDL_SetRenderDrawColor(renderer, 5, 101, 207, 255) < 0) {
+            fprintf(stderr, "merged span state setup: %s\n", SDL_GetError());
+            goto done;
+        }
+        DRAW_SPAN(0, 120, 4, 120);
+        DRAW_SPAN(14, 120, 10, 120);
+        if (SDL_SetRenderDrawColor(renderer, 193, 47, 83, 255) < 0) {
+            fprintf(stderr, "merged span color setup: %s\n", SDL_GetError());
+            goto done;
+        }
+        DRAW_SPAN(20, 120, 24, 120);
+        if (SDL_SetRenderDrawColor(renderer, 5, 101, 207, 255) < 0 ||
+            SDL_RenderSetClipRect(renderer, &clip) < 0) {
+            fprintf(stderr, "merged span clip setup: %s\n", SDL_GetError());
+            goto done;
+        }
+        DRAW_SPAN(28, 120, 35, 120);
+        if (SDL_RenderSetClipRect(renderer, NULL) < 0) {
+            fprintf(stderr, "merged span clip reset: %s\n", SDL_GetError());
+            goto done;
+        }
+        DRAW_SPAN(40, 120, 49, 120);
+        if (SDL_RenderCopy(renderer, texture, &source_rect, &destination) < 0) {
+            fprintf(stderr, "merged span ordering copy: %s\n", SDL_GetError());
+            goto done;
+        }
+        DRAW_SPAN(47, 120, 52, 120);
+        if (SDL_RenderSetViewport(renderer, &viewport) < 0) {
+            fprintf(stderr, "merged span viewport setup: %s\n", SDL_GetError());
+            goto done;
+        }
+        DRAW_SPAN(0, 0, 4, 0);
+        if (SDL_RenderSetViewport(renderer, NULL) < 0 ||
+            SDL_SetRenderDrawColor(renderer, 50, 100, 200, 128) < 0 ||
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE) < 0) {
+            fprintf(stderr, "merged span viewport reset: %s\n", SDL_GetError());
+            goto done;
+        }
+        DRAW_SPAN(70, 121, 74, 121);
+        if (SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND) < 0) {
+            fprintf(stderr, "merged span blend setup: %s\n", SDL_GetError());
+            goto done;
+        }
+        DRAW_SPAN(72, 121, 76, 121);
+#undef DRAW_SPAN
+    }
+
     /* Three 4 MiB textures plus the pinned composition exceed the 12 MiB
        test budget. Reusing the first texture verifies eviction restoration. */
     for (i = 0; i < 3; ++i) {
@@ -566,6 +642,33 @@ int main(int argc, char **argv)
     failures += check_pixel(result, 29, 110, fill_batch_second,
                             "second fill end") != 0;
     failures += check_pixel(result, 69, 110, batch_fill, "fill batch last") != 0;
+    failures += check_pixel(result, 0, 120, batch_fill, "merged line first") != 0;
+    failures += check_pixel(result, 4, 120, batch_fill, "merged line inclusive end") != 0;
+    failures += check_pixel(result, 5, 120, background, "merged line after end") != 0;
+    failures += check_pixel(result, 10, 120, batch_fill, "merged reverse line end") != 0;
+    failures += check_pixel(result, 14, 120, batch_fill, "merged reverse line start") != 0;
+    failures += check_pixel(result, 20, 120, fill_batch_second, "merged color boundary") != 0;
+    failures += check_pixel(result, 29, 120, background, "merged clip outside left") != 0;
+    failures += check_pixel(result, 30, 120, batch_fill, "merged clip inside left") != 0;
+    failures += check_pixel(result, 32, 120, batch_fill, "merged clip inside right") != 0;
+    failures += check_pixel(result, 33, 120, background, "merged clip outside right") != 0;
+    failures += check_pixel(result, 45, 120, p1, "merged draw ordering") != 0;
+    failures += check_pixel(result, 48, 120, batch_fill, "merged post-draw fill") != 0;
+    failures += check_pixel(result, 60, 120, batch_fill, "merged viewport left") != 0;
+    failures += check_pixel(result, 64, 120, batch_fill, "merged viewport right") != 0;
+    failures += check_pixel(result, 65, 120, background, "merged viewport outside") != 0;
+    failures += check_pixel(result, 70, 121, rgba(50, 100, 200, 128),
+                            "merged blend initial") != 0;
+    failures += check_pixel(result, 72, 121,
+        reference(rgba(50, 100, 200, 128), rgba(50, 100, 200, 128),
+                  0xffffffffu, REF_SRC_ALPHA, REF_ONE_MINUS_SRC_ALPHA, REF_ADD,
+                  REF_ONE, REF_ONE_MINUS_SRC_ALPHA, REF_ADD, 0),
+                  "merged blend boundary") != 0;
+    failures += check_pixel(result, 76, 121,
+        reference(rgba(50, 100, 200, 128), background, 0xffffffffu,
+                  REF_SRC_ALPHA, REF_ONE_MINUS_SRC_ALPHA, REF_ADD, REF_ONE,
+                  REF_ONE_MINUS_SRC_ALPHA, REF_ADD, 0),
+                  "merged blend destination") != 0;
     failures += check_pixel(result, 0, 80, rgba(40, 210, 30, 255),
                             "resident texture zero") != 0;
     failures += check_pixel(result, 4, 80, rgba(110, 150, 110, 255),
@@ -638,7 +741,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "display present: %s\n", SDL_GetError());
         goto done;
     }
-    {
+    if (audio) {
         Uint32 start = SDL_GetTicks();
         while (SDL_GetQueuedAudioSize(audio) != 0 && SDL_GetTicks() - start < 3000u) {
             SDL_Delay(10);
@@ -650,7 +753,9 @@ int main(int argc, char **argv)
         SDL_Delay(100);
     }
     printf("Noodles renderer diagnostic: PASS (renderer=%s, hash=%08x)\n", info.name, hash);
-    printf("SDL audio diagnostic: PASS\n");
+    if (audio) {
+        printf("SDL audio diagnostic: PASS\n");
+    }
     fflush(stdout);
     SDL_Delay(hold_ms);
     rc = 0;

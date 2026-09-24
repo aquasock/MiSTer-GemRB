@@ -64,3 +64,59 @@ diff -ruN SDL2-2.32.10.orig/src/render/SDL_sysrender.h SDL2-2.32.10/src/render/S
  extern SDL_RenderDriver SW_RenderDriver;
  extern SDL_RenderDriver VITA_GXM_RenderDriver;
  
+diff --git a/src/render/SDL_render.c b/src/render/SDL_render.c
+--- a/src/render/SDL_render.c
++++ b/src/render/SDL_render.c
+@@ -454 +454 @@
+-static SDL_RenderCommand *PrepQueueCmdDraw(SDL_Renderer *renderer, const SDL_RenderCommandType cmdtype, SDL_Texture *texture)
++static SDL_RenderCommand *PrepQueueCmdDraw(SDL_Renderer *renderer, const SDL_RenderCommandType cmdtype, SDL_Texture *texture, SDL_bool *reused)
+@@ -460,0 +461,4 @@
++    if (reused) {
++        *reused = SDL_FALSE;
++    }
++
+@@ -483 +487,15 @@
+-    if (retval == 0) {
++    if (retval == 0 && renderer->merge_fill_rects &&
++        cmdtype == SDL_RENDERCMD_FILL_RECTS) {
++        SDL_RenderCommand *tail = renderer->render_commands_tail;
++        if (tail && tail->command == SDL_RENDERCMD_FILL_RECTS &&
++            tail->data.draw.r == color->r && tail->data.draw.g == color->g &&
++            tail->data.draw.b == color->b && tail->data.draw.a == color->a &&
++            tail->data.draw.blend == blendMode && tail->data.draw.texture == texture) {
++            cmd = tail;
++            if (reused) {
++                *reused = SDL_TRUE;
++            }
++        }
++    }
++
++    if (retval == 0 && !cmd) {
+@@ -502 +520 @@
+-    SDL_RenderCommand *cmd = PrepQueueCmdDraw(renderer, SDL_RENDERCMD_DRAW_POINTS, NULL);
++    SDL_RenderCommand *cmd = PrepQueueCmdDraw(renderer, SDL_RENDERCMD_DRAW_POINTS, NULL, NULL);
+@@ -515 +533 @@
+-    SDL_RenderCommand *cmd = PrepQueueCmdDraw(renderer, SDL_RENDERCMD_DRAW_LINES, NULL);
++    SDL_RenderCommand *cmd = PrepQueueCmdDraw(renderer, SDL_RENDERCMD_DRAW_LINES, NULL, NULL);
+@@ -530,0 +549 @@
++    SDL_bool reused = SDL_FALSE;
+@@ -532 +551 @@
+-    cmd = PrepQueueCmdDraw(renderer, (use_rendergeometry ? SDL_RENDERCMD_GEOMETRY : SDL_RENDERCMD_FILL_RECTS), NULL);
++    cmd = PrepQueueCmdDraw(renderer, (use_rendergeometry ? SDL_RENDERCMD_GEOMETRY : SDL_RENDERCMD_FILL_RECTS), NULL, &reused);
+@@ -592 +611 @@
+-            if (retval < 0) {
++            if (retval < 0 && !reused) {
+@@ -602 +621 @@
+-    SDL_RenderCommand *cmd = PrepQueueCmdDraw(renderer, SDL_RENDERCMD_COPY, texture);
++    SDL_RenderCommand *cmd = PrepQueueCmdDraw(renderer, SDL_RENDERCMD_COPY, texture, NULL);
+@@ -617 +636 @@
+-    SDL_RenderCommand *cmd = PrepQueueCmdDraw(renderer, SDL_RENDERCMD_COPY_EX, texture);
++    SDL_RenderCommand *cmd = PrepQueueCmdDraw(renderer, SDL_RENDERCMD_COPY_EX, texture, NULL);
+@@ -638 +657 @@
+-    cmd = PrepQueueCmdDraw(renderer, SDL_RENDERCMD_GEOMETRY, texture);
++    cmd = PrepQueueCmdDraw(renderer, SDL_RENDERCMD_GEOMETRY, texture, NULL);
+diff --git a/src/render/SDL_sysrender.h b/src/render/SDL_sysrender.h
+--- a/src/render/SDL_sysrender.h
++++ b/src/render/SDL_sysrender.h
+@@ -268,0 +269 @@
++    SDL_bool merge_fill_rects;

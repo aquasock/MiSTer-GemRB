@@ -188,7 +188,8 @@ all previously queued FPGA rendering plus the core's vertical-blank handoff rath
 also reports accelerated opaque-fill, blended-fill, plain-draw and flagged-draw counts and pixels, fill- and sprite-batch
 counts and maximum sizes, submission stalls, CPU fallback work, uploads, readbacks, evictions, drains and current FPGA
 texture residency. A callback line attributes CPU time and call volume to SDL command construction, texture creation,
-updates, locks, target changes, readback and destruction. The counters and their performance-clock reads are disabled
+updates, locks, target changes, readback and destruction; its merged-fill count reports compatible calls appended to an
+existing SDL command. The counters and their performance-clock reads are disabled
 otherwise; presentation synchronization is unchanged.
 Opaque points and simple lines use the FPGA fill engine. Operations that still need SDL's software rasterizer keep the
 FPGA result coherent by reading and uploading only the affected target region.
@@ -199,6 +200,9 @@ is the core's current hardware back buffer, so presentation does not copy an int
 textures and explicit render targets remain managed surfaces. With protocol 1.5+ and SDK 0.10, each flushed sprite or
 fill batch uses a free descriptor table with its own completion fence, allowing consecutive batches to remain queued
 without overwriting each other's descriptors. Protocol 1.6 batches opaque fills; older cores retain scalar fills.
+The Noodles SDL backend also appends consecutive compatible fill calls to one internal SDL command when their target,
+color, blend, viewport and clip state match. Any intervening draw or state change ends that command, preserving SDL order
+while avoiding thousands of command objects for engines that submit pre-rasterized horizontal spans one line at a time.
 
 ### The swap file
 
