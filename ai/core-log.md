@@ -505,3 +505,34 @@ Reduce HPS memory pressure by releasing redundant CPU texture shadows while thei
 - [x] Passed
 
 ---
+
+## 17 COMMIT Unreleased ??? 2026-09-24T19:18:00-07:00
+
+#### Coming From:
+
+Unreleased 96b1249
+
+#### Purpose:
+
+Eliminate redundant HPS texture shadows that forced the live Baldur's Gate II combat workload into USB swap.
+
+#### Outcome:
+
+The approved change will make CPU shadows demand-allocated and release a non-pinned, non-target shadow once the same current pixels are safely resident in an FPGA surface. Width and height will remain independent of shadow lifetime; updates and locks will recreate and synchronize a shadow as needed, CPU fallbacks will read current pixels back before access, and eviction will preserve current FPGA contents before destroying residency. The composition surface and active render target will retain their shadows to avoid repeated allocation and regional synchronization within a frame. Shadow allocation and release totals will be added to opt-in renderer statistics, and the diagnostic will exercise upload, hardware use, later CPU access and eviction restoration across the new lifetime transitions.
+
+#### Next Steps:
+
+Rebuild SDL, the renderer diagnostic, GemRB and the bundle, run exact-pixel diagnostics on the protocol-1.5 core, then repeat the same Throne of Bhaal combat path and compare shadow memory, RSS, swap traffic, CPU use and frame rate with the measured 434 MiB anonymous footprint and active swap baseline.
+
+#### Files Modified:
+
+- README.md
+- sdl-renderer/noodles/SDL_render_noodles.c
+- tools/noodles-render-test.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
