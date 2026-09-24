@@ -187,3 +187,33 @@ Add opt-in per-frame counts and pixel totals for accelerated fills, copies and b
 - [x] Passed
 
 ---
+
+## 7 COMMIT Unreleased ??? 2026-09-24T07:18:00-07:00
+
+#### Coming From:
+
+Unreleased cfb7985
+
+#### Purpose:
+
+Measure the rendering workload responsible for the multi-second Noodles command queue in Baldur's Gate II gameplay.
+
+#### Outcome:
+
+The Noodles SDL backend will extend its disabled-by-default periodic statistics with operation counts and pixel or byte totals for accelerated fills and draws, software fallbacks, surface uploads and readbacks, and residency evictions. The instrumentation will preserve normal runtime behavior and provide enough evidence to distinguish command-count overhead, blend or copy pixel throughput, CPU/GPU synchronization and residency churn before selecting an optimization.
+
+#### Next Steps:
+
+Implement and document the counters, run fresh SDL and GemRB cross-builds plus the renderer diagnostic, deploy the hash-verified bundle, and repeat the same Throne of Bhaal AR4000 save on hardware. Use the observed workload to propose the smallest host batching or RTL optimization as a separate cycle.
+
+#### Files Modified:
+
+- README.md
+- sdl-renderer/noodles/SDL_render_noodles.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
