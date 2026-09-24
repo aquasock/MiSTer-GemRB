@@ -228,6 +228,11 @@ export MALLOC_ARENA_MAX="${MALLOC_ARENA_MAX:-1}" MALLOC_MMAP_THRESHOLD_="${MALLO
 export GCONV_PATH="$D/libs/gconv" PYTHONHOME="$D/python" PYTHONDONTWRITEBYTECODE=1
 export SDL_VIDEODRIVER="${SDL_VIDEODRIVER:-mister}" SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-mister}"
 export SDL_RENDER_DRIVER="${SDL_RENDER_DRIVER:-software}"
+if [ "$SDL_RENDER_DRIVER" = software ]; then
+    # SDL's software renderer asks for a window surface. Disable SDL's otherwise automatic hardware-renderer probe for
+    # that surface so the software launcher cannot open a hidden Noodles session.
+    export SDL_FRAMEBUFFER_ACCELERATION="${SDL_FRAMEBUFFER_ACCELERATION:-software}"
+fi
 # An alpha-less window surface lets SDL use its fast NEON blitter for the final composite.
 export SDL_MISTER_FORMAT="${SDL_MISTER_FORMAT:-xrgb}"
 
