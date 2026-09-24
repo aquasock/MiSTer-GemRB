@@ -337,6 +337,12 @@ set -e
 D=/media/fat/gemrb
 [ -f "$D/env.sh" ] && . "$D/env.sh"
 RBF="${MISTER_NOODLES_RBF:-/media/fat/pet/Noodles_descriptor_ring_seed13.rbf}"
+LAUNCH_TTY="$(tty 2>/dev/null || true)"
+if [ "$LAUNCH_TTY" != /dev/tty2 ] && [ "${MISTER_NOODLES_ALLOW_DIRECT:-0}" != 1 ]; then
+    echo "Launch Noodles games from MiSTer's OSD Scripts menu so Main releases the mouse and keyboard."
+    echo "Direct shell launch is refused because Main keeps exclusive evdev grabs outside the Scripts path."
+    exit 1
+fi
 case "$RBF" in
     /*) ;;
     *) echo "MISTER_NOODLES_RBF must be an absolute path: $RBF"; exit 1 ;;
@@ -351,10 +357,10 @@ if [ ! -p /dev/MiSTer_cmd ]; then
     exit 1
 fi
 
-# Main's supported core-load path resets Noodles and relinquishes its evdev
-# grabs. This gives every game a clean hardware session without debugger-based
-# input manipulation. The core owns its fixed 800x600 output, so do not ask
-# Main to switch the separate Linux framebuffer/output mode around it.
+# Main's OSD Scripts path relinquishes its evdev grabs before this wrapper
+# starts. Reloading Noodles here gives the game a clean hardware session while
+# preserving that handoff. The core owns its fixed 800x600 output, so do not
+# ask Main to switch the separate Linux framebuffer/output mode around it.
 printf 'load_core %s\n' "$RBF" > /dev/MiSTer_cmd
 sleep 3
 export SDL_RENDER_DRIVER=noodles
