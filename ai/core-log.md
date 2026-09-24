@@ -346,3 +346,35 @@ The remaining host-visible cost is approximately 20 blended rectangle fallbacks 
 - [x] Passed
 
 ---
+
+## 12 COMMIT Unreleased ??? 2026-09-24T08:29:17-07:00
+
+#### Coming From:
+
+Unreleased 667661e
+
+#### Purpose:
+
+Move SDL blended rectangle fills onto the new Noodles hardware operation and qualify GemRB audio over HDMI with the same RBF.
+
+#### Outcome:
+
+The planned renderer update will use the protocol 1.4 solid-source blended-fill operation for supported SDL blend modes on managed and default targets, preserving command order and retaining the regional CPU path for unsupported cases. The exact-pixel diagnostic will distinguish the accelerated default-target and managed-target results, and its SDL package will add a deterministic 48 kHz stereo tone check. Existing testing has already confirmed that the qualified protocol 1.3 RBF contains the MiSTer ALSA path, `/dev/MrAudio` consumes nonzero GemRB PCM and a controlled tone is audible over HDMI, so this cycle will test audio as an RBF regression rather than add a redundant enable switch.
+
+#### Next Steps:
+
+After MiSTer-Noodles publishes the tested SDK and timing-qualified protocol 1.4 image, pin that source, replace supported blended-fill fallbacks, rebuild SDL, the diagnostic and GemRB, deploy the new RBF, verify exact pixels and HDMI audio, then repeat the Throne of Bhaal AR4000 save with statistics disabled and enabled to measure the removed synchronization and CPU fallback cost.
+
+#### Files Modified:
+
+- README.md
+- scripts/env.sh
+- sdl-renderer/noodles/SDL_render_noodles.c
+- tools/noodles-render-test.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
