@@ -145,13 +145,12 @@ MiSTer-GemRB v$VERSION: installing
    acceleration, run "noodles-launcher" from Scripts, return to the core browser within 30 seconds and select
    Utility/Baldurs Gate II (GemRB). Main loads Noodles and the waiting launcher starts GemRB.
 
-The launcher needs a USB drive for swap memory: the MiSTer has little RAM, and the game needs more than it has (a big
-fight, or loading a new area), so a swap file is used to keep the game from being killed. Plug the drive in before you
-start a game: it must already be formatted as ext4 (do that once on a Linux PC; FAT32 is far too slow) and have at least 500 MB free, and only one file,
-gemrb-swapfile (384 MB), is added to it; nothing on the drive is erased. If no drive is found, the launcher says so and
-waits until you plug one in (Enter checks again, q quits). Do not unplug it while playing. The file is created in the
-background the first time (minutes on a slow drive) and kept for next time. Set MISTER_USB=/media/usb0 in
-/media/fat/gemrb/env.sh to pick a drive when several are plugged in. The SD card is never used for swap.
+Software-renderer launches use USB swap because large fights and area transitions can exhaust the MiSTer's Linux-visible
+RAM. Plug in an ext4 USB drive with at least 500 MB free before those launches. The tested Noodles BG2 MGL defaults to no
+swap after completing its heavy combat and game-over path within RAM. Set MISTER_SWAP=usb in /media/fat/gemrb/env.sh to
+give a Noodles launch the same safety file, or MISTER_SWAP=none to disable it for a software launch. When selected, only
+gemrb-swapfile (384 MB) is added; nothing is erased. The file is retained for later launches. Set MISTER_USB=/media/usb0
+to choose among several drives. The SD card is never used for swap.
 
 Needs: a MiSTer with a DE10-Nano, a USB mouse and keyboard, and an HDMI display that accepts 800x600 at 60 Hz.
 GemRB's settings for each game are in /media/fat/gemrb/GemRB-<game>.cfg (created from GemRB-<game>.cfg.default on the

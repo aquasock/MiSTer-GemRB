@@ -36,7 +36,7 @@ Heart of Winter and Trials of the Luremaster), Icewind Dale II and Planescape: T
   sample rate, and a fallback for SDL's software renderer, which lacks the custom blend modes GemRB's wall-occlusion
   stencil needs (without it characters were drawn as solid purple rectangles).
 - **A launcher for the OSD Scripts menu, one per game** — switches the HDMI output to the game's resolution so your display scales the picture to
-  fill the screen, checks for a USB swap drive (see below), runs the game, and restores your mode afterwards.
+  fill the screen, prepares USB swap when the selected launch mode requires it, runs the game, and restores your mode afterwards.
 - **The game's own videos** — GemRB includes its own Bink and MVE decoders, so no FFmpeg is needed.
 
 ## Performance
@@ -68,8 +68,8 @@ core, compared with 48–50.5% in the protocol 1.4 sample.
   and `MrAudio` devices. Tested on the Buildroot image with Linux 6.18.38.
 - A USB mouse and keyboard, and an HDMI display that accepts 800x600 at 60 Hz.
 - The data files of the games you want to play, 1.4 to 2.6 GB each (see [Supported games](#supported-games)).
-- **A USB drive for swap memory**, plugged in before you start a game, formatted as **ext4** with at least
-  500 MB free. See "The swap file" below.
+- **A USB drive for swap memory when using the software renderer**, plugged in before you start a game, formatted as
+  **ext4** with at least 500 MB free. The tested Noodles BG2 launch does not require it. See "The swap file" below.
 - To build: a Linux PC (Ubuntu 26.04 was used), about 2 GB of free disk space, a network connection for fetching
   sources, and a checkout of [MiSTer-VCMI](https://github.com/aquasock/MiSTer-VCMI) next to this repository: the SDL2
   driver sources are shared, not copied.
@@ -164,7 +164,7 @@ Local settings go in `/media/fat/gemrb/env.sh`, which the launcher reads if it e
 | `MISTER_SWAP_MB=384` | Size of the swap file in MB |
 | `MISTER_DEBUG=1` | Developer: run the game under gdb and write `crash.log` (call stacks of all threads, plus a raw stack dump) if it crashes. Needs the unstripped files from `scripts/debug-symbols.sh` and `scripts/deploy.sh debug`, which are not in the release zip |
 | `MISTER_MALLOC_CHECK=1` | Developer, with `MISTER_DEBUG`: also use glibc's heap-checking allocator (slower) |
-| `MISTER_SWAP=none` | Developer: run without swap (the game can be killed when memory runs out) |
+| `MISTER_SWAP=none` or `usb` | Disable swap, or explicitly use USB swap. Noodles BG2 defaults to `none`; software launches default to `usb` |
 | `SDL_RENDER_NOODLES_RESIDENT_MB=192` | FPGA texture-residency budget used by the Noodles renderer; valid overrides are clamped to 8–220 MiB |
 
 GemRB's own settings for each game are in `/media/fat/gemrb/GemRB-<game>.cfg`, which the launcher creates from
@@ -198,12 +198,14 @@ each other's descriptors.
 
 ### The swap file
 
-The MiSTer has about 490 MB of RAM and no swap, and the game needs more than that: the animations of a big fight, and
-while an area loads the old and the new area are in memory at once. When memory ran out the kernel killed the game. So
-the launcher adds a swap file, and it **requires a USB drive** for it. Plug one in before starting a game; if the launcher
-does not find one it says so and waits for you to plug one in (Enter checks again, `q` quits).
+The MiSTer exposes about 490 MB of RAM to Linux. Software-renderer launches retain the USB swap default because large
+fights and area transitions can hold enough creature and area data to exhaust that memory. The Noodles renderer keeps
+texture contents in FPGA-visible DDR and releases redundant CPU shadows; BG2 completed the tested Throne of Bhaal fight,
+game-over video and game-over screen with swap disabled, a 374 MiB observed RSS peak and at least 107 MiB still available.
+The Noodles BG2 MGL therefore defaults to no swap. Set `MISTER_SWAP=usb` in `env.sh` to add the safety file for a mod,
+longer session or workload that needs it. Set `MISTER_SWAP=none` to disable swap for a software-renderer test.
 
-- One file, `gemrb-swapfile` (384 MB), is added to the drive. The drive must already be formatted as ext4 (do that
+- When USB swap is selected, one file, `gemrb-swapfile` (384 MB), is added to the drive. The drive must already be formatted as ext4 (do that
   once on a Linux PC, for example with `mkfs.ext4`; FAT32 is far too slow, about 0.1 MB/s to create the file) and have at
   least 500 MB free. The launcher never erases or formats anything. The launcher only looks at drives mounted
   under `/media/usbN` and never touches anything else. The file is kept for next time; delete it by hand if you no

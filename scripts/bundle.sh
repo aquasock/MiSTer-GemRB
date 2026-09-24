@@ -100,7 +100,7 @@ cat > "$OUT/run.sh" <<'RUN'
 #   MISTER_DEBUG=1                   developer: run under gdb and write crash.log (needs deploy.sh debug)
 #   MISTER_MALLOC_CHECK=1            developer: with MISTER_DEBUG, also check the heap on every allocation (slower)
 #   MISTER_USB=/media/usbN           swap drive to use when several are plugged in (skips the question)
-#   MISTER_SWAP=none                 developer: run without swap (the game can be killed when memory runs out)
+#   MISTER_SWAP=none|usb             disable swap, or explicitly use USB swap (Noodles defaults to none)
 #   MISTER_SWAP_MB=384               size of the emergency swap file (0 = none)
 D=/media/fat/gemrb
 cd "$D" || exit 1
@@ -177,11 +177,11 @@ case "$RES" in
 esac
 sed -e "s/^Width=.*/Width=$NEW_W/" -e "s/^Height=.*/Height=$NEW_H/" "$CFG" > "$CFG.new" && mv "$CFG.new" "$CFG"
 
-# Swap: the game needs more memory than the MiSTer has, so it needs a swap file, and that goes on a USB drive, never on the SD
-# card (constant writes there would wear the card and are slow, since it is mounted synchronously). The drive must already have
-# an ext4 filesystem mounted under /media/usbN with room to spare (FAT32 is far too slow: with the synchronous mount that USB
-# drives get, creating the file runs at about 0.1 MB/s). Only one file, gemrb-swapfile, is added to it: nothing on the drive
-# is erased, formatted or changed. MISTER_USB=/media/usbN picks the drive when several are plugged in.
+# Swap: software-renderer launches use a USB swap file because large fights and area transitions can exceed Linux-visible RAM.
+# The memory-reduced Noodles BG2 path defaults to no swap; MISTER_SWAP=usb enables the same safety file explicitly. It always
+# goes on a USB drive, never the synchronously mounted SD card. The drive must already have an ext4 filesystem mounted under
+# /media/usbN with room to spare. Only gemrb-swapfile is added; nothing on the drive is erased, formatted or otherwise changed.
+# MISTER_USB=/media/usbN picks the drive when several are plugged in.
 SWAP_MB="${MISTER_SWAP_MB:-384}"
 usb_mounts() {
     # MiSTer may expose one partition at more than one /media/usbN path after
@@ -215,7 +215,11 @@ pick_usb() {
 }
 choose_swap() {
     SWAPFILE=""; SWAP_DIR=""
-    [ "$MISTER_SWAP" = none ] && return 0
+    case "$MISTER_SWAP" in
+        none) return 0 ;;
+        ""|usb) ;;
+        *) echo "  Unsupported MISTER_SWAP='$MISTER_SWAP' (use none or usb)."; sleep 10; return 1 ;;
+    esac
     while true; do
         if pick_usb; then SWAPFILE="$SWAP_DIR/gemrb-swapfile"; return 0; fi
         echo
@@ -245,12 +249,9 @@ fi
 # An alpha-less window surface lets SDL use its fast NEON blitter for the final composite.
 export SDL_MISTER_FORMAT="${SDL_MISTER_FORMAT:-xrgb}"
 
-# The MiSTer has about 490 MB of RAM and no swap, and the game (creature animations, and the old and new area while an area
-# loads) can need more than that: the kernel then kills the game. So keep a swap file on the USB drive chosen above. The
-# kernel is told to use it only as a last resort (swappiness 5). It is created in the background the first time (minutes on a
-# slow drive) and kept for next time; it is switched off again when the game exits. It is attached to swap directly, which
-# writes to the drive's blocks without going through the (synchronous) filesystem; if the filesystem does not allow that, it
-# goes through a loop device instead.
+# When enabled, keep a last-resort swap file on the USB drive chosen above. It is created in the background the first time,
+# retained for later launches, and switched off when the game exits. Swappiness 5 avoids routine writes. The file is attached
+# directly when the filesystem permits it and through a loop device otherwise.
 swap_off() {
     for p in $(ps | grep -E "dd if=/dev/zero of=.*gemrb-swapfile" | grep -v grep | awk '{print $1}'); do kill "$p" 2>/dev/null; done
     for f in $(awk '/gemrb-swapfile/ { print $1 }' /proc/swaps); do swapoff "$f" 2>/dev/null; done

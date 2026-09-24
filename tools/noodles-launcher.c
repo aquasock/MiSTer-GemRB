@@ -612,6 +612,7 @@ static int run_adapter(const struct manifest *m)
         setenv("SDL_RENDER_DRIVER", "noodles", 1);
         setenv("MISTER_RESOLUTION", "800x600", 1);
         setenv("MISTER_OUTPUT_MODE", "off", 1);
+        setenv("MISTER_SWAP", "none", 1);
         setenv("NOODLES_ENGINE", m->engine, 1);
         setenv("NOODLES_GAME", m->game, 1);
         setenv("NOODLES_DATA", m->data, 1);
