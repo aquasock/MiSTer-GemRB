@@ -473,7 +473,7 @@ Verify mouse and keyboard control plus HDMI music in the live MGL-launched game,
 
 ---
 
-## 16 COMMIT Unreleased ??? 2026-09-24T19:04:00-07:00
+## 16 COMMIT Unreleased 96b1249 2026-09-24T19:04:00-07:00
 
 #### Coming From:
 
@@ -485,11 +485,11 @@ Preserve the Noodles core display while handing Main's physical input devices to
 
 #### Outcome:
 
-The hardware test showed that the supported framebuffer hotkey released input correctly but placed Main's black Linux framebuffer over the live Noodles output, leaving GemRB music audible with no visible game. The correction will keep the watcher, MGL validation and supervision architecture while replacing the valid-game framebuffer transition with the previously proven kernel `pidfd_getfd` path: duplicate Main's existing event descriptors, remove their exclusive grabs without closing or replacing Main's descriptors, start GemRB on the still-visible Noodles display, and restore those grabs after the adapter exits. The temporary virtual keyboard will remain limited to the visible validation-error path. The BG2 MGL will also move directly under Utility because hardware testing showed that Main did not expose its extra Noodles Games subdirectory.
+Sources `5bc7c86` and `96b1249` retain the watcher, validation and supervision architecture while replacing the valid-game framebuffer transition with the proven kernel `pidfd_getfd` path. The coordinator duplicates Main's four existing event descriptors, removes their exclusive grabs without closing them or covering the Noodles output, and restores the same grabs after GemRB exits; the temporary virtual keyboard remains limited to the visible validation-error path. The BG2 MGL now installs directly under Utility because Main did not expose its extra Noodles Games subdirectory on the test system. Strict native, analyzer and static ARM builds passed, the deployed launcher SHA256 is `aedd628e470e2e5584756224673e3eb1b6fd969803e2143138c3bbfb727a8d78`, and the generated MGL retained SHA256 `8354fe8dfa8797256d2f7d0f33427fc3320fe3de9db420d9b8cfdf3368a03db6`. Two valid launches reached the BG2 menu with visible Noodles output, working mouse and keyboard input and HDMI music; one exited normally with status zero, restored all four Main grabs and removed swap, and the user then launched the direct Utility entry, loaded the Throne of Bhaal save and entered combat.
 
 #### Next Steps:
 
-Build and deploy the corrected coordinator, launch the valid Baldur's Gate II MGL and verify visible Noodles video with mouse, keyboard and HDMI audio, then exit normally and repeat the launch. Recheck OSD open-close behavior separately because Main can reacquire input when its OSD opens during gameplay.
+Reduce HPS memory pressure by releasing redundant CPU texture shadows while their current contents are resident in FPGA memory, recreating them only for updates, fallback access or eviction. Then repeat the same combat workload and compare RSS, swap traffic, CPU use and frame rate before returning to spell-heavy rendering work.
 
 #### Files Modified:
 
@@ -501,7 +501,7 @@ Build and deploy the corrected coordinator, launch the valid Baldur's Gate II MG
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
