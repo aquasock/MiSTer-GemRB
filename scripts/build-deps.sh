@@ -65,17 +65,18 @@ step_vorbis() {
 step_noodles() {
 	local archive="MiSTer-Noodles-$NOODLES_COMMIT.tar.gz"
 	local source="MiSTer-Noodles-$NOODLES_COMMIT"
+	local stamp="$STAMPS/noodles.$NOODLES_COMMIT"
 	fetch "https://github.com/aquasock/MiSTer-Noodles/archive/$NOODLES_COMMIT.tar.gz" "$archive"
 	printf '%s  %s\n' "$NOODLES_ARCHIVE_SHA256" "$DL/$archive" | sha256sum -c -
 	extract "$archive" "$source"
-	[ -e "$STAMPS/noodles" ] && { echo "noodles: already built"; return; }
+	[ -e "$stamp" ] && { echo "noodles: already built"; return; }
 	say "noodles SDK"
 	(
 		make -C "$SRC/$source" sdk CROSS="$CROSS-" \
 			CFLAGS="-std=c99 -O2 -fPIC -Wall -Wextra -Wno-unused-parameter"
 		make -C "$SRC/$source" install-sdk CROSS="$CROSS-" SDK_TARGET=arm PREFIX="$PREFIX"
 	) >"$LOGS/noodles.log" 2>&1 || { echo "noodles FAILED, see $LOGS/noodles.log"; tail -25 "$LOGS/noodles.log"; exit 1; }
-	touch "$STAMPS/noodles"
+	touch "$stamp"
 }
 
 step_sdl2() {
@@ -99,7 +100,7 @@ step_sdl2() {
 	mkdir -p "$d/src/video/mister" "$d/src/audio/mister" "$d/src/render/noodles"
 	cp "$dd"/mister/* "$d/src/video/mister/"; cp "$dd"/mister-audio/* "$d/src/audio/mister/"
 	cp "$ROOT"/sdl-renderer/noodles/* "$d/src/render/noodles/"
-	local h; h=$(cat "$dd"/mister/* "$dd"/mister-audio/* "$dd"/*.patch "$ROOT/patches/sdl2/neon-blit-opaque-dst.patch" "$ROOT/patches/sdl2/triangle-no-int64-divide.patch" "$ROOT/patches/sdl2/blendfillrect-neon.patch" "$ROOT/patches/sdl2/noodles-renderer.patch" "$ROOT"/sdl-renderer/noodles/* | md5sum | cut -d' ' -f1)
+	local h; h=$({ printf '%s\n' "$NOODLES_COMMIT"; cat "$dd"/mister/* "$dd"/mister-audio/* "$dd"/*.patch "$ROOT/patches/sdl2/neon-blit-opaque-dst.patch" "$ROOT/patches/sdl2/triangle-no-int64-divide.patch" "$ROOT/patches/sdl2/blendfillrect-neon.patch" "$ROOT/patches/sdl2/noodles-renderer.patch" "$ROOT"/sdl-renderer/noodles/*; } | md5sum | cut -d' ' -f1)
 	[ "$(cat "$STAMPS/sdl2.driver" 2>/dev/null)" = "$h" ] || { rm -f "$STAMPS/sdl2"; echo "$h" >"$STAMPS/sdl2.driver"; }
 	# Shared, so the drivers can be updated without relinking GemRB. Other audio backends stay off.
 	cm sdl2 "$d" -DSDL_MISTER=ON -DSDL_MISTERAUDIO=ON -DSDL_RENDER_NOODLES=ON -DNOODLES_ROOT="$PREFIX" -DSDL_ARMNEON=ON -DARMNEON_FOUND=1 -DCMAKE_PROJECT_SDL2_INCLUDE="$ROOT/scripts/enable-asm.cmake" \

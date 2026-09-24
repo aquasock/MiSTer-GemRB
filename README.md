@@ -169,7 +169,9 @@ work, uploads, readbacks, evictions, drains and current FPGA texture residency. 
 Opaque points and simple lines use the FPGA fill engine. Operations that still need SDL's software rasterizer keep the
 FPGA result coherent by reading and uploading only the affected target region.
 Consecutive accelerated copies to the same target share the core's 64-entry sprite batches. Fills, software fallbacks,
-target changes and resource synchronization flush pending copies to preserve SDL command order.
+target changes and resource synchronization flush pending copies to preserve SDL command order. The SDL default target
+is the core's current hardware back buffer, so presentation does not copy an intermediate 800x600 composition surface;
+textures and explicit render targets remain managed surfaces.
 
 ### The swap file
 

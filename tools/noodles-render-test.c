@@ -119,6 +119,7 @@ int main(int argc, char **argv)
     const uint32_t batch_fill = rgba(5, 101, 207, 255);
     uint32_t source[16 * 16];
     uint32_t result[WIDTH * HEIGHT];
+    uint32_t display_pixel;
     SDL_Window *window = NULL;
     SDL_Renderer *renderer = NULL;
     SDL_Texture *texture = NULL;
@@ -443,6 +444,31 @@ int main(int argc, char **argv)
         SDL_SetTextureAlphaMod(target, 255) < 0 ||
         SDL_RenderCopy(renderer, target, NULL, &rect) < 0) {
         fprintf(stderr, "display copy: %s\n", SDL_GetError());
+        goto done;
+    }
+    rect = (SDL_Rect){ 10, 10, 4, 4 };
+    if (SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND) < 0 ||
+        SDL_SetRenderDrawColor(renderer, 100, 50, 200, 128) < 0 ||
+        SDL_RenderFillRect(renderer, &rect) < 0) {
+        fprintf(stderr, "default-target regional fill: %s\n", SDL_GetError());
+        goto done;
+    }
+    rect = (SDL_Rect){ 10, 10, 1, 1 };
+    if (SDL_RenderReadPixels(renderer, &rect, SDL_PIXELFORMAT_ABGR8888,
+                             &display_pixel, 4) < 0 ||
+        display_pixel != reference(rgba(100, 50, 200, 128), rgba(0, 0, 0, 255),
+                                   0xffffffffu, REF_SRC_ALPHA,
+                                   REF_ONE_MINUS_SRC_ALPHA, REF_ADD, REF_ONE,
+                                   REF_ONE_MINUS_SRC_ALPHA, REF_ADD, 0)) {
+        fprintf(stderr, "default-target regional result: got %08x\n", display_pixel);
+        goto done;
+    }
+    rect = (SDL_Rect){ (800 - WIDTH) / 2 + 25,
+                       (600 - HEIGHT) / 2 + 100, 1, 1 };
+    if (SDL_RenderReadPixels(renderer, &rect, SDL_PIXELFORMAT_ABGR8888,
+                             &display_pixel, 4) < 0 || display_pixel != p2) {
+        fprintf(stderr, "default-target accelerated result: got %08x expected %08x\n",
+                display_pixel, p2);
         goto done;
     }
     SDL_ClearError();

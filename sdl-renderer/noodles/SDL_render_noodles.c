@@ -167,8 +167,11 @@ static int NOODLES_SurfaceRead(NOODLES_RenderData *data,
                                size_t pitch)
 {
     const Uint64 start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
-    const int result = noodles_surface_read(surface, rect, pixels, pitch,
-                                            NOODLES_DEFAULT_TIMEOUT_MS);
+    const int result = surface
+        ? noodles_surface_read(surface, rect, pixels, pitch,
+                               NOODLES_DEFAULT_TIMEOUT_MS)
+        : noodles_back_buffer_read(data->link, rect, pixels, pitch,
+                                   NOODLES_DEFAULT_TIMEOUT_MS);
     if (data->stats_enabled) {
         const Uint64 elapsed = SDL_GetPerformanceCounter() - start;
         data->stats_sync_ticks += elapsed;
@@ -185,8 +188,11 @@ static int NOODLES_SurfaceUpdate(NOODLES_RenderData *data,
                                  const void *pixels, size_t pitch)
 {
     const Uint64 start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
-    const int result = noodles_surface_update(surface, rect, pixels, pitch,
-                                              NOODLES_DEFAULT_TIMEOUT_MS);
+    const int result = surface
+        ? noodles_surface_update(surface, rect, pixels, pitch,
+                                 NOODLES_DEFAULT_TIMEOUT_MS)
+        : noodles_back_buffer_update(data->link, rect, pixels, pitch,
+                                     NOODLES_DEFAULT_TIMEOUT_MS);
     if (data->stats_enabled) {
         const Uint64 elapsed = SDL_GetPerformanceCounter() - start;
         data->stats_sync_ticks += elapsed;
@@ -330,6 +336,10 @@ static int NOODLES_MakeResident(NOODLES_RenderData *data,
 {
     NOODLES_TextureData *candidate;
     SDL_bool collected_after_drain = SDL_FALSE;
+    if (surface == &data->composition) {
+        NOODLES_TouchSurface(data, surface);
+        return 0;
+    }
     if (surface->surface) {
         NOODLES_TouchSurface(data, surface);
         return 0;
@@ -383,7 +393,8 @@ static int NOODLES_MakeResident(NOODLES_RenderData *data,
 static int NOODLES_EnsureGPU(NOODLES_RenderData *data, NOODLES_TextureData *surface)
 {
     noodles_rect_t rect;
-    if ((!surface->surface || !surface->gpu_valid) &&
+    if ((((surface != &data->composition) && !surface->surface) ||
+         !surface->gpu_valid) &&
         NOODLES_FlushDraws(data) < 0) {
         return -1;
     }
@@ -483,7 +494,7 @@ static void NOODLES_MarkCPUWrite(NOODLES_TextureData *surface)
     surface->gpu_valid = SDL_FALSE;
 }
 
-static int NOODLES_SubmitFill(NOODLES_RenderData *data, noodles_surface_t *target,
+static int NOODLES_SubmitFill(NOODLES_RenderData *data, NOODLES_TextureData *target,
                               const noodles_rect_t *rect, Uint32 color)
 {
     Uint64 start;
@@ -491,7 +502,9 @@ static int NOODLES_SubmitFill(NOODLES_RenderData *data, noodles_surface_t *targe
         return -1;
     }
     start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
-    if (noodles_surface_fill(target, rect, color) == 0) {
+    if ((target == &data->composition
+            ? noodles_back_buffer_fill(data->link, rect, color)
+            : noodles_surface_fill(target->surface, rect, color)) == 0) {
         if (data->stats_enabled) {
             data->stats_fill_commands++;
             data->stats_fill_pixels += (Uint64)rect->width * rect->height;
@@ -507,7 +520,9 @@ static int NOODLES_SubmitFill(NOODLES_RenderData *data, noodles_surface_t *targe
             NOODLES_AddTiming(data, start, &data->stats_fill_ticks);
             return -1;
         }
-        if (noodles_surface_fill(target, rect, color) == 0) {
+        if ((target == &data->composition
+                ? noodles_back_buffer_fill(data->link, rect, color)
+                : noodles_surface_fill(target->surface, rect, color)) == 0) {
             if (data->stats_enabled) {
                 data->stats_fill_commands++;
                 data->stats_fill_pixels += (Uint64)rect->width * rect->height;
@@ -1154,7 +1169,8 @@ static int NOODLES_RunCopy(NOODLES_RenderData *data, NOODLES_TextureData *target
     draw.dst_y = destination.y;
     draw.flags = flags;
     draw.modulation = modulation;
-    if (NOODLES_SubmitDraw(data, target->surface, &draw) < 0) {
+    if (NOODLES_SubmitDraw(data,
+            target == &data->composition ? NULL : target->surface, &draw) < 0) {
         return -1;
     }
     NOODLES_MarkGPUWrite(target);
@@ -1225,7 +1241,7 @@ static int NOODLES_SubmitOpaquePrimitives(NOODLES_RenderData *data,
             fill.y = points[i].y;
             fill.width = 1;
             fill.height = 1;
-            if (NOODLES_SubmitFill(data, target->surface, &fill, color) < 0) {
+            if (NOODLES_SubmitFill(data, target, &fill, color) < 0) {
                 return -1;
             }
             drew = SDL_TRUE;
@@ -1245,7 +1261,7 @@ static int NOODLES_SubmitOpaquePrimitives(NOODLES_RenderData *data,
                 fill.y = y1;
                 fill.width = (Uint32)(SDL_abs(x2 - x1) + 1);
                 fill.height = 1;
-                if (NOODLES_SubmitFill(data, target->surface, &fill, color) < 0) {
+                if (NOODLES_SubmitFill(data, target, &fill, color) < 0) {
                     return -1;
                 }
             } else if (x1 == x2) {
@@ -1253,7 +1269,7 @@ static int NOODLES_SubmitOpaquePrimitives(NOODLES_RenderData *data,
                 fill.y = SDL_min(y1, y2);
                 fill.width = 1;
                 fill.height = (Uint32)(SDL_abs(y2 - y1) + 1);
-                if (NOODLES_SubmitFill(data, target->surface, &fill, color) < 0) {
+                if (NOODLES_SubmitFill(data, target, &fill, color) < 0) {
                     return -1;
                 }
             } else {
@@ -1266,7 +1282,7 @@ static int NOODLES_SubmitOpaquePrimitives(NOODLES_RenderData *data,
                 for (step = 0; step <= steps; ++step) {
                     fill.x = x1 + step * step_x;
                     fill.y = y1 + step * step_y;
-                    if (NOODLES_SubmitFill(data, target->surface, &fill, color) < 0) {
+                    if (NOODLES_SubmitFill(data, target, &fill, color) < 0) {
                         return -1;
                     }
                 }
@@ -1311,7 +1327,7 @@ static int NOODLES_RunCommandQueueImpl(SDL_Renderer *renderer, SDL_RenderCommand
             rect.y = 0;
             rect.width = (Uint32)target->shadow->w;
             rect.height = (Uint32)target->shadow->h;
-            if (NOODLES_SubmitFill(data, target->surface, &rect,
+            if (NOODLES_SubmitFill(data, target, &rect,
                     NOODLES_PackRGBA(cmd->data.color.r, cmd->data.color.g,
                                      cmd->data.color.b, cmd->data.color.a)) < 0) {
                 return -1;
@@ -1395,7 +1411,7 @@ static int NOODLES_RunCommandQueueImpl(SDL_Renderer *renderer, SDL_RenderCommand
                 fill.y = visible.y;
                 fill.width = (Uint32)visible.w;
                 fill.height = (Uint32)visible.h;
-                if (NOODLES_SubmitFill(data, target->surface, &fill,
+                if (NOODLES_SubmitFill(data, target, &fill,
                         NOODLES_PackRGBA(cmd->data.draw.r, cmd->data.draw.g,
                                          cmd->data.draw.b, cmd->data.draw.a)) < 0) {
                     return -1;
@@ -1627,14 +1643,7 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
 {
     NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
     const Uint64 start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
-    Uint64 copy_start = 0;
-    Uint64 copy_done = 0;
     Uint64 wait_start = 0;
-    noodles_rect_t source;
-    source.x = 0;
-    source.y = 0;
-    source.width = NOODLES_BUFFER_WIDTH;
-    source.height = NOODLES_BUFFER_HEIGHT;
     if (NOODLES_FlushDraws(data) < 0) {
         return -1;
     }
@@ -1642,22 +1651,7 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
         return -1;
     }
     if (data->stats_enabled) {
-        copy_start = SDL_GetPerformanceCounter();
-    }
-    if (noodles_surface_blit_to_back_buffer(data->link, 0, 0, data->composition.surface,
-                                            &source) < 0) {
-        if (errno != EAGAIN || NOODLES_DrainLink(data) < 0 ||
-            noodles_surface_blit_to_back_buffer(data->link, 0, 0, data->composition.surface,
-                                                 &source) < 0) {
-            return NOODLES_SetErrno("present copy");
-        }
-    }
-    if (data->stats_enabled) {
-        if (noodles_link_drain(data->link, NOODLES_DEFAULT_TIMEOUT_MS) < 0) {
-            return NOODLES_SetErrno("present copy drain");
-        }
-        copy_done = SDL_GetPerformanceCounter();
-        wait_start = copy_done;
+        wait_start = SDL_GetPerformanceCounter();
     }
     if (noodles_present_and_wait(data->link) < 0) {
         return NOODLES_SetErrno("present");
@@ -1671,7 +1665,6 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
         data->stats_present_ticks += present_ticks;
         data->stats_present_max_ticks = SDL_max(data->stats_present_max_ticks,
                                                 present_ticks);
-        data->stats_present_copy_ticks += copy_done - copy_start;
         data->stats_present_wait_ticks += now - wait_start;
         if (interval_ticks >= frequency * 5u) {
             const double milliseconds = 1000.0 / (double)frequency;
@@ -1777,6 +1770,10 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
             data->stats_drains = 0;
         }
     }
+    /* SDL leaves the back buffer undefined after presentation. The next
+       framework buffer is usable by the GPU, but its CPU shadow is stale. */
+    data->composition.gpu_valid = SDL_TRUE;
+    data->composition.cpu_valid = SDL_FALSE;
     return 0;
 }
 
@@ -1854,11 +1851,12 @@ static int NOODLES_CreateRenderer(SDL_Renderer *renderer, SDL_Window *window, Ui
         return SDL_SetError("Noodles renderer requires protocol 1.3");
     }
     if (NOODLES_InitSurface(data, NOODLES_BUFFER_WIDTH, NOODLES_BUFFER_HEIGHT,
-                            SDL_TRUE, &data->composition) < 0 ||
-        NOODLES_MakeResident(data, &data->composition) < 0) {
+                            SDL_TRUE, &data->composition) < 0) {
         NOODLES_DestroyRenderer(renderer);
         return -1;
     }
+    data->composition.cpu_valid = SDL_FALSE;
+    data->composition.gpu_valid = SDL_TRUE;
     data->target = &data->composition;
 
     renderer->GetOutputSize = NOODLES_GetOutputSize;
