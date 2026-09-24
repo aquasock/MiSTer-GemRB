@@ -283,3 +283,33 @@ Instrument the full-screen composition-to-back-buffer copy separately from verti
 - [x] Passed
 
 ---
+
+## 10 COMMIT Unreleased ??? 2026-09-24T07:48:20-07:00
+
+#### Coming From:
+
+Unreleased 09ccf56
+
+#### Purpose:
+
+Measure the remaining presentation and command-queue costs after sprite batching so the next FPS optimization targets the dominant host-side path.
+
+#### Outcome:
+
+The planned disabled-by-default timing detail will separate the full-screen composition copy from vertical-blank waiting and divide command-queue execution among solid fills, sprite-batch submission, CPU and FPGA synchronization, and remaining renderer work. It will retain the existing aggregate and workload statistics and will not change rendering behavior or the qualified RBF.
+
+#### Next Steps:
+
+Implement the timing counters, rebuild SDL and GemRB, run the existing exact-pixel diagnostic on the timing-qualified protocol-1.3 core, and repeat the Throne of Bhaal AR4000 save. Use the measured split to implement the next host-side performance change, and defer audio until a performance cycle requires an RBF rebuild so both hardware changes can share qualification.
+
+#### Files Modified:
+
+- README.md
+- sdl-renderer/noodles/SDL_render_noodles.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
