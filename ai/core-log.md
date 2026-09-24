@@ -314,7 +314,7 @@ Add bounded SDK operations for reading, updating and filling the current back bu
 
 ---
 
-## 11 COMMIT Unreleased ??? 2026-09-24T07:59:06-07:00
+## 11 COMMIT Unreleased 667661e 2026-09-24T07:59:06-07:00
 
 #### Coming From:
 
@@ -326,22 +326,23 @@ Eliminate the measured full-screen presentation copy by rendering SDL's default 
 
 #### Outcome:
 
-The planned integration will update to the SDK revision that adds bounded current-back-buffer read, update and fill operations, then use those operations and existing back-buffer sprite batches for SDL's default target. Textures and explicit render targets will remain managed surfaces, CPU fallbacks will retain regional coherence, target switching will flush pending work, and presentation will submit only the existing protocol-1.3 present command without changing the qualified RBF.
+Source `43b4fe7` pins MiSTer-Noodles `0df688d`, makes the SDL default target use the core's current back buffer for fills, sprite batches and synchronized CPU transfers, retains managed surfaces for textures and explicit render targets, removes the 800x600 composition copy from presentation, extends the exact-pixel diagnostic and makes dependency stamps follow the pinned SDK revision. The first hardware diagnostic exposed a remaining managed-surface guard on full default-target readback; source `667661e` corrected that guard, and fresh SDK, SDL, diagnostic, GemRB and bundle builds passed. The deployed diagnostic binary SHA256 is `92c9fdb1b8db581786c35e0f88120d814d8eae463136fa0956434d2ce7412c97`, its SDL library SHA256 is `7ad9759e13d7ab39163e56ceabcdd6d4cd0a045a667810ad778588114eeabbfd`, the stripped GemRB SDL library SHA256 is `32929b4a014c9dd1682d05d3c4f17db17790cf6cd571f3ee5b32ea249e9f9164`, and the timing-qualified protocol-1.3 core passed the expanded hardware diagnostic with hash `a6d5728e`. In the same Throne of Bhaal AR4000 save, the user observed better performance and no visual fault. Four uncontaminated live timing intervals measured 11.78-12.06fps, 45.6-47.7ms in the command queue, 28.2-28.9ms in presentation and 8.3-8.8ms elsewhere; the presentation copy is zero, compared with the prior deliberately serialized 9.8-10.1fps measurement whose copy alone took about 35ms. Memory retained 239MiB available and swap remained unused.
 
 #### Next Steps:
 
-Implement and test the SDK dependency update and direct default-target path, extend the exact-pixel diagnostic to exercise default-target CPU and FPGA ordering, rebuild SDL and GemRB, run the diagnostic on hardware, and repeat the Throne of Bhaal AR4000 save with statistics disabled for an unperturbed FPS result and enabled for residual timing. Defer audio until an optimization requires an RBF rebuild.
+The remaining host-visible cost is approximately 20 blended rectangle fallbacks per frame, which spend about 19-20ms in regional synchronization plus 13-14ms in CPU fallback and queue handling; the existing host path already keeps those transfers regional and ordered. The next material FPS step should add an FPGA blended-fill operation and remove those fallbacks, which requires a new RBF, so enable the existing MiSTer ALSA path in the same hardware qualification cycle as requested. Also replace the manual post-launch Main input-grab release with a supported handoff because opening the OSD makes Main reacquire the physical devices.
 
 #### Files Modified:
 
 - README.md
+- scripts/build-deps.sh
 - scripts/env.sh
 - sdl-renderer/noodles/SDL_render_noodles.c
 - tools/noodles-render-test.c
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
