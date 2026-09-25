@@ -1242,3 +1242,32 @@ None.
 - [x] Passed
 
 ---
+
+## 41 COMMIT Unreleased c904d9a 2026-09-25T13:25:51-07:00
+
+#### Coming From:
+
+Unreleased c904d9a
+
+#### Purpose:
+
+Determine whether the hybrid-affinity session ended because the no-swap target exhausted Linux-visible memory.
+
+#### Outcome:
+
+After the successful Kobold battle and next-area load recorded in Entry 40, the kernel OOM-killed GemRB PID 2478 at 20:25:01 UTC. The kill record reports 602416 KiB total virtual memory, 463496 KiB anonymous resident memory, 244 KiB file-backed resident memory and 520 KiB of page tables on a target with 502864 KiB total Linux-visible RAM and no active swap; `run.sh` consequently recorded exit 137. The subsequent 461628 KiB available-memory reading reflects memory reclaimed after the kill, not remaining capacity at the failure. This does not reverse the completed hybrid performance comparison or resemble either corrected Kobold use-after-free, but the overall no-swap session did not pass sustained gameplay and FPGA presentation has not eliminated GemRB's peak host-memory requirement.
+
+#### Next Steps:
+
+Keep the affinity and memory findings separate, and obtain approval either to enable the existing USB swap path for the short hybrid implementation regression or to defer affinity implementation while a dedicated low-overhead memory-growth investigation identifies whether the approximately 463 MiB resident peak is reclaimable cache, area-lifetime retention or required AR4000 working data.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
