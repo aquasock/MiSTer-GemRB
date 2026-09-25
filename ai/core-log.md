@@ -761,3 +761,33 @@ Retain the asynchronous SDL path because it removes avoidable host serialization
 - [x] Passed
 
 ---
+
+## 25 COMMIT Unreleased ??? 2026-09-25T04:19:35-07:00
+
+#### Coming From:
+
+Unreleased b404508
+
+#### Purpose:
+
+Classify GemRB's accelerated draw workload by blend mode and rectangle size so the next reusable RTL throughput change targets measured traffic.
+
+#### Outcome:
+
+The proposed statistics-only SDL change divides submitted draw counts and pixels into plain, standard alpha blend, destination-independent modulation, additive or multiplicative, mirrored and custom-mode groups, and records pixel-area buckets for both draws and fills. It does not change command generation, ordering, pixels, GemRB, the SDK protocol or the RBF.
+
+#### Next Steps:
+
+Build and deploy the instrumented SDL library, require the existing exact-pixel diagnostic and audio check, then capture the same paused autosave long enough for stable five-second windows. Combine those categories with the accepted RBF's measured 136 Mpixel/s solid-fill, 67-76 Mpixel/s batched-copy and 66.1 Mpixel/s blend rates to choose the next Noodles RTL proposal.
+
+#### Files Modified:
+
+- README.md
+- sdl-renderer/noodles/SDL_render_noodles.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
