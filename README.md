@@ -269,6 +269,19 @@ MISTER_HOST=<your MiSTer's IP> scripts/deploy.sh code
 GAME_DATA=<extracted game folder> MISTER_HOST=<your MiSTer's IP> scripts/deploy.sh data bg2
 ```
 
+To profile ARM CPU time without stopping GemRB, build and copy the standalone sampler, capture the main GemRB process,
+then symbolize the result on the build PC:
+
+```sh
+scripts/build-profiler.sh
+scp work/profiler/noodles-perf-sampler root@<MiSTer-IP>:/tmp/
+ssh root@<MiSTer-IP> '/tmp/noodles-perf-sampler <GemRB-PID> 10 499' > work/noodles-perf.capture
+tools/symbolize-perf-samples.py work/noodles-perf.capture
+```
+
+The sampler uses Linux `perf_event_open`, samples only the main thread, and does not pause or trace the game process.
+Keep the matching unstripped `work/gemrb-install` and `work/prefix` trees on the PC for useful function names.
+
 Everything is created under `work/`, which is not tracked, and the pinned versions are in `scripts/env.sh`. Each
 dependency step leaves a stamp, so a rerun skips finished work; changing the SDL drivers or patches rebuilds SDL
 automatically.
