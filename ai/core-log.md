@@ -1332,7 +1332,7 @@ None.
 
 ---
 
-## 44 COMMIT Unreleased ??? 2026-09-25T14:11:21-07:00
+## 44 COMMIT Unreleased f4b56eb 2026-09-25T14:11:21-07:00
 
 #### Coming From:
 
@@ -1344,11 +1344,11 @@ Make the Noodles SDL renderer clear and blend only the written region of mostly 
 
 #### Outcome:
 
-Planned. With `DrawFPS=1`, a stationary AR0015 scene on the `8b0c829` bundle showed about 27fps, and a ten-second sample of per-thread kernel counters showed GemRB's main thread running only about 42% of the time while it slept in Noodles fence waits, so the scene is limited by FPGA drawing at roughly 37ms per frame rather than by ARM time. GemRB 0.9.5 clears a full-screen transparent HUD buffer every frame and then blends all 800x600 pixels of it over the display even when it holds little more than the cursor; at Entry 27's measured engine rates that clear and blend cost about 2.7ms and 7ms. Following the user's direction that MiSTer-Noodles serve as a general SDL accelerator while games stay close to upstream, the change is confined to `sdl-renderer/noodles/SDL_render_noodles.c`. Each managed texture will record a rectangle outside which every pixel equals one known value. An opaque clear or fill to that value that covers the rectangle will write only the rectangle, or nothing when it is empty, provided the FPGA copy is current; any other clear resets the rectangle and value. An unmirrored `SDL_BLENDMODE_BLEND` or `SDL_BLENDMODE_ADD` copy from a texture whose known outside value has zero alpha will copy only the intersection with that rectangle, since such pixels leave the destination unchanged. Every other write grows the rectangle by its destination bounds, geometry and unknown writes make it the whole texture, and the display composition target is never tracked because its three hardware buffers rotate. Statistics mode will report trimmed copy and fill pixels.
+With `DrawFPS=1`, a stationary AR0015 scene on the `8b0c829` bundle showed about 27fps, and a ten-second sample of per-thread kernel counters showed GemRB's main thread running only about 42% of the time while it slept in Noodles fence waits, so the scene is limited by FPGA drawing at roughly 37ms per frame rather than by ARM time. GemRB 0.9.5 clears its full-screen transparent HUD buffer with `SDL_RenderClear` every frame and composites every window buffer with an `SDL_BLENDMODE_BLEND` copy, so an HUD holding little more than the cursor still costs an 800x600 fill and an 800x600 blend, about 2.7ms and 7ms at Entry 27's engine rates. Following the user's direction that MiSTer-Noodles serve as a general SDL accelerator while games stay close to upstream, source `f4b56eb` changes only `sdl-renderer/noodles/SDL_render_noodles.c` and the renderer diagnostic. Each managed texture records a rectangle outside which every pixel equals one known value. An unblended clear or fill to that value covering the rectangle writes only the rectangle, or nothing when it is empty, provided the FPGA copy is current, while any other full clear resets the rectangle and value. An unmirrored `SDL_BLENDMODE_BLEND` or `SDL_BLENDMODE_ADD` copy from a texture whose known outside value has zero alpha copies only its intersection with the rectangle, except where an opaque source is converted to an unblended copy. Blended fills, copies, points, whole line segments, CPU updates, locks and scaled or self copies grow the rectangle, geometry makes it the whole texture, and the display composition target is never tracked because its hardware buffers rotate. Statistics mode reports trimmed draw and fill pixels. The diagnostic adds twelve transparent-overlay frames covering reduced and skipped clears, blended fills, sprite copies, points, a diagonal line, a CPU update, geometry, a scaled copy, transparent non-black, opaque and restoring clears, and BLEND and ADD composites with modulation, a partial source, a clip and a mirror; the first pass checks each overlay's untouched pixels against its clear colour and the second replays the frames without intermediate readbacks, both compared per pixel against a CPU reference. SDL built with only the three existing warnings and the diagnostic without warnings; the diagnostic SDL SHA256 is `c39fd8093bb139f726b9aa0175583c845c54d79df66048af2f007fa42da2d411`, the diagnostic binary `945096d3544e3cd68d695f3136047f3fb3504cefe19554bf8c7e8817215e3979` and the bundle SDL `d8c07a8021858d25ffca7ab02bc4149666ccf4da33aa3972fa88b9d01913bccf`, with all other bundle files unchanged. On the loaded protocol-1.7 core with GemRB stopped, the new diagnostic passed against both the previous renderer, validating the reference model, and the new renderer, each with hash `93f8e614` and HDMI audio passing. Two deliberately broken renderer builds, one skipping the reduced clear and one offsetting trimmed copies by a pixel, were each rejected by the existing alpha-state checks and, with those checks removed in a temporary uncommitted binary, independently by the new sequence at frame 1's stale pixel and the offset composite. The bundle was deployed with USB swap and `DrawFPS=1` retained.
 
 #### Next Steps:
 
-Extend the exact-pixel renderer diagnostic with a transparent-overlay sequence covering trimmed clears, trimmed blended and additive composites, moved content, CPU updates, opaque and non-transparent clears and full-texture fallbacks, run it and the existing diagnostic on hardware, then test the same stationary AR0015 scene with `DrawFPS=1` and diagnostics off, followed by panning, combat and menus, before comparing against the 27fps baseline.
+Test the same stationary AR0015 scene with `DrawFPS=1` and diagnostics off against the 27fps baseline, followed by panning, combat, menus, dialogue and videos for visual correctness, particularly cursor, tooltip and window-frame drawing.
 
 #### Files Modified:
 
@@ -1357,7 +1357,7 @@ Extend the exact-pixel renderer diagnostic with a transparent-overlay sequence c
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
