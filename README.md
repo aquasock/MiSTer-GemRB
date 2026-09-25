@@ -182,15 +182,18 @@ The drivers read the `SDL_MISTER_*` environment variables described in the
 sets `SDL_MISTER_FORMAT=xrgb` (an alpha-less screen, which lets SDL use its fast blitter). Normal launchers select
 `SDL_RENDER_DRIVER=software`; the parallel Noodles launchers select `SDL_RENDER_DRIVER=noodles`.
 Set `SDL_RENDER_NOODLES_STATS=1` when starting a Noodles launcher to log a five-second summary of observed frame rate,
-SDL command-queue time, FPGA presentation time, and the remaining per-frame time. Detailed timing separates fills,
-sprite batches and synchronization. Presentation waits for the submitted frame's fence, so that measurement includes
-all previously queued FPGA rendering plus the core's vertical-blank handoff rather than vertical blank alone. The summary
+SDL command-queue time, presentation submission time, deferred presentation-wait time, and the remaining per-frame time.
+Detailed timing separates fills, sprite batches and synchronization. `SDL_RenderPresent` leaves one submitted frame in
+flight so the application can prepare its next SDL command list while the FPGA renders and performs the vertical-blank
+handoff. The next renderer operation that needs the Noodles link resolves that fence first, preserving command order,
+buffer ownership and texture hazards; the reported presentation wait is only the completion time that could not overlap.
+The summary
 also reports accelerated opaque-fill, blended-fill, plain-draw and flagged-draw counts and pixels, fill- and sprite-batch
 counts and maximum sizes, submission stalls, CPU fallback work, uploads, readbacks, evictions, drains and current FPGA
 texture residency. A callback line attributes CPU time and call volume to SDL command construction, texture creation,
 updates, locks, target changes, readback and destruction; its merged-fill count reports compatible calls appended to an
 existing SDL command. The counters and their performance-clock reads are disabled
-otherwise; presentation synchronization is unchanged.
+otherwise; asynchronous presentation and its synchronization boundaries are unchanged.
 Opaque points and simple lines use the FPGA fill engine. Operations that still need SDL's software rasterizer keep the
 FPGA result coherent by reading and uploading only the affected target region.
 Consecutive accelerated copies to the same target share the core's 64-entry sprite batches. On protocol 1.6,

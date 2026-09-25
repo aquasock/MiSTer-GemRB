@@ -108,6 +108,56 @@ static int render_copy(SDL_Renderer *renderer, SDL_Texture *texture, int x,
     return SDL_RenderCopyEx(renderer, texture, NULL, &destination, 0.0, NULL, flip);
 }
 
+static int draw_display_and_check(SDL_Renderer *renderer, SDL_Texture *target,
+                                  uint32_t expected, const char *phase)
+{
+    SDL_Rect rect;
+    uint32_t pixel;
+    if (SDL_SetRenderTarget(renderer, NULL) < 0 ||
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255) < 0 ||
+        SDL_RenderClear(renderer) < 0) {
+        fprintf(stderr, "%s display clear: %s\n", phase, SDL_GetError());
+        return -1;
+    }
+    rect = (SDL_Rect){ (800 - WIDTH) / 2, (600 - HEIGHT) / 2, WIDTH, HEIGHT };
+    if (SDL_SetTextureBlendMode(target, SDL_BLENDMODE_NONE) < 0 ||
+        SDL_SetTextureColorMod(target, 255, 255, 255) < 0 ||
+        SDL_SetTextureAlphaMod(target, 255) < 0 ||
+        SDL_RenderCopy(renderer, target, NULL, &rect) < 0) {
+        fprintf(stderr, "%s display copy: %s\n", phase, SDL_GetError());
+        return -1;
+    }
+    rect = (SDL_Rect){ 10, 10, 4, 4 };
+    if (SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND) < 0 ||
+        SDL_SetRenderDrawColor(renderer, 100, 50, 200, 128) < 0 ||
+        SDL_RenderFillRect(renderer, &rect) < 0) {
+        fprintf(stderr, "%s default-target regional fill: %s\n",
+                phase, SDL_GetError());
+        return -1;
+    }
+    rect = (SDL_Rect){ 10, 10, 1, 1 };
+    if (SDL_RenderReadPixels(renderer, &rect, SDL_PIXELFORMAT_ABGR8888,
+                             &pixel, 4) < 0 ||
+        pixel != reference(rgba(100, 50, 200, 128), rgba(0, 0, 0, 255),
+                           0xffffffffu, REF_SRC_ALPHA,
+                           REF_ONE_MINUS_SRC_ALPHA, REF_ADD, REF_ONE,
+                           REF_ONE_MINUS_SRC_ALPHA, REF_ADD, 0)) {
+        fprintf(stderr, "%s default-target regional result: got %08x\n",
+                phase, pixel);
+        return -1;
+    }
+    rect = (SDL_Rect){ (800 - WIDTH) / 2 + 25,
+                       (600 - HEIGHT) / 2 + 100, 1, 1 };
+    if (SDL_RenderReadPixels(renderer, &rect, SDL_PIXELFORMAT_ABGR8888,
+                             &pixel, 4) < 0 || pixel != expected) {
+        fprintf(stderr,
+                "%s default-target accelerated result: got %08x expected %08x\n",
+                phase, pixel, expected);
+        return -1;
+    }
+    return 0;
+}
+
 static SDL_AudioDeviceID queue_tone(void)
 {
     enum { TONE_RATE = 48000, TONE_FRAMES = 48000, TONE_AMPLITUDE = 9000 };
@@ -175,7 +225,6 @@ int main(int argc, char **argv)
     const uint32_t fill_batch_second = rgba(193, 47, 83, 255);
     uint32_t source[16 * 16];
     uint32_t result[WIDTH * HEIGHT];
-    uint32_t display_pixel;
     SDL_Window *window = NULL;
     SDL_Renderer *renderer = NULL;
     SDL_AudioDeviceID audio = 0;
@@ -696,49 +745,25 @@ int main(int argc, char **argv)
         goto done;
     }
 
-    if (SDL_SetRenderTarget(renderer, NULL) < 0 ||
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255) < 0 ||
-        SDL_RenderClear(renderer) < 0) {
-        fprintf(stderr, "display clear: %s\n", SDL_GetError());
-        goto done;
-    }
-    rect = (SDL_Rect){ (800 - WIDTH) / 2, (600 - HEIGHT) / 2, WIDTH, HEIGHT };
-    if (SDL_SetTextureBlendMode(target, SDL_BLENDMODE_NONE) < 0 ||
-        SDL_SetTextureColorMod(target, 255, 255, 255) < 0 ||
-        SDL_SetTextureAlphaMod(target, 255) < 0 ||
-        SDL_RenderCopy(renderer, target, NULL, &rect) < 0) {
-        fprintf(stderr, "display copy: %s\n", SDL_GetError());
-        goto done;
-    }
-    rect = (SDL_Rect){ 10, 10, 4, 4 };
-    if (SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND) < 0 ||
-        SDL_SetRenderDrawColor(renderer, 100, 50, 200, 128) < 0 ||
-        SDL_RenderFillRect(renderer, &rect) < 0) {
-        fprintf(stderr, "default-target regional fill: %s\n", SDL_GetError());
-        goto done;
-    }
-    rect = (SDL_Rect){ 10, 10, 1, 1 };
-    if (SDL_RenderReadPixels(renderer, &rect, SDL_PIXELFORMAT_ABGR8888,
-                             &display_pixel, 4) < 0 ||
-        display_pixel != reference(rgba(100, 50, 200, 128), rgba(0, 0, 0, 255),
-                                   0xffffffffu, REF_SRC_ALPHA,
-                                   REF_ONE_MINUS_SRC_ALPHA, REF_ADD, REF_ONE,
-                                   REF_ONE_MINUS_SRC_ALPHA, REF_ADD, 0)) {
-        fprintf(stderr, "default-target regional result: got %08x\n", display_pixel);
-        goto done;
-    }
-    rect = (SDL_Rect){ (800 - WIDTH) / 2 + 25,
-                       (600 - HEIGHT) / 2 + 100, 1, 1 };
-    if (SDL_RenderReadPixels(renderer, &rect, SDL_PIXELFORMAT_ABGR8888,
-                             &display_pixel, 4) < 0 || display_pixel != p2) {
-        fprintf(stderr, "default-target accelerated result: got %08x expected %08x\n",
-                display_pixel, p2);
+    if (draw_display_and_check(renderer, target, p2, "initial") < 0) {
         goto done;
     }
     SDL_ClearError();
     SDL_RenderPresent(renderer);
     if (*SDL_GetError()) {
-        fprintf(stderr, "display present: %s\n", SDL_GetError());
+        fprintf(stderr, "initial display present: %s\n", SDL_GetError());
+        goto done;
+    }
+    /* The first present remains in flight. These commands and their readback
+       require the renderer to resolve that fence before using the next back
+       buffer, then the second present tests another asynchronous handoff. */
+    if (draw_display_and_check(renderer, target, p2, "post-present") < 0) {
+        goto done;
+    }
+    SDL_ClearError();
+    SDL_RenderPresent(renderer);
+    if (*SDL_GetError()) {
+        fprintf(stderr, "second display present: %s\n", SDL_GetError());
         goto done;
     }
     if (audio) {
