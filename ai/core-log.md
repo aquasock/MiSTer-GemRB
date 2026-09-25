@@ -920,7 +920,7 @@ Obtain user approval for the next mitigation. Candidates are measuring HPS SDRAM
 
 ---
 
-## 30 COMMIT Unreleased ??? 2026-09-25T10:15:29-07:00
+## 30 COMMIT Unreleased 3dd6632 2026-09-25T10:15:29-07:00
 
 #### Coming From:
 
@@ -932,11 +932,11 @@ Measure whether HPS SDRAM controller port arbitration settings protect ARM memor
 
 #### Outcome:
 
-Entry 29 showed that engine fills and copies double ARM DDR3 latency and cut ARM bandwidth by 40-60%, and the three-buffer image made CPU-bound combat slower. Reference records CVHPS-001 through CVHPS-005, taken from the Cyclone V HPS Technical Reference Manual, establish that the MPU arbitrates on command ports 7 and 9 and FPGA traffic on ports 0-5, that `mppriority` gives absolute priority, that `mpweight_0_4` to `mpweight_3_4` set deficit round-robin weights with per-priority sums, and that both can be changed at run time. A read of the live controller found every port at priority 0, FPGA ports at weight 16, MPU ports at 8 and L3 ports at 4, so a busy FPGA port wins about two thirds of contested arbitration. The proposed source adds `tools/mister-mpfe.sh`, which applies a named profile over SSH from the build PC after validating the weight limit, writes `mppriority` first, and reads back and decodes the result: `default` restores the preloader values, `equal` gives FPGA and MPU ports weight 8, `mpu` gives FPGA ports 4 and MPU ports 16, and `mpu-priority` raises the MPU ports to priority 1. The settings are not persistent and every boot restores the defaults. GemRB, SDL, the SDK and the RBF are unchanged.
+Entry 29 showed engine fills and copies doubling ARM DDR3 latency. Reference records CVHPS-001 through CVHPS-005 establish from the Cyclone V HPS Technical Reference Manual that the MPU uses command ports 7 and 9 and FPGA traffic ports 0-5, that `mppriority`, `mpweight_0_4` to `mpweight_3_4` and `remappriority` set absolute priority, deficit round-robin weights and command-queue jumping, and that they take effect at run time. The live controller used the preloader values: every port at priority 0, FPGA ports at weight 16, MPU ports at 8 and L3 at 4. Source `3dd6632` adds `tools/mister-mpfe.sh`, which validates, applies, reads back and decodes the `default`, `equal`, `mpu`, `mpu-priority` and `mpu-remap` profiles until the next boot; `mpu-remap` extends the approved plan by also setting `remappriority` bit 1 for the MPU ports' priority, and every profile writes that register so `default` restores it. Under the mixed engine load, ARM latency was 1.74 times idle with `default`, 1.69 with `equal`, 1.60 with `mpu`, 1.54 with `mpu-priority` and 1.38 with `mpu-remap`; ARM read bandwidth rose from 68% of idle to 74%, 79%, 78% and 82%; and engine throughput fell from 60.8 to 55.7, 49.6, 48.1 and 37.5 Mpixel/s. Weight changes therefore recover bandwidth but little latency, because FPGA commands already in the controller's queue still precede the ARM; `mpu-remap` alone reduces latency materially but also cuts the ARM's own streaming writes and copies with the engine idle, from about 1,270 to 941MB/s and from 393 to 262MB/s. In GemRB with three buffers, profiles switched live with log offsets recorded: the paused AR4000 scene held 28.4-29.3fps with near-zero draw wait under `default` and `mpu`, while `mpu-remap` left 8-10ms of draw wait and 27.8-28.6fps. In the same continuous combat, first-round means were 20.8fps for `default`, 25.0 for `mpu` and 25.7 for `mpu-remap`, but the second round gave 22.5 for `default` and 21.8 for `mpu`, and within-profile windows spanned 17.0-27.5fps; this fight also ran far faster than the 7.8-10fps spell-heavy interval of entry 28. The arbitration effect is therefore smaller than combat's own variation and is not demonstrated in game. The party's death ended the fight, and the controller was restored to `default`.
 
 #### Next Steps:
 
-Run the contention tool under each weight profile on the protocol-1.7 image, restoring `default` after each, and try `mpu-priority` last while watching the display for starved scanout. Take the profile with the best ARM protection for its engine cost into paused and combat captures, then propose whether to apply it persistently from the launcher.
+Leave the preloader arbitration unchanged, retaining `mpu` as the best synthetic trade-off at no paused-scene cost for a later controlled comparison. Attribute CPU-bound combat directly, since time outside the renderer dominates it, by profiling the main thread with the non-stopping sampler during a spell-heavy interval and distinguishing game logic, texture updates and blocking; then proceed with the approved formal-verification and pipeline-buffer cycles for the Noodles core.
 
 #### Files Modified:
 
@@ -945,7 +945,7 @@ Run the contention tool under each weight profile on the protocol-1.7 image, res
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
