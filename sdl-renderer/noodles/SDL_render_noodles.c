@@ -40,6 +40,20 @@
 #define NOODLES_MAX_RESIDENT_MB 220u
 #define NOODLES_DRAW_BATCH_MAX 64u
 #define NOODLES_FILL_BATCH_MAX 64u
+#define NOODLES_SIZE_BUCKETS 5u
+
+enum
+{
+    NOODLES_DRAW_CLASS_COPY64,
+    NOODLES_DRAW_CLASS_PLAIN_REROUTE,
+    NOODLES_DRAW_CLASS_BLEND,
+    NOODLES_DRAW_CLASS_REPLACE_MOD,
+    NOODLES_DRAW_CLASS_ADD,
+    NOODLES_DRAW_CLASS_MOD,
+    NOODLES_DRAW_CLASS_MUL,
+    NOODLES_DRAW_CLASS_CUSTOM,
+    NOODLES_DRAW_CLASSES
+};
 
 typedef struct NOODLES_TextureData
 {
@@ -110,6 +124,16 @@ typedef struct NOODLES_RenderData
     Uint64 stats_plain_draw_pixels;
     Uint64 stats_flagged_draws;
     Uint64 stats_flagged_draw_pixels;
+    Uint64 stats_draw_class_commands[NOODLES_DRAW_CLASSES];
+    Uint64 stats_draw_class_pixels[NOODLES_DRAW_CLASSES];
+    Uint64 stats_draw_size_commands[NOODLES_SIZE_BUCKETS];
+    Uint64 stats_draw_size_pixels[NOODLES_SIZE_BUCKETS];
+    Uint64 stats_fill_size_commands[NOODLES_SIZE_BUCKETS];
+    Uint64 stats_fill_size_pixels[NOODLES_SIZE_BUCKETS];
+    Uint64 stats_mirrored_draws;
+    Uint64 stats_mirrored_draw_pixels;
+    Uint64 stats_modulated_draws;
+    Uint64 stats_modulated_draw_pixels;
     Uint64 stats_draw_stalls;
     Uint64 stats_draw_batches;
     Uint64 stats_draw_batch_max;
@@ -790,9 +814,13 @@ static int NOODLES_FlushFills(NOODLES_RenderData *data)
         data->stats_fill_batch_max = SDL_max(data->stats_fill_batch_max,
                                              (Uint64)count);
         for (i = 0; i < count; ++i) {
-            data->stats_fill_pixels +=
-                (Uint64)data->pending_fills[i].rect.width *
-                data->pending_fills[i].rect.height;
+            const Uint64 pixels = (Uint64)data->pending_fills[i].rect.width *
+                                  data->pending_fills[i].rect.height;
+            const unsigned bucket = pixels <= 64u ? 0u : pixels <= 1024u ? 1u :
+                                    pixels <= 4096u ? 2u : pixels <= 16384u ? 3u : 4u;
+            data->stats_fill_pixels += pixels;
+            data->stats_fill_size_commands[bucket]++;
+            data->stats_fill_size_pixels[bucket] += pixels;
         }
     }
     data->pending_fill_count = 0;
@@ -843,8 +871,13 @@ static int NOODLES_SubmitFill(NOODLES_RenderData *data, NOODLES_TextureData *tar
         }
     }
     if (data->stats_enabled) {
+        const Uint64 pixels = (Uint64)rect->width * rect->height;
+        const unsigned bucket = pixels <= 64u ? 0u : pixels <= 1024u ? 1u :
+                                pixels <= 4096u ? 2u : pixels <= 16384u ? 3u : 4u;
         data->stats_fill_commands++;
-        data->stats_fill_pixels += (Uint64)rect->width * rect->height;
+        data->stats_fill_pixels += pixels;
+        data->stats_fill_size_commands[bucket]++;
+        data->stats_fill_size_pixels[bucket] += pixels;
     }
     NOODLES_AddTiming(data, start, &data->stats_fill_ticks);
     return 0;
@@ -880,8 +913,13 @@ static int NOODLES_SubmitBlendFill(NOODLES_RenderData *data,
         }
     }
     if (data->stats_enabled) {
+        const Uint64 pixels = (Uint64)rect->width * rect->height;
+        const unsigned bucket = pixels <= 64u ? 0u : pixels <= 1024u ? 1u :
+                                pixels <= 4096u ? 2u : pixels <= 16384u ? 3u : 4u;
         data->stats_blend_fill_commands++;
-        data->stats_blend_fill_pixels += (Uint64)rect->width * rect->height;
+        data->stats_blend_fill_pixels += pixels;
+        data->stats_fill_size_commands[bucket]++;
+        data->stats_fill_size_pixels[bucket] += pixels;
     }
     NOODLES_AddTiming(data, start, &data->stats_fill_ticks);
     return 0;
@@ -923,12 +961,51 @@ static int NOODLES_FlushDraws(NOODLES_RenderData *data)
             const noodles_surface_draw_t *draw = &data->pending_draws[i];
             const Uint64 pixels = (Uint64)draw->source_rect.width *
                                   draw->source_rect.height;
+            const Uint32 mode = draw->flags & ~(NOODLES_DRAW_MIRROR_X |
+                                                 NOODLES_DRAW_MIRROR_Y);
+            const Uint32 pitch = noodles_surface_pitch(draw->source);
+            const Uint32 source_offset = (Uint32)draw->source_rect.y * pitch +
+                                         (Uint32)draw->source_rect.x * 4u;
+            const SDL_bool copy64_safe = !(draw->source_rect.width & 1u) &&
+                                         !(pitch & 7u) && !(source_offset & 7u);
+            const unsigned size_bucket = pixels <= 64u ? 0u : pixels <= 1024u ? 1u :
+                                         pixels <= 4096u ? 2u :
+                                         pixels <= 16384u ? 3u : 4u;
+            unsigned draw_class;
             if (draw->flags) {
                 data->stats_flagged_draws++;
                 data->stats_flagged_draw_pixels += pixels;
             } else {
                 data->stats_plain_draws++;
                 data->stats_plain_draw_pixels += pixels;
+            }
+            if (mode == 0u) {
+                draw_class = copy64_safe ? NOODLES_DRAW_CLASS_COPY64 :
+                                           NOODLES_DRAW_CLASS_PLAIN_REROUTE;
+            } else if (mode == NOODLES_DRAW_BLEND || mode == NOODLES_DRAW_MODE_BLEND) {
+                draw_class = NOODLES_DRAW_CLASS_BLEND;
+            } else if (mode == NOODLES_DRAW_MODE_NONE) {
+                draw_class = NOODLES_DRAW_CLASS_REPLACE_MOD;
+            } else if (mode == NOODLES_DRAW_MODE_ADD) {
+                draw_class = NOODLES_DRAW_CLASS_ADD;
+            } else if (mode == NOODLES_DRAW_MODE_MOD) {
+                draw_class = NOODLES_DRAW_CLASS_MOD;
+            } else if (mode == NOODLES_DRAW_MODE_MUL) {
+                draw_class = NOODLES_DRAW_CLASS_MUL;
+            } else {
+                draw_class = NOODLES_DRAW_CLASS_CUSTOM;
+            }
+            data->stats_draw_class_commands[draw_class]++;
+            data->stats_draw_class_pixels[draw_class] += pixels;
+            data->stats_draw_size_commands[size_bucket]++;
+            data->stats_draw_size_pixels[size_bucket] += pixels;
+            if (draw->flags & (NOODLES_DRAW_MIRROR_X | NOODLES_DRAW_MIRROR_Y)) {
+                data->stats_mirrored_draws++;
+                data->stats_mirrored_draw_pixels += pixels;
+            }
+            if (draw->modulation != 0xffffffffu) {
+                data->stats_modulated_draws++;
+                data->stats_modulated_draw_pixels += pixels;
             }
         }
     }
@@ -2342,6 +2419,48 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
                     (unsigned long long)data->stats_primitive_vertices,
                     (unsigned long long)data->stats_geometry_commands,
                     (unsigned long long)data->stats_geometry_triangles);
+            SDL_Log("Noodles draw classes: copy64=%llu/%.3fMpx reroute=%llu/%.3fMpx blend=%llu/%.3fMpx replace-mod=%llu/%.3fMpx add=%llu/%.3fMpx mod=%llu/%.3fMpx mul=%llu/%.3fMpx custom=%llu/%.3fMpx mirrored=%llu/%.3fMpx modulated=%llu/%.3fMpx",
+                    (unsigned long long)data->stats_draw_class_commands[NOODLES_DRAW_CLASS_COPY64],
+                    (double)data->stats_draw_class_pixels[NOODLES_DRAW_CLASS_COPY64] / 1000000.0,
+                    (unsigned long long)data->stats_draw_class_commands[NOODLES_DRAW_CLASS_PLAIN_REROUTE],
+                    (double)data->stats_draw_class_pixels[NOODLES_DRAW_CLASS_PLAIN_REROUTE] / 1000000.0,
+                    (unsigned long long)data->stats_draw_class_commands[NOODLES_DRAW_CLASS_BLEND],
+                    (double)data->stats_draw_class_pixels[NOODLES_DRAW_CLASS_BLEND] / 1000000.0,
+                    (unsigned long long)data->stats_draw_class_commands[NOODLES_DRAW_CLASS_REPLACE_MOD],
+                    (double)data->stats_draw_class_pixels[NOODLES_DRAW_CLASS_REPLACE_MOD] / 1000000.0,
+                    (unsigned long long)data->stats_draw_class_commands[NOODLES_DRAW_CLASS_ADD],
+                    (double)data->stats_draw_class_pixels[NOODLES_DRAW_CLASS_ADD] / 1000000.0,
+                    (unsigned long long)data->stats_draw_class_commands[NOODLES_DRAW_CLASS_MOD],
+                    (double)data->stats_draw_class_pixels[NOODLES_DRAW_CLASS_MOD] / 1000000.0,
+                    (unsigned long long)data->stats_draw_class_commands[NOODLES_DRAW_CLASS_MUL],
+                    (double)data->stats_draw_class_pixels[NOODLES_DRAW_CLASS_MUL] / 1000000.0,
+                    (unsigned long long)data->stats_draw_class_commands[NOODLES_DRAW_CLASS_CUSTOM],
+                    (double)data->stats_draw_class_pixels[NOODLES_DRAW_CLASS_CUSTOM] / 1000000.0,
+                    (unsigned long long)data->stats_mirrored_draws,
+                    (double)data->stats_mirrored_draw_pixels / 1000000.0,
+                    (unsigned long long)data->stats_modulated_draws,
+                    (double)data->stats_modulated_draw_pixels / 1000000.0);
+            SDL_Log("Noodles size buckets: draw <=64=%llu/%.3fMpx <=1K=%llu/%.3fMpx <=4K=%llu/%.3fMpx <=16K=%llu/%.3fMpx >16K=%llu/%.3fMpx; fill <=64=%llu/%.3fMpx <=1K=%llu/%.3fMpx <=4K=%llu/%.3fMpx <=16K=%llu/%.3fMpx >16K=%llu/%.3fMpx",
+                    (unsigned long long)data->stats_draw_size_commands[0],
+                    (double)data->stats_draw_size_pixels[0] / 1000000.0,
+                    (unsigned long long)data->stats_draw_size_commands[1],
+                    (double)data->stats_draw_size_pixels[1] / 1000000.0,
+                    (unsigned long long)data->stats_draw_size_commands[2],
+                    (double)data->stats_draw_size_pixels[2] / 1000000.0,
+                    (unsigned long long)data->stats_draw_size_commands[3],
+                    (double)data->stats_draw_size_pixels[3] / 1000000.0,
+                    (unsigned long long)data->stats_draw_size_commands[4],
+                    (double)data->stats_draw_size_pixels[4] / 1000000.0,
+                    (unsigned long long)data->stats_fill_size_commands[0],
+                    (double)data->stats_fill_size_pixels[0] / 1000000.0,
+                    (unsigned long long)data->stats_fill_size_commands[1],
+                    (double)data->stats_fill_size_pixels[1] / 1000000.0,
+                    (unsigned long long)data->stats_fill_size_commands[2],
+                    (double)data->stats_fill_size_pixels[2] / 1000000.0,
+                    (unsigned long long)data->stats_fill_size_commands[3],
+                    (double)data->stats_fill_size_pixels[3] / 1000000.0,
+                    (unsigned long long)data->stats_fill_size_commands[4],
+                    (double)data->stats_fill_size_pixels[4] / 1000000.0);
             SDL_Log("Noodles sync: uploads=%llu/%.3fMiB readbacks=%llu/%.3fMiB evictions=%llu drains=%llu progress=%llu resident=%.1fMiB shadow=%.1fMiB/%.1fMiB peak alloc=%llu free=%llu",
                     (unsigned long long)data->stats_uploads,
                     (double)data->stats_upload_bytes / (1024.0 * 1024.0),
@@ -2410,6 +2529,22 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
             data->stats_plain_draw_pixels = 0;
             data->stats_flagged_draws = 0;
             data->stats_flagged_draw_pixels = 0;
+            SDL_memset(data->stats_draw_class_commands, 0,
+                       sizeof(data->stats_draw_class_commands));
+            SDL_memset(data->stats_draw_class_pixels, 0,
+                       sizeof(data->stats_draw_class_pixels));
+            SDL_memset(data->stats_draw_size_commands, 0,
+                       sizeof(data->stats_draw_size_commands));
+            SDL_memset(data->stats_draw_size_pixels, 0,
+                       sizeof(data->stats_draw_size_pixels));
+            SDL_memset(data->stats_fill_size_commands, 0,
+                       sizeof(data->stats_fill_size_commands));
+            SDL_memset(data->stats_fill_size_pixels, 0,
+                       sizeof(data->stats_fill_size_pixels));
+            data->stats_mirrored_draws = 0;
+            data->stats_mirrored_draw_pixels = 0;
+            data->stats_modulated_draws = 0;
+            data->stats_modulated_draw_pixels = 0;
             data->stats_draw_stalls = 0;
             data->stats_draw_batches = 0;
             data->stats_draw_batch_max = 0;
