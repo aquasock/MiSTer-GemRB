@@ -1184,3 +1184,32 @@ None.
 - [x] Passed
 
 ---
+
+## 39 COMMIT Unreleased c904d9a 2026-09-25T13:17:54-07:00
+
+#### Coming From:
+
+Unreleased c904d9a
+
+#### Purpose:
+
+Qualify the deferred hybrid CPU-affinity layout on the crash-corrected normal build before changing the launcher default.
+
+#### Outcome:
+
+The approved diagnostics-off comparison retains GemRB's main thread on CPU 0 while allowing only its already-created non-main threads to run on CPUs 0-1. It uses the normal `c904d9a` bundle and the accepted protocol-1.7 seed-13 core with renderer statistics, pacing probes, profilers and swap disabled. This is a reversible runtime test that changes no source or deployed files and preserves CPU 0 as the launcher default until the result is accepted.
+
+#### Next Steps:
+
+Launch AR4000 normally, apply and verify the hybrid masks after GemRB has created its steady-state threads, and compare panning, depleted-ammunition Kobold combat, the endgame video and the game-over transition with the CPU 0 baseline; then either reject the layout and retain the existing default or propose a deterministic launcher implementation.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
