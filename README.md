@@ -190,6 +190,9 @@ target. Texture updates made while a frame is in flight accumulate in their CPU 
 uploaded to fresh managed surfaces when their previous surfaces are still in use, letting the SDK retire the old copies
 at their fences. A second presentation, direct display readback or renderer teardown resolves the outstanding fence.
 The reported presentation wait is only the completion time that could not overlap.
+A pacing line splits that wait into draw commands still running before the pending `PRESENT` and the remaining flip,
+scaler retirement and vertical-blank interval, counts frames whose draws had already finished when the wait began, and
+reports the rendering thread's user and system CPU share and context switches per frame.
 Transient command-ring or descriptor pressure waits for one verified command of forward progress before retrying; it
 does not drain through every later command or the queued presentation.
 The summary
@@ -292,6 +295,12 @@ scp work/profiler/noodles-perf-sampler root@<MiSTer-IP>:/tmp/
 ssh root@<MiSTer-IP> '/tmp/noodles-perf-sampler <GemRB-PID> 10 499' > work/noodles-perf.capture
 tools/symbolize-perf-samples.py work/noodles-perf.capture
 ```
+
+To measure the loaded core's engine rates and `PRESENT` pacing without GemRB, build the diagnostic package, copy
+`work/noodles-test` to the MiSTer and run its `throughput.sh` while the Noodles core is loaded and GemRB is stopped. It
+times full-surface fills, copies and blends between off-screen managed surfaces, then shows how long `PRESENT` occupies
+the command queue as off-screen draw work before it grows, and whether a command queued behind `PRESENT` can run before
+the flip completes.
 
 The sampler uses Linux `perf_event_open`, samples only the main thread, and does not pause or trace the game process.
 Keep the matching unstripped `work/gemrb-install` and `work/prefix` trees on the PC for useful function names.

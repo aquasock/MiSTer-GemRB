@@ -30,6 +30,7 @@
 
 #include <errno.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <noodles_link.h>
 #include <noodles_surface.h>
@@ -104,6 +105,7 @@ typedef struct NOODLES_RenderData
     SDL_bool fill_batch_enabled;
     SDL_bool present_pending;
     noodles_fence_t present_fence;
+    noodles_fence_t present_draw_fence;
     SDL_bool stats_enabled;
     SDL_bool in_command_queue;
     Uint64 stats_start;
@@ -120,6 +122,14 @@ typedef struct NOODLES_RenderData
     Uint64 stats_present_wait_ticks;
     Uint64 stats_present_wait_max_ticks;
     Uint64 stats_present_waits;
+    Uint64 stats_present_draw_wait_ticks;
+    Uint64 stats_present_flip_wait_ticks;
+    Uint64 stats_present_flip_wait_max_ticks;
+    Uint64 stats_present_drawn_early;
+    Uint64 stats_thread_user;
+    Uint64 stats_thread_system;
+    Uint64 stats_thread_voluntary;
+    Uint64 stats_thread_involuntary;
     Uint64 stats_fill_commands;
     Uint64 stats_fill_pixels;
     Uint64 stats_fill_stalls;
@@ -380,26 +390,102 @@ static void NOODLES_AddTiming(NOODLES_RenderData *data, Uint64 start,
     }
 }
 
+/* With statistics enabled, first waits for the commands queued before the
+   pending PRESENT so the deferred wait separates remaining draw work from
+   the flip, retirement and vertical-blank interval. */
 static int NOODLES_WaitPresent(NOODLES_RenderData *data)
 {
     Uint64 start;
+    Uint64 drawn;
     Uint64 elapsed;
+    int complete = 0;
     if (!data->present_pending) {
         return 0;
     }
     start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
+    drawn = start;
+    if (data->stats_enabled) {
+        if (noodles_link_poll(data->link, data->present_draw_fence, &complete) < 0) {
+            return NOODLES_SetErrno("present draw poll");
+        }
+        if (complete) {
+            data->stats_present_drawn_early++;
+        } else {
+            if (noodles_link_wait(data->link, data->present_draw_fence,
+                                  NOODLES_DEFAULT_TIMEOUT_MS) < 0) {
+                return NOODLES_SetErrno("present draw completion");
+            }
+            drawn = SDL_GetPerformanceCounter();
+            data->stats_present_draw_wait_ticks += drawn - start;
+        }
+    }
     if (noodles_link_wait(data->link, data->present_fence,
                           NOODLES_DEFAULT_TIMEOUT_MS) < 0) {
         return NOODLES_SetErrno("present completion");
     }
     data->present_pending = SDL_FALSE;
     if (data->stats_enabled) {
-        elapsed = SDL_GetPerformanceCounter() - start;
+        const Uint64 now = SDL_GetPerformanceCounter();
+        elapsed = now - start;
         data->stats_present_wait_ticks += elapsed;
         data->stats_present_wait_max_ticks = SDL_max(
             data->stats_present_wait_max_ticks, elapsed);
         data->stats_present_waits++;
+        data->stats_present_flip_wait_ticks += now - drawn;
+        data->stats_present_flip_wait_max_ticks = SDL_max(
+            data->stats_present_flip_wait_max_ticks, now - drawn);
     }
+    return 0;
+}
+
+/* Reads the calling thread's cumulative user and system clock ticks and
+   voluntary and involuntary context switches. Returns zero on success. */
+static int NOODLES_ReadThreadUsage(Uint64 *user, Uint64 *system,
+                                   Uint64 *voluntary, Uint64 *involuntary)
+{
+    char buffer[2048];
+    const char *field;
+    size_t length;
+    int i;
+    SDL_RWops *file = SDL_RWFromFile("/proc/thread-self/stat", "r");
+    if (!file) {
+        return -1;
+    }
+    length = SDL_RWread(file, buffer, 1, sizeof(buffer) - 1);
+    SDL_RWclose(file);
+    buffer[length] = '\0';
+    /* Fields after the parenthesized command name start with state (3);
+       utime and stime are fields 14 and 15. */
+    field = SDL_strrchr(buffer, ')');
+    if (!field) {
+        return -1;
+    }
+    for (i = 3; i < 14 && field; ++i) {
+        field = SDL_strchr(field + 1, ' ');
+    }
+    if (!field) {
+        return -1;
+    }
+    *user = SDL_strtoull(field + 1, (char **)&field, 10);
+    *system = SDL_strtoull(field, NULL, 10);
+
+    file = SDL_RWFromFile("/proc/thread-self/status", "r");
+    if (!file) {
+        return -1;
+    }
+    length = SDL_RWread(file, buffer, 1, sizeof(buffer) - 1);
+    SDL_RWclose(file);
+    buffer[length] = '\0';
+    field = SDL_strstr(buffer, "voluntary_ctxt_switches:");
+    if (!field) {
+        return -1;
+    }
+    *voluntary = SDL_strtoull(field + 24, NULL, 10);
+    field = SDL_strstr(field + 24, "nonvoluntary_ctxt_switches:");
+    if (!field) {
+        return -1;
+    }
+    *involuntary = SDL_strtoull(field + 27, NULL, 10);
     return 0;
 }
 
@@ -2565,6 +2651,7 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
     if (NOODLES_EnsureGPU(data, &data->composition) < 0) {
         return -1;
     }
+    data->present_draw_fence = noodles_link_last_fence(data->link);
     if (noodles_push_present(data->link, &fence) < 0) {
         return NOODLES_SetErrno("present");
     }
@@ -2620,6 +2707,35 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
                     (unsigned long long)data->stats_present_waits,
                     (double)data->stats_present_wait_max_ticks * milliseconds,
                     present_other_ticks * milliseconds / frame_count);
+            {
+                Uint64 user = 0, system = 0, voluntary = 0, involuntary = 0;
+                const long clock_ticks = sysconf(_SC_CLK_TCK);
+                const double seconds = (double)interval_ticks / (double)frequency;
+                const int usage = NOODLES_ReadThreadUsage(&user, &system, &voluntary,
+                                                          &involuntary);
+                const SDL_bool have_usage = usage == 0 && data->stats_thread_user +
+                    data->stats_thread_system + data->stats_thread_voluntary != 0;
+                SDL_Log("Noodles pacing: present-wait draw=%.3f ms flip=%.3f ms avg/%.3f max drawn-before-wait=%llu/%llu; main thread user=%.1f%% sys=%.1f%% voluntary-switches=%.1f involuntary=%.1f per frame",
+                        (double)data->stats_present_draw_wait_ticks * milliseconds / frame_count,
+                        (double)data->stats_present_flip_wait_ticks * milliseconds / frame_count,
+                        (double)data->stats_present_flip_wait_max_ticks * milliseconds,
+                        (unsigned long long)data->stats_present_drawn_early,
+                        (unsigned long long)data->stats_present_waits,
+                        have_usage ? (double)(user - data->stats_thread_user) * 100.0 /
+                                     (double)clock_ticks / seconds : 0.0,
+                        have_usage ? (double)(system - data->stats_thread_system) * 100.0 /
+                                     (double)clock_ticks / seconds : 0.0,
+                        have_usage ? (double)(voluntary - data->stats_thread_voluntary) /
+                                     frame_count : 0.0,
+                        have_usage ? (double)(involuntary - data->stats_thread_involuntary) /
+                                     frame_count : 0.0);
+                if (usage == 0) {
+                    data->stats_thread_user = user;
+                    data->stats_thread_system = system;
+                    data->stats_thread_voluntary = voluntary;
+                    data->stats_thread_involuntary = involuntary;
+                }
+            }
             SDL_Log("Noodles work: fill=%llu/%.3fMpx batches=%llu max-batch=%llu stalls=%llu blend-fill=%llu/%.3fMpx stalls=%llu plain=%llu/%.3fMpx flagged=%llu/%.3fMpx draw-batches=%llu max-draw-batch=%llu draw-stalls=%llu CPU-copy=%llu/%.3fMpx CPU-fill=%llu/%.3fMpx primitives=%llu/%llu vertices geometry=%llu/%llu triangles",
                     (unsigned long long)data->stats_fill_commands,
                     (double)data->stats_fill_pixels / 1000000.0,
@@ -2754,6 +2870,10 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
             data->stats_present_wait_ticks = 0;
             data->stats_present_wait_max_ticks = 0;
             data->stats_present_waits = 0;
+            data->stats_present_draw_wait_ticks = 0;
+            data->stats_present_flip_wait_ticks = 0;
+            data->stats_present_flip_wait_max_ticks = 0;
+            data->stats_present_drawn_early = 0;
             data->stats_fill_commands = 0;
             data->stats_fill_pixels = 0;
             data->stats_fill_stalls = 0;
@@ -2924,6 +3044,9 @@ static int NOODLES_CreateRenderer(SDL_Renderer *renderer, SDL_Window *window, Ui
     data->stats_enabled = SDL_getenv("SDL_RENDER_NOODLES_STATS") != NULL;
     if (data->stats_enabled) {
         data->stats_start = SDL_GetPerformanceCounter();
+        NOODLES_ReadThreadUsage(&data->stats_thread_user, &data->stats_thread_system,
+                                &data->stats_thread_voluntary,
+                                &data->stats_thread_involuntary);
     }
     if (noodles_link_open(&data->link) < 0) {
         const int saved_errno = errno;

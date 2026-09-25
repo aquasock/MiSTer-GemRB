@@ -11,6 +11,9 @@ mkdir -p "$OUT/libs"
 	-I"$PREFIX/include/SDL2" -D_REENTRANT \
 	"$ROOT/tools/noodles-render-test.c" -L"$PREFIX/lib" -lSDL2 -lm \
 	-Wl,-rpath,'$ORIGIN/libs' -o "$OUT/noodles-render-test"
+"$CROSS-gcc" -O2 -Wall -Wextra $ARCH_FLAGS -I"$PREFIX/include" \
+	"$ROOT/tools/noodles-throughput.c" -L"$PREFIX/lib" -lnoodles \
+	-Wl,-rpath,'$ORIGIN/libs' -o "$OUT/noodles-throughput"
 
 cp -L "$PREFIX/lib/libSDL2-2.0.so.0" "$OUT/libs/libSDL2-2.0.so.0"
 cp -L /usr/arm-linux-gnueabihf/lib/ld-linux-armhf.so.3 "$OUT/libs/ld-linux-armhf.so.3"
@@ -24,8 +27,14 @@ D="$(cd "$(dirname "$0")" && pwd)"
 export SDL_VIDEODRIVER=mister SDL_AUDIODRIVER=mister SDL_RENDER_DRIVER=noodles SDL_MISTER_FORMAT=xrgb
 exec "$D/libs/ld-linux-armhf.so.3" --library-path "$D/libs" "$D/noodles-render-test" "$@"
 EOF
-chmod +x "$OUT/run.sh" "$OUT/noodles-render-test"
+cat >"$OUT/throughput.sh" <<'EOF2'
+#!/bin/bash
+set -e
+D="$(cd "$(dirname "$0")" && pwd)"
+exec "$D/libs/ld-linux-armhf.so.3" --library-path "$D/libs" "$D/noodles-throughput" "$@"
+EOF2
+chmod +x "$OUT/run.sh" "$OUT/throughput.sh" "$OUT/noodles-render-test" "$OUT/noodles-throughput"
 
 "$CROSS-readelf" -d "$OUT/noodles-render-test" | grep NEEDED
-sha256sum "$OUT/noodles-render-test" "$OUT/libs/libSDL2-2.0.so.0"
+sha256sum "$OUT/noodles-render-test" "$OUT/noodles-throughput" "$OUT/libs/libSDL2-2.0.so.0"
 echo "built: $OUT"
