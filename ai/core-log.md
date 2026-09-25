@@ -804,11 +804,11 @@ Eliminate provably redundant standard-alpha work by tracking conservative whole-
 
 #### Outcome:
 
-Source `cb02171` implements the SDL-only change, tracking whether a texture is entirely opaque, entirely transparent or unknown and preserving that state only where SDL's alpha equations prove the result. Standard-alpha draws from known-transparent sources become no-ops, while known-opaque identity-modulated draws use the plain copy path; partial, unsupported or ambiguous writes invalidate state. The one-time forced readback probe is removed, counters report skipped and converted pixels, and the diagnostic now covers CPU updates plus GPU-generated full and partial alpha-state transitions. Fresh SDL, diagnostic and bundle builds passed; the diagnostic SHA256 is `0dacdabc22b84c9d0d09368b79778bd0c48e14f0cefaa0fc70ac1f7e667126c5`, the diagnostic SDL SHA256 is `f33d17109f105b3d7a5879b9429953305828af9330ec5bb51da7dcce40b9160e`, and the stripped bundle SDL SHA256 is `77a420d5f976c4d40ecad04fab9fe381ebe7b338b0e3c9d808d55694d7b90d0a`. GemRB, the SDK protocol and the RBF remain unchanged; MiSTer pixel, audio and timing validation is pending.
+Source `cb02171` implements the SDL-only change, tracking whether a texture is entirely opaque, entirely transparent or unknown and preserving that state only where SDL's alpha equations prove the result. Standard-alpha draws from known-transparent sources become no-ops, while known-opaque identity-modulated draws use the plain copy path; partial, unsupported or ambiguous writes invalidate state. The one-time forced readback probe is removed, counters report skipped and converted pixels, and the diagnostic covers CPU updates plus GPU-generated full and partial alpha-state transitions. Fresh SDL, diagnostic and bundle builds passed; the diagnostic SHA256 is `0dacdabc22b84c9d0d09368b79778bd0c48e14f0cefaa0fc70ac1f7e667126c5`, the diagnostic SDL SHA256 is `f33d17109f105b3d7a5879b9429953305828af9330ec5bb51da7dcce40b9160e`, and the hash-verified deployed stripped SDL SHA256 is `77a420d5f976c4d40ecad04fab9fe381ebe7b338b0e3c9d808d55694d7b90d0a`. The expanded MiSTer diagnostic twice produced exact framebuffer hash `93f8e614` and audio passed. In the stable paused scene, about 0.15 million pixels per frame moved from blend to copy, but no whole draw could be skipped and the dominant 1.11 million large-source pixels remained unknown after partial render-target writes; stationary performance remained 20.0-20.1fps with a 32.6-34.0ms presentation wait. Sustained panning similarly remained about 19.7-20.0fps while high-motion windows still raised command construction to 3.6ms and queue submission to 16.4ms. The optimization is correct and reusable but does not materially change this workload. GemRB, the SDK protocol and the RBF remain unchanged.
 
 #### Next Steps:
 
-Deploy the hash-verified SDL library without changing the accepted RBF, require two exact-pixel diagnostic passes with audio, then compare stationary and active-panning timing plus skipped and converted pixel counts against the captured baselines before deciding the span-list and dynamic blend-fast-path order.
+Retain conservative alpha state because it safely removes work when future consumers expose uniform surfaces, and implement the next optimization in the generic FPGA blend engine: for identity-modulated standard-alpha draws, inspect source pairs before destination access, skip fully transparent pairs and write fully opaque pairs without reading the destination, while sending partial pairs through the existing exact blend pipeline. Validate exhaustive pixels, stalls, alignment, mirroring and row edges before a timing-qualified RBF build, then repeat stationary and panning measurements before adding a larger span-list command.
 
 #### Files Modified:
 
@@ -819,6 +819,6 @@ Deploy the hash-verified SDL library without changing the accepted RBF, require 
 #### Status:
 
 - [x] Built
-- [ ] Passed
+- [x] Passed
 
 ---
