@@ -102,6 +102,7 @@ cat > "$OUT/run.sh" <<'RUN'
 #   MISTER_USB=/media/usbN           swap drive to use when several are plugged in (skips the question)
 #   MISTER_SWAP=none|usb             disable swap, or explicitly use USB swap (Noodles defaults to none)
 #   MISTER_SWAP_MB=384               size of the emergency swap file (0 = none)
+#   MISTER_CPUS=0                    ARM cores the game may run on, as a taskset list such as 0 or 0-1 (default 0)
 D=/media/fat/gemrb
 cd "$D" || exit 1
 
@@ -298,6 +299,12 @@ if [ -n "$MODELINE" ] && [ -p /dev/MiSTer_cmd ]; then
     echo "video_mode $MODELINE" > /dev/MiSTer_cmd
     switched=1
     sleep 2.5   # let the display re-sync; Main resizes the framebuffer to match
+fi
+# The MiSTer frontend pins itself to CPU 1 and keeps it nearly busy, and everything it starts, including this script,
+# inherits that affinity. Move this shell, and so the game or gdb it starts, to the cores in MISTER_CPUS (default CPU 0,
+# otherwise almost idle).
+if command -v taskset >/dev/null 2>&1 && ! taskset -c -p "${MISTER_CPUS:-0}" $$ >/dev/null; then
+    echo "  Could not apply MISTER_CPUS='${MISTER_CPUS:-0}'; the game keeps the inherited CPU affinity."
 fi
 # MISTER_DEBUG=1 (developer option) runs the game under gdb, with the unstripped files from `deploy.sh debug`, and writes the
 # call stacks of every thread to crash.log if the game crashes. Adding MISTER_MALLOC_CHECK=1 also loads glibc's checking

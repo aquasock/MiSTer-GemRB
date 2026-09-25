@@ -170,6 +170,7 @@ Local settings go in `/media/fat/gemrb/env.sh`, which the launcher reads if it e
 | `MISTER_MALLOC_CHECK=1` | Developer, with `MISTER_DEBUG`: also use glibc's heap-checking allocator (slower) |
 | `MISTER_SWAP=none` or `usb` | Disable swap, or explicitly use USB swap. Noodles BG2 defaults to `none`; software launches default to `usb` |
 | `SDL_RENDER_NOODLES_RESIDENT_MB=192` | FPGA texture-residency budget used by the Noodles renderer; valid overrides are clamped to 8–220 MiB |
+| `MISTER_CPUS=0` | ARM cores the game runs on, as a `taskset` list such as `0` or `0-1`. The MiSTer frontend occupies CPU 1, so the default is CPU 0 |
 | `SDL_RENDER_NOODLES_BUFFERS=2` | Keep two display buffers on a protocol 1.7 Noodles core instead of the default three |
 
 GemRB's own settings for each game are in `/media/fat/gemrb/GemRB-<game>.cfg`, which the launcher creates from
