@@ -919,3 +919,33 @@ Obtain user approval for the next mitigation. Candidates are measuring HPS SDRAM
 - [x] Passed
 
 ---
+
+## 30 COMMIT Unreleased ??? 2026-09-25T10:15:29-07:00
+
+#### Coming From:
+
+Unreleased 00b3678
+
+#### Purpose:
+
+Measure whether HPS SDRAM controller port arbitration settings protect ARM memory access from Noodles engine traffic.
+
+#### Outcome:
+
+Entry 29 showed that engine fills and copies double ARM DDR3 latency and cut ARM bandwidth by 40-60%, and the three-buffer image made CPU-bound combat slower. Reference records CVHPS-001 through CVHPS-005, taken from the Cyclone V HPS Technical Reference Manual, establish that the MPU arbitrates on command ports 7 and 9 and FPGA traffic on ports 0-5, that `mppriority` gives absolute priority, that `mpweight_0_4` to `mpweight_3_4` set deficit round-robin weights with per-priority sums, and that both can be changed at run time. A read of the live controller found every port at priority 0, FPGA ports at weight 16, MPU ports at 8 and L3 ports at 4, so a busy FPGA port wins about two thirds of contested arbitration. The proposed source adds `tools/mister-mpfe.sh`, which applies a named profile over SSH from the build PC after validating the weight limit, writes `mppriority` first, and reads back and decodes the result: `default` restores the preloader values, `equal` gives FPGA and MPU ports weight 8, `mpu` gives FPGA ports 4 and MPU ports 16, and `mpu-priority` raises the MPU ports to priority 1. The settings are not persistent and every boot restores the defaults. GemRB, SDL, the SDK and the RBF are unchanged.
+
+#### Next Steps:
+
+Run the contention tool under each weight profile on the protocol-1.7 image, restoring `default` after each, and try `mpu-priority` last while watching the display for starved scanout. Take the profile with the best ARM protection for its engine cost into paused and combat captures, then propose whether to apply it persistently from the launcher.
+
+#### Files Modified:
+
+- README.md
+- tools/mister-mpfe.sh
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
