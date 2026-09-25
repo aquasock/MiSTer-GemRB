@@ -950,7 +950,7 @@ Leave the preloader arbitration unchanged, retaining `mpu` as the best synthetic
 
 ---
 
-## 31 COMMIT Unreleased ??? 2026-09-25T10:49:16-07:00
+## 31 COMMIT Unreleased 1eb84fc 2026-09-25T10:49:16-07:00
 
 #### Coming From:
 
@@ -962,11 +962,11 @@ Run GemRB on the ARM core that the MiSTer frontend leaves idle instead of inheri
 
 #### Outcome:
 
-Profiling combat found the MiSTer frontend pinned to CPU 1 and nearly saturating it, while every GemRB and `noodles-launcher` thread carried the inherited `Cpus_allowed_list` of 1, CPU 0 stayed almost idle, and the main thread's scheduler statistics showed 206s running against 217s waiting to run. In one continuous fight with the three-buffer image, moving the live process between CPUs every 15 seconds gave 17.4fps mean and 8.1fps worst on CPU 1 against 24.2fps mean and 20.8fps worst on CPU 0, CPU 0 won every paired interval, and the two 8fps collapses, with 106-109ms per frame outside the renderer and about 33 involuntary context switches per frame, occurred only on CPU 1. The user found combat better with a temporary watcher that pinned each relaunch to CPU 0, though the known Kobold Commando heap fault, reported as `malloc(): unaligned tcache chunk detected`, ended those sessions. Panning remained CPU-bound on CPU 0 at 18-21fps with 1,800-2,700 wall-stencil fill calls and 68-70% main-thread CPU per frame. The proposed source makes the generated `run.sh`, used by the Noodles and software launchers, set its own affinity with `taskset` before starting GemRB or gdb, from `MISTER_CPUS` in `env.sh` with CPU 0 as the default.
+Profiling combat found the MiSTer frontend pinned to CPU 1 and nearly saturating it, while every GemRB and `noodles-launcher` thread carried the inherited `Cpus_allowed_list` of 1, CPU 0 stayed almost idle, and the main thread's scheduler statistics showed 206s running against 217s waiting to run. In one continuous fight with the three-buffer image and statistics enabled, moving the live process between CPUs every 15 seconds gave 17.4fps mean and 8.1fps worst on CPU 1 against 24.2fps mean and 20.8fps worst on CPU 0, CPU 0 won every paired interval, and the two 8fps collapses, with 106-109ms per frame outside the renderer and about 33 involuntary context switches per frame, occurred only on CPU 1. Source `1eb84fc` makes the generated `run.sh`, used by the Noodles and software launchers, move its own shell with `taskset` before starting GemRB or gdb, from `MISTER_CPUS` in `env.sh` with CPU 0 as the default; an unparsable value is reported and leaves the inherited affinity. The bundle built and deployed with `run.sh` SHA256 `320071b00105085197e61fef9a9a9b0083af1c55f837851bcc660c7b379943ec`, and the MiSTer's `taskset` applied `0` and `0-1` to child processes and rejected an invalid list as intended. At the user's request the run was repeated without any diagnostics: `SDL_RENDER_NOODLES_STATS` was commented out in the MiSTer's `env.sh`, no profiler, watcher or test tool ran, and the controller used its default arbitration. A normal Noodles launch placed every GemRB thread on CPU 0, and after 334s the main thread had run 97.9s and waited 19.0s, a wait-to-run ratio of 0.19 instead of 1.05. The user reported that everything ran much better, panning was almost perfect, the endgame video played almost perfectly and combat kept a few stutters; the session did not crash. Two changes were combined, so the gain cannot be divided exactly between affinity and disabled statistics, but the statistics mode is not negligible: its raw fence timing from `cd506c8` polls every 20us and produced 100-330 voluntary context switches per frame in earlier windows, which competed with GemRB on the shared core and inflated CPU-bound measurements. A later five-second sample showed one secondary GemRB thread running 2.8% and waiting 4.9% of CPU 0, consistent with a short periodic thread queued behind the main thread; the kernel does not expose `wchan` or kernel stacks. Earlier sessions ended three times through the known Kobold Commando heap fault with exit codes 134 and 139.
 
 #### Next Steps:
 
-Rebuild and deploy the bundle, confirm that a normal Noodles launch places every GemRB thread on CPU 0, and repeat paused and combat captures. Then compare `MISTER_CPUS=0-1` against CPU 0 alone, and address panning with one batched fill per wall polygon before the approved Noodles verification and pipeline-buffer cycles.
+Reduce the statistics mode's overhead before further CPU-bound measurement, in particular replacing the 20us raw-fence polling with sparse or coarser timing, and compare `MISTER_CPUS=0-1` with CPU 0 alone for the remaining combat stutter. Then capture the Kobold Commando heap fault with `MISTER_DEBUG=1` and `MISTER_MALLOC_CHECK=1`, and continue with the approved Noodles formal-verification and pipeline-buffer cycles; batched wall-polygon fills are lower priority now that panning is nearly smooth.
 
 #### Files Modified:
 
@@ -975,7 +975,7 @@ Rebuild and deploy the bundle, confirm that a normal Noodles launch places every
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
