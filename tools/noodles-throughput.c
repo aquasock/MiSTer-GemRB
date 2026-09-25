@@ -4,8 +4,10 @@
    Rate tests repeat full-surface operations between managed off-screen
    surfaces and time them from first submission to drain. Pacing tests show
    how long PRESENT keeps the command queue busy and how that changes with
-   the amount of draw work before it. Run it alone while the core is loaded:
-   it is a separate SDK client and GemRB must not be running. */
+   the amount of draw work before it. They time the raw completion count the
+   core publishes, separately from the SDK's confirmed wait, which also needs
+   the core to answer a verification request. Run it alone while the core is
+   loaded: it is a separate SDK client and GemRB must not be running. */
 
 #define _POSIX_C_SOURCE 199309L
 #include <noodles_link.h>
@@ -49,6 +51,29 @@ static void fail(const char *operation)
             if (noodles_link_wait_progress(link, NOODLES_DEFAULT_TIMEOUT_MS)) fail(what); \
         }                                                                         \
     } while (0)
+
+/* Returns when the core's published completion count reaches target,
+   without the SDK's verification round trip. */
+static double raw_wait(noodles_fence_t target, const char *what)
+{
+    const struct timespec step = {0, 20000};
+    const double deadline = now_ms() + NOODLES_DEFAULT_TIMEOUT_MS;
+    for (;;) {
+        const double now = now_ms();
+        if (((noodles_link_done_count(link) - target) & 0x7fffffffu) < 0x40000000u) return now;
+        if (now > deadline) {
+            errno = ETIMEDOUT;
+            fail(what);
+        }
+        nanosleep(&step, NULL);
+    }
+}
+
+static double confirmed_wait(noodles_fence_t target, const char *what)
+{
+    if (noodles_link_wait(link, target, NOODLES_DEFAULT_TIMEOUT_MS) != 0) fail(what);
+    return now_ms();
+}
 
 static void drain(const char *what)
 {
@@ -162,57 +187,62 @@ static summary summarize(double *v, int n)
     return s;
 }
 
-/* Frame loop: k full-surface fills off screen, then PRESENT. Draw time is
-   measured from the start of the frame (the queue is idle after the previous
-   PRESENT) to the fills' fence, PRESENT occupancy from there to its fence. */
+/* Frame loop: k full-surface fills off screen, then PRESENT. Draw time runs
+   from the start of the frame (the queue is idle after the previous PRESENT)
+   to the fills' raw completion, PRESENT from there to its raw completion and
+   confirmation from there to the SDK's confirmed wait. */
 static void run_pacing(noodles_surface_t *dst, int k)
 {
     const noodles_rect_t all = {0, 0, W, H};
-    double draw[PACING_FRAMES], present[PACING_FRAMES], period[PACING_FRAMES];
+    double draw[PACING_FRAMES], present[PACING_FRAMES], confirm[PACING_FRAMES];
+    double period[PACING_FRAMES];
     double previous = 0.0;
     int frame, i;
 
     for (frame = -PACING_WARMUP; frame < PACING_FRAMES; ++frame) {
         noodles_fence_t draw_fence, present_fence;
-        double start = now_ms(), drawn, presented;
+        double start = now_ms(), drawn, presented, confirmed;
         for (i = 0; i < k; ++i) {
             SUBMIT("pacing fill", noodles_surface_fill(dst, &all, 0xff000000u | (uint32_t)i));
         }
         draw_fence = noodles_link_last_fence(link);
         SUBMIT("present", noodles_push_present(link, &present_fence));
-        if (noodles_link_wait(link, draw_fence, NOODLES_DEFAULT_TIMEOUT_MS)) fail("draw wait");
-        drawn = now_ms();
-        if (noodles_link_wait(link, present_fence, NOODLES_DEFAULT_TIMEOUT_MS)) fail("present wait");
-        presented = now_ms();
+        drawn = raw_wait(draw_fence, "draw wait");
+        presented = raw_wait(present_fence, "present wait");
+        confirmed = confirmed_wait(present_fence, "present confirmation");
         if (frame >= 0) {
             draw[frame] = drawn - start;
             present[frame] = presented - drawn;
-            period[frame] = presented - previous;
+            confirm[frame] = confirmed - presented;
+            period[frame] = confirmed - previous;
         }
-        previous = presented;
+        previous = confirmed;
     }
     {
         const summary d = summarize(draw, PACING_FRAMES);
         const summary p = summarize(present, PACING_FRAMES);
+        const summary c = summarize(confirm, PACING_FRAMES);
         const summary f = summarize(period, PACING_FRAMES);
-        printf("%2d %7.2f %7.2f %7.2f %7.2f %7.2f %7.2f %7.2f %7.2f %6.2f\n", k,
-               d.mean, p.mean, p.min, p.max, f.mean, f.min, f.p50, f.max,
+        printf("%2d %7.2f %7.2f %7.2f %7.2f %7.2f %7.2f %7.2f %7.2f %7.2f %6.2f\n", k,
+               d.mean, p.mean, p.min, p.max, c.mean, f.mean, f.min, f.p50, f.max,
                1000.0 / f.mean);
     }
 }
 
-/* A fill pushed immediately behind PRESENT: how long it takes to complete
-   compared with the same fill on an idle queue shows whether later commands
-   can execute while PRESENT waits for the display. */
+/* A fill pushed immediately behind PRESENT: its raw completion relative to
+   the flip shows whether later commands can execute while PRESENT waits for
+   the display, and the confirmed PRESENT wait shows whether the queued fill
+   delays the SDK's verification of the earlier fence. */
 static void run_behind_present(noodles_surface_t *dst)
 {
     const noodles_rect_t all = {0, 0, W, H};
-    double alone[PACING_FRAMES], behind[PACING_FRAMES], flip[PACING_FRAMES];
+    double alone[PACING_FRAMES], flip[PACING_FRAMES], behind[PACING_FRAMES];
+    double confirm[PACING_FRAMES];
     int frame;
 
     for (frame = -PACING_WARMUP; frame < PACING_FRAMES; ++frame) {
         noodles_fence_t present_fence, fill_fence;
-        double start, filled, presented;
+        double start, filled, presented, confirmed;
 
         start = now_ms();
         SUBMIT("idle fill", noodles_surface_fill(dst, &all, 0xff102030u));
@@ -223,22 +253,59 @@ static void run_behind_present(noodles_surface_t *dst)
         SUBMIT("present", noodles_push_present(link, &present_fence));
         SUBMIT("fill behind present", noodles_surface_fill(dst, &all, 0xff302010u));
         fill_fence = noodles_link_last_fence(link);
-        if (noodles_link_wait(link, present_fence, NOODLES_DEFAULT_TIMEOUT_MS)) fail("present wait");
-        presented = now_ms();
-        if (noodles_link_wait(link, fill_fence, NOODLES_DEFAULT_TIMEOUT_MS)) fail("fill wait");
-        filled = now_ms();
+        presented = raw_wait(present_fence, "present wait");
+        confirmed = confirmed_wait(present_fence, "present confirmation");
+        filled = raw_wait(fill_fence, "fill wait");
+        drain("behind present");
         if (frame >= 0) {
             flip[frame] = presented - start;
-            behind[frame] = filled - start;
+            behind[frame] = filled - presented;
+            confirm[frame] = confirmed - presented;
         }
     }
     {
         const summary a = summarize(alone, PACING_FRAMES);
         const summary p = summarize(flip, PACING_FRAMES);
         const summary b = summarize(behind, PACING_FRAMES);
-        printf("fill alone %.2f ms; PRESENT %.2f ms (%.2f-%.2f); fill pushed behind PRESENT "
-               "completes after %.2f ms (%.2f-%.2f), %.2f ms after the flip\n",
-               a.mean, p.mean, p.min, p.max, b.mean, b.min, b.max, b.mean - p.mean);
+        const summary c = summarize(confirm, PACING_FRAMES);
+        printf("fill alone %.2f ms; PRESENT raw %.2f ms (%.2f-%.2f); fill queued behind it "
+               "completes %.2f ms after the flip (%.2f-%.2f); PRESENT confirmation %.2f ms "
+               "after its raw completion (%.2f-%.2f)\n",
+               a.mean, p.mean, p.min, p.max, b.mean, b.min, b.max, c.mean, c.min, c.max);
+    }
+}
+
+/* One fill followed by more queued fills: the delay between the first
+   fill's raw completion and the SDK's confirmed wait on it, as the queued
+   work behind it grows. */
+static void run_confirmation(noodles_surface_t *dst, int queued)
+{
+    const noodles_rect_t all = {0, 0, W, H};
+    double raw[PACING_FRAMES], confirm[PACING_FRAMES];
+    int frame, i;
+
+    for (frame = -PACING_WARMUP; frame < PACING_FRAMES; ++frame) {
+        noodles_fence_t first;
+        double start, reached, confirmed;
+        drain("confirmation setup");
+        start = now_ms();
+        SUBMIT("first fill", noodles_surface_fill(dst, &all, 0xff405060u));
+        first = noodles_link_last_fence(link);
+        for (i = 0; i < queued; ++i) {
+            SUBMIT("queued fill", noodles_surface_fill(dst, &all, 0xff000000u | (uint32_t)i));
+        }
+        reached = raw_wait(first, "first fill");
+        confirmed = confirmed_wait(first, "first fill confirmation");
+        if (frame >= 0) {
+            raw[frame] = reached - start;
+            confirm[frame] = confirmed - reached;
+        }
+    }
+    drain("confirmation");
+    {
+        const summary r = summarize(raw, PACING_FRAMES);
+        const summary c = summarize(confirm, PACING_FRAMES);
+        printf("%2d %7.2f %7.2f %7.2f %7.2f\n", queued, r.mean, c.mean, c.min, c.max);
     }
 }
 
@@ -295,12 +362,16 @@ int main(int argc, char **argv)
 
     printf("\nPRESENT pacing: k full-surface off-screen fills per frame, %d frames each (ms)\n",
            PACING_FRAMES);
-    printf("%2s %7s %7s %7s %7s %7s %7s %7s %7s %6s\n", "k", "draw", "present", "min", "max",
-           "period", "min", "median", "max", "fps");
+    printf("%2s %7s %7s %7s %7s %7s %7s %7s %7s %7s %6s\n", "k", "draw", "present", "min",
+           "max", "confirm", "period", "min", "median", "max", "fps");
     for (k = 0; k <= 10; ++k) run_pacing(dst, k);
 
     printf("\nQueue behind PRESENT\n");
     run_behind_present(dst);
+
+    printf("\nConfirmed wait on a fill with n full-surface fills queued behind it (ms)\n");
+    printf("%2s %7s %7s %7s %7s\n", "n", "raw", "confirm", "min", "max");
+    for (k = 0; k <= 8; k += 2) run_confirmation(dst, k);
 
     noodles_surface_destroy(half);
     noodles_surface_destroy(clear);
