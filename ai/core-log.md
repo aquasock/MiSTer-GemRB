@@ -1040,7 +1040,7 @@ Obtain user approval to retain queue-callback counts in ordinary statistics whil
 
 ---
 
-## 34 COMMIT Unreleased ??? 2026-09-25T11:34:26-07:00
+## 34 COMMIT Unreleased 35409f1 2026-09-25T11:34:26-07:00
 
 #### Coming From:
 
@@ -1052,11 +1052,11 @@ Compare diagnostics-off GemRB gameplay with CPU 0 affinity against allowing both
 
 #### Outcome:
 
-This approved measurement defers further statistics-mode refinement because normal gameplay is close to the desired result. The deployed `35409f1` bundle and protocol-1.7 seed-13 core will run without renderer statistics, pacing probes, profilers or MPFE changes while the same AR4000 panning and combat path is compared with `MISTER_CPUS=0` and `MISTER_CPUS=0-1`; external read-only process inspection may record thread placement and scheduling without instrumenting GemRB.
+The deployed `35409f1` bundle and protocol-1.7 seed-13 core ran without renderer statistics, pacing probes, profilers or MPFE changes. With `MISTER_CPUS=0-1`, panning was usually nearly perfect but some sections slowed severely; during one 30-second sample the main thread migrated nine times, appeared on busy CPU 1 in 5 of 120 samples and spent 4.61 seconds waiting to run. Pinning every live thread back to CPU 0 removed migration but made battle more stuttery. A hybrid with only the main thread fixed to CPU 0 and existing secondary and audio threads allowed on both cores made panning perfect, but the known Kobold Commando fault ended the process before combat qualification: immediately after repeated `SHOOT` activity, glibc reported `malloc(): unaligned tcache chunk detected`, GemRB exited 134 and the launcher restored all four Main input grabs. Unrestricted `0-1` is rejected and CPU 0 remains the launcher default; the hybrid remains an uncommitted experiment until correctness work permits a complete comparison.
 
 #### Next Steps:
 
-Run the controlled comparison on the MiSTer, retain CPU 0 unless allowing both cores produces a repeatable subjective improvement without moving the main thread onto the busy frontend core, and then proceed to the approved Kobold Commando heap-fault capture as a separate cycle.
+Capture the reproducible Kobold Commando heap corruption with the existing debug-symbol and allocator-checking path under the CPU 0 default, identify the earliest failing allocation and stack, and defer any hybrid-affinity implementation until the same battle can complete reliably.
 
 #### Files Modified:
 
@@ -1064,7 +1064,7 @@ None.
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
