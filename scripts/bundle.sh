@@ -27,6 +27,10 @@ cp -a "$INSTALL/gemrb" "$INSTALL"/libgemrb_core.so* "$INSTALL/plugins" "$INSTALL
 	-o "$OUT/noodles-launcher" "$ROOT/tools/noodles-launcher.c"
 $STRIP --strip-unneeded "$OUT/noodles-launcher"
 
+# run.sh preloads this into GemRB to keep the main thread on CPU 0 while the other threads may also use CPU 1.
+"${CROSS}-gcc" $ARCH_FLAGS -std=c11 -O2 -Wall -Wextra -Werror -shared -fPIC \
+	-o "$OUT/libs/libmister-affinity.so" "$ROOT/tools/mister-affinity.c"
+
 # Libraries: the ones built here, then a private glibc so the MiSTer's old one is not used.
 for l in libSDL2-2.0.so.0 libSDL2_mixer-2.0.so.0 libpython$PYV.so.1.0 libz.so.1 libpng16.so.16 \
          libfreetype.so.6 libogg.so.0 libvorbis.so.0.4.9 libvorbisfile.so.3.3.8; do
@@ -102,7 +106,8 @@ cat > "$OUT/run.sh" <<'RUN'
 #   MISTER_USB=/media/usbN           swap drive to use when several are plugged in (skips the question)
 #   MISTER_SWAP=none|usb             disable swap, or explicitly use USB swap (Noodles defaults to none)
 #   MISTER_SWAP_MB=384               size of the emergency swap file (0 = none)
-#   MISTER_CPUS=0                    ARM cores the game may run on, as a taskset list such as 0 or 0-1 (default 0)
+#   MISTER_CPUS=0-1                  ARM cores the game may run on, as a taskset list such as 0 or 0-1 (default 0-1)
+#   MISTER_MAIN_CPUS=0               cores for the game's main thread, within MISTER_CPUS (default 0)
 D=/media/fat/gemrb
 cd "$D" || exit 1
 
@@ -301,11 +306,17 @@ if [ -n "$MODELINE" ] && [ -p /dev/MiSTer_cmd ]; then
     sleep 2.5   # let the display re-sync; Main resizes the framebuffer to match
 fi
 # The MiSTer frontend pins itself to CPU 1 and keeps it nearly busy, and everything it starts, including this script,
-# inherits that affinity. Move this shell, and so the game or gdb it starts, to the cores in MISTER_CPUS (default CPU 0,
-# otherwise almost idle).
-if command -v taskset >/dev/null 2>&1 && ! taskset -c -p "${MISTER_CPUS:-0}" $$ >/dev/null; then
-    echo "  Could not apply MISTER_CPUS='${MISTER_CPUS:-0}'; the game keeps the inherited CPU affinity."
+# inherits that affinity. Move this shell, and so the game or gdb it starts, to the cores in MISTER_CPUS (default 0-1).
+# libmister-affinity then keeps the game's main thread on MISTER_MAIN_CPUS (default CPU 0, otherwise almost idle) while
+# its audio and helper threads may use every core in MISTER_CPUS. MISTER_CPUS=0 keeps every thread on CPU 0.
+if command -v taskset >/dev/null 2>&1 && ! taskset -c -p "${MISTER_CPUS:-0-1}" $$ >/dev/null; then
+    echo "  Could not apply MISTER_CPUS='${MISTER_CPUS:-0-1}'; the game keeps the inherited CPU affinity."
 fi
+AFFINITY_PRELOAD=""
+[ -f "$D/libs/libmister-affinity.so" ] && AFFINITY_PRELOAD="$D/libs/libmister-affinity.so"
+# Pages swapped in and out while the game runs go into last-run.log.
+swap_pages() { awk '$1 == "pswpin" { i = $2 } $1 == "pswpout" { o = $2 } END { print i + 0, o + 0 }' /proc/vmstat 2>/dev/null; }
+swap_start=$(swap_pages)
 # MISTER_DEBUG=1 (developer option) runs the game under gdb, with the unstripped files from `deploy.sh debug`, and writes the
 # call stacks of every thread to crash.log if the game crashes. Adding MISTER_MALLOC_CHECK=1 also loads glibc's checking
 # allocator (libc_malloc_debug), which stops the game at the first sign of heap corruption instead of much later (slower).
@@ -317,13 +328,13 @@ if [ "$MISTER_DEBUG" = 1 ] && command -v gdb >/dev/null 2>&1; then
     # gdb has its own Python: keep GemRB's PYTHONHOME and GCONV_PATH away from it, and give them to the game inside it.
     env -u PYTHONHOME -u GCONV_PATH gdb -batch -ex "set pagination off" -ex "set startup-with-shell off" -ex "set debug-file-directory $D/debug" \
         -ex "set environment PYTHONHOME $D/python" -ex "set environment GCONV_PATH $D/libs/gconv" \
-        -ex "set environment LD_PRELOAD $HEAP_PRELOAD" -ex "set environment MALLOC_CHECK_ $HEAP_CHECK" -ex "set environment MALLOC_PERTURB_ $HEAP_PERTURB" \
+        -ex "set environment LD_PRELOAD $HEAP_PRELOAD${HEAP_PRELOAD:+:}$AFFINITY_PRELOAD" -ex "set environment MALLOC_CHECK_ $HEAP_CHECK" -ex "set environment MALLOC_PERTURB_ $HEAP_PERTURB" \
         -ex "handle SIGPIPE nostop noprint pass" -ex "handle SIGUSR1 nostop noprint pass" -ex "handle SIGUSR2 nostop noprint pass" \
         -ex run -ex "echo \n=== the game stopped ===\n" -ex "info program" -ex "bt 40" -ex "thread apply all bt 15" \
         -ex "echo \n=== main thread stack (glibc frames cannot be unwound after abort) ===\n" -ex "thread 1" -ex "x/700a \$sp" \
         --args "$D/gemrb" -c "$CFG" "$@" > "$D/crash.log" 2>&1 &
 else
-    "$D/gemrb" -c "$CFG" "$@" &
+    LD_PRELOAD="$AFFINITY_PRELOAD" "$D/gemrb" -c "$CFG" "$@" &
 fi
 child=$!
 trap 'kill -TERM $child 2>/dev/null' TERM HUP INT
@@ -333,7 +344,8 @@ wait $child 2>/dev/null
 reset_console
 # Always leave a short record of how the game ended (a crash is 128 plus the signal: 139 = segfault, 134 = abort, 137 = killed).
 {
-    echo "$(date '+%F %T') $GAME exit=$rc $(grep -E 'MemAvailable|SwapFree' /proc/meminfo | tr -s ' ' | tr '\n' ' ')"
+    echo "$(date '+%F %T') $GAME exit=$rc $(grep -E 'MemAvailable|SwapFree' /proc/meminfo | tr -s ' ' | tr '\n' ' ')" \
+        "$(swap_pages | awk -v s="$swap_start" '{ split(s, a, " "); print "swap pages in=" ($1 - a[1]) " out=" ($2 - a[2]) }')"
     dmesg 2>/dev/null | grep -i -E 'out of memory|oom-kill' | tail -1
 } >> "$D/last-run.log"
 tail -50 "$D/last-run.log" > "$D/last-run.log.new" && mv "$D/last-run.log.new" "$D/last-run.log"
