@@ -1331,3 +1331,33 @@ None.
 - [x] Passed
 
 ---
+
+## 44 COMMIT Unreleased ??? 2026-09-25T14:11:21-07:00
+
+#### Coming From:
+
+Unreleased 8b0c829
+
+#### Purpose:
+
+Make the Noodles SDL renderer clear and blend only the written region of mostly transparent render targets, without changing GemRB or any rendered pixel.
+
+#### Outcome:
+
+Planned. With `DrawFPS=1`, a stationary AR0015 scene on the `8b0c829` bundle showed about 27fps, and a ten-second sample of per-thread kernel counters showed GemRB's main thread running only about 42% of the time while it slept in Noodles fence waits, so the scene is limited by FPGA drawing at roughly 37ms per frame rather than by ARM time. GemRB 0.9.5 clears a full-screen transparent HUD buffer every frame and then blends all 800x600 pixels of it over the display even when it holds little more than the cursor; at Entry 27's measured engine rates that clear and blend cost about 2.7ms and 7ms. Following the user's direction that MiSTer-Noodles serve as a general SDL accelerator while games stay close to upstream, the change is confined to `sdl-renderer/noodles/SDL_render_noodles.c`. Each managed texture will record a rectangle outside which every pixel equals one known value. An opaque clear or fill to that value that covers the rectangle will write only the rectangle, or nothing when it is empty, provided the FPGA copy is current; any other clear resets the rectangle and value. An unmirrored `SDL_BLENDMODE_BLEND` or `SDL_BLENDMODE_ADD` copy from a texture whose known outside value has zero alpha will copy only the intersection with that rectangle, since such pixels leave the destination unchanged. Every other write grows the rectangle by its destination bounds, geometry and unknown writes make it the whole texture, and the display composition target is never tracked because its three hardware buffers rotate. Statistics mode will report trimmed copy and fill pixels.
+
+#### Next Steps:
+
+Extend the exact-pixel renderer diagnostic with a transparent-overlay sequence covering trimmed clears, trimmed blended and additive composites, moved content, CPU updates, opaque and non-transparent clears and full-texture fallbacks, run it and the existing diagnostic on hardware, then test the same stationary AR0015 scene with `DrawFPS=1` and diagnostics off, followed by panning, combat and menus, before comparing against the 27fps baseline.
+
+#### Files Modified:
+
+- sdl-renderer/noodles/SDL_render_noodles.c
+- tools/noodles-render-test.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
