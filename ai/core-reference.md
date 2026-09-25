@@ -112,6 +112,18 @@ rules:
     - "project release media target"
     - "720x480 29.97 interlaced top-field-first MPEG-2 Program Stream qualification"
     - "stereo 48 kHz AC-3 release-profile qualification"
+
+- source_id: CVHPS-TRM
+  priority: P1
+  authority: Altera (Intel) official vendor specification
+  document: "Cyclone V Hard Processor System Technical Reference Manual"
+  consulted_edition: "cv_5v4, 2014.12.15"
+  consulted_on: 2026-09-25
+  consulted_url: "https://people.ece.cornell.edu/land/courses/ece5760/DE1_SOC/cv_5_HPS_tech_ref.pdf"
+  current_url: "https://docs.altera.com/r/docs/683126/21.2/cyclone-v-hard-processor-system-technical-reference-manual"
+  note: "Intel's own PDF endpoints refused download on 2026-09-25; the consulted file is an unmodified copy of the vendor manual."
+  use_for:
+    - "HPS SDRAM controller multi-port front end arbitration between the MPU, L3 and FPGA-to-SDRAM ports"
 ```
 
 The 2021 H.222.0 edition is the controlled text consulted for the records below. It is newer and more useful than the previously catalogued paywalled-only systems reference, but it does not eliminate the need to check the 2025 delta before a current-edition conformance claim.
@@ -133,6 +145,7 @@ The 2021 H.222.0 edition is the controlled text consulted for the records below.
 | Existing video decode behavior | H.262 clauses and Annex B | H262-001 through H262-026 |
 | MPEG-1 Layer II audio decode | ISO/IEC 11172-3 | Re-open the controlled text for every syntax-level conclusion |
 | Adopted DVD-from-film release media profile | NARA MPD-D2 | NARA-001 |
+| HPS DDR3 arbitration between the ARM and FPGA ports | Cyclone V HPS TRM chapter 11 | CVHPS-001 through CVHPS-005 |
 
 ### Explicitly deferred
 
@@ -216,6 +229,11 @@ H222-009: "Program Stream Map and MPEG-2 video type"
 H222-010: "PES data-alignment indicator"
 H222-011: "Decode-order and presentation-order timing"
 NARA-001: "Adopted NARA MPD-D2 DVD-from-film release media profile"
+CVHPS-001: "MPFE command port mapping"
+CVHPS-002: "MPFE absolute port priority"
+CVHPS-003: "MPFE static weights and sums of weights"
+CVHPS-004: "Runtime update of MPFE priority and weights"
+CVHPS-005: "Command pool priority remap"
 ```
 
 ---
@@ -551,7 +569,78 @@ The following official external production profile is adopted as the project's r
 
 ---
 
-## 8. Record template
+## 8. Cyclone V HPS SDRAM controller records
+
+```yaml
+- record_id: CVHPS-001
+  title: "MPFE command port mapping"
+  status: VERIFIED
+  verified_date: 2026-09-25
+  confidence: HIGH
+  source_id: CVHPS-TRM
+  source_edition: "cv_5v4, 2014.12.15"
+  source_reference: "Chapter 11, Table 11-4 HPS SDRAM MPFE Command Port Mapping"
+  controlled_conclusion: "Command ports 0, 2 and 4 carry FPGA-fabric AXI read or Avalon-MM commands; 1, 3 and 5 carry FPGA-fabric AXI write or Avalon-MM commands; 6 is the L3 AXI read port, 7 the MPU AXI read port, 8 the L3 AXI write port and 9 the MPU AXI write port. AXI FPGA ports are assigned in read/write pairs starting at an even port."
+  applicability: "All Cyclone V HPS SDRAM controller configurations"
+  exceptions: []
+  conformance_effect: "ARM CPU traffic arbitrates on ports 7 and 9; FPGA-to-SDRAM traffic on ports 0-5."
+
+- record_id: CVHPS-002
+  title: "MPFE absolute port priority"
+  status: VERIFIED
+  verified_date: 2026-09-25
+  confidence: HIGH
+  source_id: CVHPS-TRM
+  source_edition: "cv_5v4, 2014.12.15"
+  source_reference: "Chapter 11, Setting the MPFE Priority; MPFE Weight Calculation; register mppriority at sdr offset 0x50AC"
+  controlled_conclusion: "mppriority (0xFFC250AC, reset 0x0) holds a 3-bit userpriority per command port, bits [2:0] for port 0 through bits [29:27] for port 9, from 0x0 lowest to 0x7 highest. Among ports with buffered transactions only those at the highest priority are serviced, so a higher-priority port's buffered work blocks lower-priority ports."
+  applicability: "Runtime-writable HPS register"
+  exceptions: []
+  conformance_effect: "Raising a port's priority can starve every lower-priority port; the manual advises equal priority with adjusted weights to avoid starvation."
+
+- record_id: CVHPS-003
+  title: "MPFE static weights and sums of weights"
+  status: VERIFIED
+  verified_date: 2026-09-25
+  confidence: HIGH
+  source_id: CVHPS-TRM
+  source_edition: "cv_5v4, 2014.12.15"
+  source_reference: "Chapter 11, Setting the MPFE Static Weights; MPFE Weight Calculation; MPFE Multi-Port Arbitration Considerations for Use; registers mpweight_0_4 to mpweight_3_4 at sdr offsets 0x50B0-0x50BC"
+  controlled_conclusion: "A 128-bit field across mpweight_0_4 to mpweight_3_4 gives each port a 5-bit static weight 0x0-0x1F, port 0 in bits [4:0] through port 9 in bits [49:45]; bits [113:50] hold eight 8-bit sums of the static weights of all ports at priority 0 through 7, priority 0 in bits [57:50]. Ports of equal priority are served by deficit round robin: a serviced port gains its static weight and loses the sum of weights, an unserviced one gains its static weight, and a drained port resets to 0x80. For each port, sum of weights minus its static weight must stay below 128."
+  applicability: "Runtime-writable HPS registers"
+  exceptions: []
+  conformance_effect: "Larger static weight gives a port a proportionally larger arbitration share among ports of its priority; inconsistent sums or a violated 128 limit break arbitration."
+
+- record_id: CVHPS-004
+  title: "Runtime update of MPFE priority and weights"
+  status: VERIFIED
+  verified_date: 2026-09-25
+  confidence: HIGH
+  source_id: CVHPS-TRM
+  source_edition: "cv_5v4, 2014.12.15"
+  source_reference: "Chapter 11, MPFE Multi-Port Arbitration Considerations for Use"
+  controlled_conclusion: "The memory controller commits the priority and weight registers into the MPFE arbiter once every 10 SDRAM clock cycles, so run-time writes take effect without a controller restart; while the multi-register weights are being written, ports can briefly arbitrate with unintended values, and mppriority should be updated first."
+  applicability: "Changing arbitration while traffic is running"
+  exceptions: []
+  conformance_effect: "Profiles can be switched live and restored; brief transitional arbitration is expected."
+
+- record_id: CVHPS-005
+  title: "Command pool priority remap"
+  status: VERIFIED
+  verified_date: 2026-09-25
+  confidence: HIGH
+  source_id: CVHPS-TRM
+  source_edition: "cv_5v4, 2014.12.15"
+  source_reference: "Chapter 11, MPFE Multi-Port Arbitration Considerations for Use; register remappriority at sdr offset 0x50E0"
+  controlled_conclusion: "Setting bit N of the priorityremap field in remappriority (0xFFC250E0, reset 0x0) sends ports of absolute priority N to the front of the single-port command queue ahead of any other transaction."
+  applicability: "Runtime-writable HPS register"
+  exceptions: []
+  conformance_effect: "An additional queue-level priority beyond MPFE arbitration."
+```
+
+---
+
+## 9. Record template
 
 ```yaml
 - record_id: "<DOMAIN>-<NNN>"
@@ -570,7 +659,7 @@ The following official external production profile is adopted as the project's r
 
 ---
 
-## 9. Maintenance boundary
+## 10. Maintenance boundary
 
 - Keep controlled conclusions, source identity, exact references, applicability, exceptions and observable conformance effects here.
 - Keep architecture, resource tradeoffs, timing results, tests, failures, deployment policy and chronological history in the appropriate project-control files.
