@@ -792,7 +792,7 @@ Add conservative alpha-state tracking to Noodles SDL render targets: full-surfac
 
 ---
 
-## 26 COMMIT Unreleased ??? 2026-09-25T04:48:46-07:00
+## 26 COMMIT Unreleased cb02171 2026-09-25T04:48:46-07:00
 
 #### Coming From:
 
@@ -804,11 +804,11 @@ Eliminate provably redundant standard-alpha work by tracking conservative whole-
 
 #### Outcome:
 
-The proposed SDL-only change tracks whether a texture is entirely opaque, entirely transparent or unknown, establishing state only from full-surface writes and preserving it only where SDL's alpha equations prove the result. Standard-alpha draws from a known-transparent source become no-ops, while known-opaque identity-modulated draws use the plain copy path; partial, unsupported or ambiguous writes invalidate state. The one-time forced readback probe is removed, and counters report skipped and converted pixels. GemRB, the SDK protocol and the RBF remain unchanged.
+Source `cb02171` implements the SDL-only change, tracking whether a texture is entirely opaque, entirely transparent or unknown and preserving that state only where SDL's alpha equations prove the result. Standard-alpha draws from known-transparent sources become no-ops, while known-opaque identity-modulated draws use the plain copy path; partial, unsupported or ambiguous writes invalidate state. The one-time forced readback probe is removed, counters report skipped and converted pixels, and the diagnostic now covers CPU updates plus GPU-generated full and partial alpha-state transitions. Fresh SDL, diagnostic and bundle builds passed; the diagnostic SHA256 is `0dacdabc22b84c9d0d09368b79778bd0c48e14f0cefaa0fc70ac1f7e667126c5`, the diagnostic SDL SHA256 is `f33d17109f105b3d7a5879b9429953305828af9330ec5bb51da7dcce40b9160e`, and the stripped bundle SDL SHA256 is `77a420d5f976c4d40ecad04fab9fe381ebe7b338b0e3c9d808d55694d7b90d0a`. GemRB, the SDK protocol and the RBF remain unchanged; MiSTer pixel, audio and timing validation is pending.
 
 #### Next Steps:
 
-Extend the exact-pixel diagnostic across full and partial updates, fills, target clears, plain copies, alpha blends, modulation and invalidation boundaries; rebuild SDL and the bundle; require exact pixels and audio; then compare stationary and active-panning frame timing with the captured baselines before deciding the span-list and dynamic blend-fast-path order.
+Deploy the hash-verified SDL library without changing the accepted RBF, require two exact-pixel diagnostic passes with audio, then compare stationary and active-panning timing plus skipped and converted pixel counts against the captured baselines before deciding the span-list and dynamic blend-fast-path order.
 
 #### Files Modified:
 
@@ -818,7 +818,7 @@ Extend the exact-pixel diagnostic across full and partial updates, fills, target
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
