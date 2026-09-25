@@ -127,6 +127,7 @@ typedef struct NOODLES_RenderData
     Uint64 stats_readback_bytes;
     Uint64 stats_evictions;
     Uint64 stats_drains;
+    Uint64 stats_progress_waits;
     Uint64 stats_shadow_allocations;
     Uint64 stats_shadow_releases;
     Uint64 stats_build_ticks;
@@ -204,6 +205,17 @@ static int NOODLES_DrainLink(NOODLES_RenderData *data)
     }
     if (noodles_link_drain(data->link, NOODLES_DEFAULT_TIMEOUT_MS) < 0) {
         return NOODLES_SetErrno("drain");
+    }
+    return 0;
+}
+
+static int NOODLES_WaitProgress(NOODLES_RenderData *data)
+{
+    if (data->stats_enabled) {
+        data->stats_progress_waits++;
+    }
+    if (noodles_link_wait_progress(data->link, NOODLES_DEFAULT_TIMEOUT_MS) < 0) {
+        return NOODLES_SetErrno("queue progress");
     }
     return 0;
 }
@@ -752,10 +764,13 @@ static int NOODLES_FlushFills(NOODLES_RenderData *data)
         return 0;
     }
     start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
-    if (noodles_surface_fill_batch(data->link,
-            data->pending_fill_target == &data->composition
-                ? NULL : data->pending_fill_target->surface,
-            data->pending_fills, count) < 0) {
+    for (;;) {
+        if (noodles_surface_fill_batch(data->link,
+                data->pending_fill_target == &data->composition
+                    ? NULL : data->pending_fill_target->surface,
+                data->pending_fills, count) == 0) {
+            break;
+        }
         if (errno != EAGAIN) {
             NOODLES_AddTiming(data, start, &data->stats_fill_ticks);
             return NOODLES_SetErrno("fill batch");
@@ -763,16 +778,9 @@ static int NOODLES_FlushFills(NOODLES_RenderData *data)
         if (data->stats_enabled) {
             data->stats_fill_stalls++;
         }
-        if (NOODLES_DrainLink(data) < 0) {
+        if (NOODLES_WaitProgress(data) < 0) {
             NOODLES_AddTiming(data, start, &data->stats_fill_ticks);
             return -1;
-        }
-        if (noodles_surface_fill_batch(data->link,
-                data->pending_fill_target == &data->composition
-                    ? NULL : data->pending_fill_target->surface,
-                data->pending_fills, count) < 0) {
-            NOODLES_AddTiming(data, start, &data->stats_fill_ticks);
-            return NOODLES_SetErrno("fill batch");
         }
     }
     NOODLES_AddTiming(data, start, &data->stats_fill_ticks);
@@ -816,9 +824,12 @@ static int NOODLES_SubmitFill(NOODLES_RenderData *data, NOODLES_TextureData *tar
         return 0;
     }
     start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
-    if ((target == &data->composition
-            ? noodles_back_buffer_fill(data->link, rect, color)
-            : noodles_surface_fill(target->surface, rect, color)) < 0) {
+    for (;;) {
+        if ((target == &data->composition
+                ? noodles_back_buffer_fill(data->link, rect, color)
+                : noodles_surface_fill(target->surface, rect, color)) == 0) {
+            break;
+        }
         if (errno != EAGAIN) {
             NOODLES_AddTiming(data, start, &data->stats_fill_ticks);
             return NOODLES_SetErrno("fill");
@@ -826,15 +837,9 @@ static int NOODLES_SubmitFill(NOODLES_RenderData *data, NOODLES_TextureData *tar
         if (data->stats_enabled) {
             data->stats_fill_stalls++;
         }
-        if (NOODLES_DrainLink(data) < 0) {
+        if (NOODLES_WaitProgress(data) < 0) {
             NOODLES_AddTiming(data, start, &data->stats_fill_ticks);
             return -1;
-        }
-        if ((target == &data->composition
-                ? noodles_back_buffer_fill(data->link, rect, color)
-                : noodles_surface_fill(target->surface, rect, color)) < 0) {
-            NOODLES_AddTiming(data, start, &data->stats_fill_ticks);
-            return NOODLES_SetErrno("fill");
         }
     }
     if (data->stats_enabled) {
@@ -855,40 +860,31 @@ static int NOODLES_SubmitBlendFill(NOODLES_RenderData *data,
         return -1;
     }
     start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
-    if ((target == &data->composition
-            ? noodles_back_buffer_blend_fill(data->link, rect, color, blend_mode)
-            : noodles_surface_blend_fill(target->surface, rect, color,
-                                         blend_mode)) == 0) {
-        if (data->stats_enabled) {
-            data->stats_blend_fill_commands++;
-            data->stats_blend_fill_pixels += (Uint64)rect->width * rect->height;
+    for (;;) {
+        if ((target == &data->composition
+                ? noodles_back_buffer_blend_fill(data->link, rect, color, blend_mode)
+                : noodles_surface_blend_fill(target->surface, rect, color,
+                                             blend_mode)) == 0) {
+            break;
         }
-        NOODLES_AddTiming(data, start, &data->stats_fill_ticks);
-        return 0;
-    }
-    if (errno == EAGAIN) {
+        if (errno != EAGAIN) {
+            NOODLES_AddTiming(data, start, &data->stats_fill_ticks);
+            return NOODLES_SetErrno("blended fill");
+        }
         if (data->stats_enabled) {
             data->stats_blend_fill_stalls++;
         }
-        if (NOODLES_DrainLink(data) < 0) {
+        if (NOODLES_WaitProgress(data) < 0) {
             NOODLES_AddTiming(data, start, &data->stats_fill_ticks);
             return -1;
         }
-        if ((target == &data->composition
-                ? noodles_back_buffer_blend_fill(data->link, rect, color,
-                                                  blend_mode)
-                : noodles_surface_blend_fill(target->surface, rect, color,
-                                             blend_mode)) == 0) {
-            if (data->stats_enabled) {
-                data->stats_blend_fill_commands++;
-                data->stats_blend_fill_pixels += (Uint64)rect->width * rect->height;
-            }
-            NOODLES_AddTiming(data, start, &data->stats_fill_ticks);
-            return 0;
-        }
+    }
+    if (data->stats_enabled) {
+        data->stats_blend_fill_commands++;
+        data->stats_blend_fill_pixels += (Uint64)rect->width * rect->height;
     }
     NOODLES_AddTiming(data, start, &data->stats_fill_ticks);
-    return NOODLES_SetErrno("blended fill");
+    return 0;
 }
 
 static int NOODLES_FlushDraws(NOODLES_RenderData *data)
@@ -901,8 +897,11 @@ static int NOODLES_FlushDraws(NOODLES_RenderData *data)
         return 0;
     }
     start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
-    if (noodles_surface_draw_batch(data->link, data->pending_draw_target,
-                                   data->pending_draws, count) < 0) {
+    for (;;) {
+        if (noodles_surface_draw_batch(data->link, data->pending_draw_target,
+                                       data->pending_draws, count) == 0) {
+            break;
+        }
         if (errno != EAGAIN) {
             NOODLES_AddTiming(data, start, &data->stats_draw_ticks);
             return NOODLES_SetErrno("draw batch");
@@ -910,14 +909,9 @@ static int NOODLES_FlushDraws(NOODLES_RenderData *data)
         if (data->stats_enabled) {
             data->stats_draw_stalls++;
         }
-        if (NOODLES_DrainLink(data) < 0) {
+        if (NOODLES_WaitProgress(data) < 0) {
             NOODLES_AddTiming(data, start, &data->stats_draw_ticks);
             return -1;
-        }
-        if (noodles_surface_draw_batch(data->link, data->pending_draw_target,
-                                       data->pending_draws, count) < 0) {
-            NOODLES_AddTiming(data, start, &data->stats_draw_ticks);
-            return NOODLES_SetErrno("draw batch");
         }
     }
     NOODLES_AddTiming(data, start, &data->stats_draw_ticks);
@@ -2348,13 +2342,14 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
                     (unsigned long long)data->stats_primitive_vertices,
                     (unsigned long long)data->stats_geometry_commands,
                     (unsigned long long)data->stats_geometry_triangles);
-            SDL_Log("Noodles sync: uploads=%llu/%.3fMiB readbacks=%llu/%.3fMiB evictions=%llu drains=%llu resident=%.1fMiB shadow=%.1fMiB/%.1fMiB peak alloc=%llu free=%llu",
+            SDL_Log("Noodles sync: uploads=%llu/%.3fMiB readbacks=%llu/%.3fMiB evictions=%llu drains=%llu progress=%llu resident=%.1fMiB shadow=%.1fMiB/%.1fMiB peak alloc=%llu free=%llu",
                     (unsigned long long)data->stats_uploads,
                     (double)data->stats_upload_bytes / (1024.0 * 1024.0),
                     (unsigned long long)data->stats_readbacks,
                     (double)data->stats_readback_bytes / (1024.0 * 1024.0),
                     (unsigned long long)data->stats_evictions,
                     (unsigned long long)data->stats_drains,
+                    (unsigned long long)data->stats_progress_waits,
                     (double)data->resident_bytes / (1024.0 * 1024.0),
                     (double)data->shadow_bytes / (1024.0 * 1024.0),
                     (double)data->shadow_peak_bytes / (1024.0 * 1024.0),
@@ -2432,6 +2427,7 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
             data->stats_readback_bytes = 0;
             data->stats_evictions = 0;
             data->stats_drains = 0;
+            data->stats_progress_waits = 0;
             data->stats_shadow_allocations = 0;
             data->stats_shadow_releases = 0;
             data->stats_build_ticks = 0;

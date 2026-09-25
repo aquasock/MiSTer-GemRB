@@ -190,6 +190,8 @@ target. Texture updates made while a frame is in flight accumulate in their CPU 
 uploaded to fresh managed surfaces when their previous surfaces are still in use, letting the SDK retire the old copies
 at their fences. A second presentation, direct display readback or renderer teardown resolves the outstanding fence.
 The reported presentation wait is only the completion time that could not overlap.
+Transient command-ring or descriptor pressure waits for one verified command of forward progress before retrying; it
+does not drain through every later command or the queued presentation.
 The summary
 also reports accelerated opaque-fill, blended-fill, plain-draw and flagged-draw counts and pixels, fill- and sprite-batch
 counts and maximum sizes, submission stalls, CPU fallback work, uploads, readbacks, evictions, drains and current FPGA
