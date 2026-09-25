@@ -791,3 +791,34 @@ Add conservative alpha-state tracking to Noodles SDL render targets: full-surfac
 - [x] Passed
 
 ---
+
+## 26 COMMIT Unreleased ??? 2026-09-25T04:48:46-07:00
+
+#### Coming From:
+
+Unreleased 928fa97
+
+#### Purpose:
+
+Eliminate provably redundant standard-alpha work by tracking conservative whole-texture alpha state inside the generic Noodles SDL renderer.
+
+#### Outcome:
+
+The proposed SDL-only change tracks whether a texture is entirely opaque, entirely transparent or unknown, establishing state only from full-surface writes and preserving it only where SDL's alpha equations prove the result. Standard-alpha draws from a known-transparent source become no-ops, while known-opaque identity-modulated draws use the plain copy path; partial, unsupported or ambiguous writes invalidate state. The one-time forced readback probe is removed, and counters report skipped and converted pixels. GemRB, the SDK protocol and the RBF remain unchanged.
+
+#### Next Steps:
+
+Extend the exact-pixel diagnostic across full and partial updates, fills, target clears, plain copies, alpha blends, modulation and invalidation boundaries; rebuild SDL and the bundle; require exact pixels and audio; then compare stationary and active-panning frame timing with the captured baselines before deciding the span-list and dynamic blend-fast-path order.
+
+#### Files Modified:
+
+- README.md
+- sdl-renderer/noodles/SDL_render_noodles.c
+- tools/noodles-render-test.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
