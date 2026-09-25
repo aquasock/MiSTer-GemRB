@@ -762,7 +762,7 @@ Retain the asynchronous SDL path because it removes avoidable host serialization
 
 ---
 
-## 25 COMMIT Unreleased ??? 2026-09-25T04:19:35-07:00
+## 25 COMMIT Unreleased 928fa97 2026-09-25T04:19:35-07:00
 
 #### Coming From:
 
@@ -774,11 +774,11 @@ Classify GemRB's accelerated draw workload by blend mode and rectangle size so t
 
 #### Outcome:
 
-The proposed statistics-only SDL change divides submitted draw counts and pixels into plain, standard alpha blend, destination-independent modulation, additive or multiplicative, mirrored and custom-mode groups, and records pixel-area buckets for both draws and fills. It does not change command generation, ordering, pixels, GemRB, the SDK protocol or the RBF.
+Source `928fa97` adds statistics-only classification of submitted draws by hardware path, blend mode, mirroring, modulation and pixel-area bucket, plus sparse alpha sampling and a one-time read-only capture of each unique large GPU-generated blend source. Fresh SDL, diagnostic and bundle builds passed; the final diagnostic library SHA256 is `ba9254cdef028e4628ec0e050aaf9217242a9ede3c1f99660a6d26fe2b37777e`, the deployed stripped SDL SHA256 is `8e8fd83fd00ef07e19490bc10c673c0be71f5301135db535df896f5040b77481`, and the exact-pixel diagnostic twice produced hash `93f8e614` with audio passing. Stable paused windows held 20.1fps and showed 0.48 million plain-copy pixels per frame, including only 0.058 million alignment reroutes, while about 1.15 million pixels were true standard alpha blends. Roughly 1.11 million blend pixels came from six large draws per frame. Full captures found repeated 640x480 sources entirely opaque, one 800x600 source with 86,400 opaque and 153,600 transparent pairs, another 800x600 source entirely transparent, large edge surfaces entirely opaque, and only one 279x281 source with 247 partial pairs among 39,059. Two full-screen fills account for about 0.96 million additional pixels per frame. The data rules out copy alignment and alternate blend modes as primary targets and shows that known alpha coverage can eliminate most destination reads and blend work. GemRB, command generation, the SDK protocol and the RBF remain unchanged.
 
 #### Next Steps:
 
-Build and deploy the instrumented SDL library, require the existing exact-pixel diagnostic and audio check, then capture the same paused autosave long enough for stable five-second windows. Combine those categories with the accepted RBF's measured 136 Mpixel/s solid-fill, 67-76 Mpixel/s batched-copy and 66.1 Mpixel/s blend rates to choose the next Noodles RTL proposal.
+Add conservative alpha-state tracking to Noodles SDL render targets: full-surface writes establish opaque, transparent or unknown state; operations preserve a known state only when SDL alpha equations prove it; partial or unsupported writes invalidate it. Skip standard-alpha draws from known-transparent sources and submit known-opaque, identity-modulated standard-alpha draws through the plain copy path. Validate every transition and boundary in the exact-pixel diagnostic, then repeat this paused scene before considering the more complex RTL fallback that detects opaque and transparent pixel pairs dynamically.
 
 #### Files Modified:
 
@@ -787,7 +787,7 @@ Build and deploy the instrumented SDL library, require the existing exact-pixel 
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
