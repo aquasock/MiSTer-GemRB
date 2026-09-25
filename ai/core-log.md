@@ -1039,3 +1039,32 @@ Obtain user approval to retain queue-callback counts in ordinary statistics whil
 - [ ] Passed
 
 ---
+
+## 34 COMMIT Unreleased ??? 2026-09-25T11:34:26-07:00
+
+#### Coming From:
+
+Unreleased 35409f1
+
+#### Purpose:
+
+Compare diagnostics-off GemRB gameplay with CPU 0 affinity against allowing both ARM cores before selecting the launcher default.
+
+#### Outcome:
+
+This approved measurement defers further statistics-mode refinement because normal gameplay is close to the desired result. The deployed `35409f1` bundle and protocol-1.7 seed-13 core will run without renderer statistics, pacing probes, profilers or MPFE changes while the same AR4000 panning and combat path is compared with `MISTER_CPUS=0` and `MISTER_CPUS=0-1`; external read-only process inspection may record thread placement and scheduling without instrumenting GemRB.
+
+#### Next Steps:
+
+Run the controlled comparison on the MiSTer, retain CPU 0 unless allowing both cores produces a repeatable subjective improvement without moving the main thread onto the busy frontend core, and then proceed to the approved Kobold Commando heap-fault capture as a separate cycle.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
