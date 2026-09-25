@@ -43,6 +43,8 @@
 #define NOODLES_DRAW_BATCH_MAX 64u
 #define NOODLES_FILL_BATCH_MAX 64u
 #define NOODLES_SIZE_BUCKETS 5u
+#define NOODLES_PACING_SAMPLE_PERIOD 10u
+#define NOODLES_RAW_POLL_NS 500000L
 
 typedef enum NOODLES_AlphaState
 {
@@ -108,6 +110,7 @@ typedef struct NOODLES_RenderData
     SDL_bool present_pending;
     noodles_fence_t present_fence;
     noodles_fence_t present_draw_fence;
+    Uint64 pacing_wait_sequence;
     SDL_bool stats_enabled;
     SDL_bool in_command_queue;
     Uint64 stats_start;
@@ -124,6 +127,7 @@ typedef struct NOODLES_RenderData
     Uint64 stats_present_wait_ticks;
     Uint64 stats_present_wait_max_ticks;
     Uint64 stats_present_waits;
+    Uint64 stats_present_pacing_samples;
     Uint64 stats_present_draw_wait_ticks;
     Uint64 stats_present_flip_wait_ticks;
     Uint64 stats_present_flip_wait_max_ticks;
@@ -398,7 +402,7 @@ static void NOODLES_AddTiming(NOODLES_RenderData *data, Uint64 start,
    commands. Statistics use it to time completion exactly. */
 static int NOODLES_WaitRawFence(NOODLES_RenderData *data, noodles_fence_t target)
 {
-    const struct timespec step = {0, 20000};
+    const struct timespec step = {0, NOODLES_RAW_POLL_NS};
     const Uint64 deadline = SDL_GetTicks64() + NOODLES_DEFAULT_TIMEOUT_MS;
     while (((noodles_link_done_count(data->link) - target) & 0x7fffffffu) >= 0x40000000u) {
         if (SDL_GetTicks64() > deadline) {
@@ -420,12 +424,17 @@ static int NOODLES_WaitPresent(NOODLES_RenderData *data)
     Uint64 drawn;
     Uint64 flipped;
     Uint64 elapsed;
+    SDL_bool sample_pacing = SDL_FALSE;
     if (!data->present_pending) {
         return 0;
     }
     start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
     drawn = flipped = start;
     if (data->stats_enabled) {
+        sample_pacing = (data->pacing_wait_sequence++ %
+                         NOODLES_PACING_SAMPLE_PERIOD) == 0;
+    }
+    if (sample_pacing) {
         if (((noodles_link_done_count(data->link) - data->present_draw_fence) &
              0x7fffffffu) < 0x40000000u) {
             data->stats_present_drawn_early++;
@@ -456,7 +465,10 @@ static int NOODLES_WaitPresent(NOODLES_RenderData *data)
         data->stats_present_wait_max_ticks = SDL_max(
             data->stats_present_wait_max_ticks, elapsed);
         data->stats_present_waits++;
-        data->stats_present_confirm_ticks += now - flipped;
+        if (sample_pacing) {
+            data->stats_present_pacing_samples++;
+            data->stats_present_confirm_ticks += now - flipped;
+        }
     }
     return 0;
 }
@@ -2692,6 +2704,8 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
         if (interval_ticks >= frequency * 5u) {
             const double milliseconds = 1000.0 / (double)frequency;
             const double frame_count = (double)data->stats_frames;
+            const double pacing_count = data->stats_present_pacing_samples > 0 ?
+                (double)data->stats_present_pacing_samples : 1.0;
             double other_ticks = (double)interval_ticks -
                                  (double)data->stats_queue_ticks -
                                  (double)data->stats_present_ticks -
@@ -2738,13 +2752,15 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
                                                           &involuntary);
                 const SDL_bool have_usage = usage == 0 && data->stats_thread_user +
                     data->stats_thread_system + data->stats_thread_voluntary != 0;
-                SDL_Log("Noodles pacing: present-wait draw=%.3f ms flip=%.3f ms avg/%.3f max confirm=%.3f ms drawn-before-wait=%llu/%llu; main thread user=%.1f%% sys=%.1f%% voluntary-switches=%.1f involuntary=%.1f per frame",
-                        (double)data->stats_present_draw_wait_ticks * milliseconds / frame_count,
-                        (double)data->stats_present_flip_wait_ticks * milliseconds / frame_count,
+                SDL_Log("Noodles pacing: present-wait draw=%.3f ms flip=%.3f ms avg/%.3f max confirm=%.3f ms sampled=%llu/%llu drawn-before-wait=%llu/%llu; main thread user=%.1f%% sys=%.1f%% voluntary-switches=%.1f involuntary=%.1f per frame",
+                        (double)data->stats_present_draw_wait_ticks * milliseconds / pacing_count,
+                        (double)data->stats_present_flip_wait_ticks * milliseconds / pacing_count,
                         (double)data->stats_present_flip_wait_max_ticks * milliseconds,
-                        (double)data->stats_present_confirm_ticks * milliseconds / frame_count,
-                        (unsigned long long)data->stats_present_drawn_early,
+                        (double)data->stats_present_confirm_ticks * milliseconds / pacing_count,
+                        (unsigned long long)data->stats_present_pacing_samples,
                         (unsigned long long)data->stats_present_waits,
+                        (unsigned long long)data->stats_present_drawn_early,
+                        (unsigned long long)data->stats_present_pacing_samples,
                         have_usage ? (double)(user - data->stats_thread_user) * 100.0 /
                                      (double)clock_ticks / seconds : 0.0,
                         have_usage ? (double)(system - data->stats_thread_system) * 100.0 /
@@ -2894,6 +2910,7 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
             data->stats_present_wait_ticks = 0;
             data->stats_present_wait_max_ticks = 0;
             data->stats_present_waits = 0;
+            data->stats_present_pacing_samples = 0;
             data->stats_present_draw_wait_ticks = 0;
             data->stats_present_flip_wait_ticks = 0;
             data->stats_present_flip_wait_max_ticks = 0;

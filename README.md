@@ -194,10 +194,11 @@ target. Texture updates made while a frame is in flight accumulate in their CPU 
 uploaded to fresh managed surfaces when their previous surfaces are still in use, letting the SDK retire the old copies
 at their fences. A second presentation, direct display readback or renderer teardown resolves the outstanding fence.
 The reported presentation wait is only the completion time that could not overlap.
-A pacing line splits that wait, using the core's raw completion count, into draw commands still running before the
-pending `PRESENT`, the remaining flip and vertical-blank interval, and the SDK's confirmation of the completed fence, which
-the core answers only between commands. It counts frames whose draws had already finished when the wait began and reports
-the rendering thread's user and system CPU share and context switches per frame. With three display buffers the flip
+A pacing line samples every tenth presentation wait and polls the core's raw completion count at 0.5 ms intervals. It
+splits each sample into draw commands still running before the pending `PRESENT`, the remaining flip and vertical-blank
+interval, and the SDK's confirmation of the completed fence, which the core answers only between commands. The line
+reports its sample count, samples whose draws had already finished when the wait began, and the rendering thread's user
+and system CPU share and context switches per frame. With three display buffers the flip
 part is instead the wait for the core to accept the queued flip, which happens once the previous flip has retired.
 Set `SDL_RENDER_NOODLES_BUFFERS=2` to keep the two-buffer presentation path on a protocol 1.7 core for comparison.
 Transient command-ring or descriptor pressure waits for one verified command of forward progress before retrying; it
