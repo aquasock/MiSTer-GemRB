@@ -1009,3 +1009,33 @@ Obtain user approval to remove raw-fence pacing probes from ordinary `SDL_RENDER
 - [ ] Passed
 
 ---
+
+## 33 COMMIT Unreleased ??? 2026-09-25T11:24:28-07:00
+
+#### Coming From:
+
+Unreleased c80f452
+
+#### Purpose:
+
+Remove raw-fence pacing probes from ordinary Noodles statistics while retaining them as a separately requested diagnostic.
+
+#### Outcome:
+
+The approved change will make `SDL_RENDER_NOODLES_STATS=1` use the same SDK presentation wait as normal play while retaining its workload, callback, aggregate timing and scheduler counters. A new `SDL_RENDER_NOODLES_PACING=1` setting, effective only with statistics enabled, will opt into the sampled raw draw and flip boundary measurements from `c80f452`; logs and documentation will distinguish ordinary statistics from the intentionally intrusive pacing diagnostic.
+
+#### Next Steps:
+
+Build SDL, the exact-pixel diagnostic and the complete bundle, pass exact pixels and HDMI audio on the protocol-1.7 seed-13 core, then compare ordinary statistics against statistics-disabled AR4000 panning, combat and video before accepting the change or proceeding to the CPU-affinity comparison.
+
+#### Files Modified:
+
+- sdl-renderer/noodles/SDL_render_noodles.c
+- README.md
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
