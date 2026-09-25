@@ -949,3 +949,33 @@ Leave the preloader arbitration unchanged, retaining `mpu` as the best synthetic
 - [x] Passed
 
 ---
+
+## 31 COMMIT Unreleased ??? 2026-09-25T10:49:16-07:00
+
+#### Coming From:
+
+Unreleased 3dd6632
+
+#### Purpose:
+
+Run GemRB on the ARM core that the MiSTer frontend leaves idle instead of inheriting the frontend's CPU 1 affinity.
+
+#### Outcome:
+
+Profiling combat found the MiSTer frontend pinned to CPU 1 and nearly saturating it, while every GemRB and `noodles-launcher` thread carried the inherited `Cpus_allowed_list` of 1, CPU 0 stayed almost idle, and the main thread's scheduler statistics showed 206s running against 217s waiting to run. In one continuous fight with the three-buffer image, moving the live process between CPUs every 15 seconds gave 17.4fps mean and 8.1fps worst on CPU 1 against 24.2fps mean and 20.8fps worst on CPU 0, CPU 0 won every paired interval, and the two 8fps collapses, with 106-109ms per frame outside the renderer and about 33 involuntary context switches per frame, occurred only on CPU 1. The user found combat better with a temporary watcher that pinned each relaunch to CPU 0, though the known Kobold Commando heap fault, reported as `malloc(): unaligned tcache chunk detected`, ended those sessions. Panning remained CPU-bound on CPU 0 at 18-21fps with 1,800-2,700 wall-stencil fill calls and 68-70% main-thread CPU per frame. The proposed source makes the generated `run.sh`, used by the Noodles and software launchers, set its own affinity with `taskset` before starting GemRB or gdb, from `MISTER_CPUS` in `env.sh` with CPU 0 as the default.
+
+#### Next Steps:
+
+Rebuild and deploy the bundle, confirm that a normal Noodles launch places every GemRB thread on CPU 0, and repeat paused and combat captures. Then compare `MISTER_CPUS=0-1` against CPU 0 alone, and address panning with one batched fill per wall polygon before the approved Noodles verification and pipeline-buffer cycles.
+
+#### Files Modified:
+
+- README.md
+- scripts/bundle.sh
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
