@@ -2,7 +2,7 @@
    the shared DDR3 controller.
 
    A measuring thread pinned to CPU 0 times dependent-load latency over a
-   buffer much larger than the caches, streaming read bandwidth and copy
+   buffer much larger than the caches and streaming read, write and copy
    bandwidth. Each phase repeats those measurements while a load thread
    pinned to CPU 1 keeps the engine idle or busy with full-surface fills,
    plain draws, standard-alpha blends or a mix of the three between
@@ -163,6 +163,21 @@ static double measure_read(const uint64_t *buffer)
     return (double)bytes / elapsed * 1e-3;
 }
 
+static double measure_write(void *to)
+{
+    uint64_t bytes = 0;
+    const double start = now_ms();
+    double elapsed;
+    unsigned value = 0;
+    do {
+        memset(to, (int)(value++ & 0xff), STREAM_BYTES);
+        __asm__ volatile("" : : "r"(to) : "memory");  /* the stores are the result */
+        bytes += STREAM_BYTES;
+        elapsed = now_ms() - start;
+    } while (elapsed < MEASURE_MS);
+    return (double)bytes / elapsed * 1e-3;
+}
+
 static double measure_copy(void *to, const void *from)
 {
     uint64_t bytes = 0;
@@ -170,13 +185,14 @@ static double measure_copy(void *to, const void *from)
     double elapsed;
     do {
         memcpy(to, from, STREAM_BYTES);
+        __asm__ volatile("" : : "r"(to) : "memory");  /* the stores are the result */
         bytes += STREAM_BYTES;
         elapsed = now_ms() - start;
     } while (elapsed < MEASURE_MS);
     return (double)bytes / elapsed * 1e-3;
 }
 
-typedef struct { double engine, latency, read, copy; } result;
+typedef struct { double engine, latency, read, write, copy; } result;
 
 static result run_phase(load_kind kind, void **chase, uint64_t *stream, void *copy_to)
 {
@@ -194,6 +210,7 @@ static result run_phase(load_kind kind, void **chase, uint64_t *stream, void *co
     }
     r.latency = measure_latency(chase);
     r.read = measure_read(stream);
+    r.write = measure_write(copy_to);
     r.copy = measure_copy(copy_to, stream);
     if (kind != LOAD_NONE) {
         stop_load = 1;
@@ -211,7 +228,7 @@ int main(void)
     void **chase;
     uint64_t *stream;
     void *copy_to;
-    result idle = {0, 0, 0, 0};
+    result idle = {0, 0, 0, 0, 0};
     size_t i;
 
     pin(0);
@@ -234,14 +251,16 @@ int main(void)
 
     printf("ARM memory on CPU 0 while CPU 1 drives the engine (latency: %u MiB dependent chain; "
            "bandwidth: %u MiB buffers)\n", CHASE_BYTES >> 20, STREAM_BYTES >> 20);
-    printf("%-11s %9s %11s %7s %10s %7s %10s %7s\n", "engine load", "Mpix/s", "latency ns",
-           "x idle", "read MB/s", "% idle", "copy MB/s", "% idle");
+    printf("%-11s %8s %10s %6s %9s %6s %10s %6s %9s %6s\n", "engine load", "Mpix/s",
+           "latency ns", "x idle", "read MB/s", "% idle", "write MB/s", "% idle", "copy MB/s",
+           "% idle");
     for (i = 0; i < sizeof(phases) / sizeof(phases[0]); ++i) {
         const result r = run_phase(phases[i], chase, stream, copy_to);
         if (i == 0) idle = r;
-        printf("%-11s %9.1f %11.1f %7.2f %10.0f %7.1f %10.0f %7.1f\n", load_names[phases[i]],
-               r.engine, r.latency, r.latency / idle.latency, r.read, r.read * 100.0 / idle.read,
-               r.copy, r.copy * 100.0 / idle.copy);
+        printf("%-11s %8.1f %10.1f %6.2f %9.0f %6.1f %10.0f %6.1f %9.0f %6.1f\n",
+               load_names[phases[i]], r.engine, r.latency, r.latency / idle.latency, r.read,
+               r.read * 100.0 / idle.read, r.write, r.write * 100.0 / idle.write, r.copy,
+               r.copy * 100.0 / idle.copy);
     }
 
     noodles_surface_destroy(half);
