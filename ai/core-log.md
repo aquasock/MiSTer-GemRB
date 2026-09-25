@@ -1098,7 +1098,7 @@ None.
 
 ---
 
-## 36 COMMIT Unreleased ??? 2026-09-25T12:10:41-07:00
+## 36 COMMIT Unreleased 6bcd48e 2026-09-25T12:10:41-07:00
 
 #### Coming From:
 
@@ -1110,11 +1110,11 @@ Backport the upstream GemRB animation-ownership correction that prevents deplete
 
 #### Outcome:
 
-The approved change will add a narrow GemRB 0.9.5 patch derived from the `Actor.h` and `Actor.cpp` portion of upstream commit `6041dd8c`, replacing raw `Animation*` entries in `currentStance` with existing managed `Holder<Animation>` references and adjusting only the affected local uses. It will not import the remainder of upstream's sixteen-file animation-lifetime refactor or alter SDL, the Noodles renderer, FPGA logic, audio, affinity or launcher behavior.
+Source `6bcd48e` adds a narrow GemRB 0.9.5 patch derived from the `Actor.h` and `Actor.cpp` portion of upstream commit `6041dd8c`. It replaces raw `Animation*` entries in `currentStance` with existing managed `Holder<Animation>` references and adjusts eight affected local ownership or access sites, without importing the remainder of upstream's sixteen-file animation-lifetime refactor or altering SDL, the Noodles renderer, FPGA logic, audio, affinity or launcher behavior. The patch applied cleanly and idempotently, the normal bundle and matching ARM AddressSanitizer diagnostic built successfully with only existing alignment warnings, and the normal bundle was deployed with core-library SHA256 `9cef1e56fdb017b0e10ef8e6bac8eb774c97b48a65d85086e0c045c1322da514`; the unchanged deployed SDL SHA256 remains `5d76ce7c30287bd55734cd63aa126406cc6bbd2d77bfc8c376f8dfa6547e00ba`.
 
 #### Next Steps:
 
-Apply the patch cleanly to the pinned GemRB source, build the normal bundle and an AddressSanitizer diagnostic, deploy the normal build, and repeat the depleted-ammunition Kobold battle; if normal gameplay completes, run one final sanitizer reproduction to prove the captured use-after-free is absent before resuming performance work.
+Repeat the depleted-ammunition Kobold battle with the deployed normal build; if normal gameplay completes, deploy the matching sanitizer build for one final reproduction to prove the captured use-after-free is absent, restore the normal bundle, and then resume performance work.
 
 #### Files Modified:
 
@@ -1122,7 +1122,7 @@ Apply the patch cleanly to the pinned GemRB source, build the normal bundle and 
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
