@@ -1272,7 +1272,7 @@ None.
 
 ---
 
-## 42 COMMIT Unreleased ??? 2026-09-25T13:35:54-07:00
+## 42 COMMIT Unreleased 8b0c829 2026-09-25T13:35:54-07:00
 
 #### Coming From:
 
@@ -1284,11 +1284,11 @@ Implement the accepted hybrid CPU-affinity layout deterministically in the launc
 
 #### Outcome:
 
-Planned. Threads inherit the affinity of the thread that creates them, so pinning the main thread alone would also confine every later thread to CPU 0. A small preloaded library, built from a new `tools/mister-affinity.c` into the bundle's `libs`, will record the process mask applied by `run.sh`, pin the main thread in its constructor to `MISTER_MAIN_CPUS`, default CPU 0, and wrap `pthread_create` so each new SDL or GemRB thread restores the recorded process mask before running its start routine. It logs the applied masks once, adds no watcher process or polling, and leaves the main thread unpinned with a message if its CPUs are outside the process mask. `run.sh` will default `MISTER_CPUS` to `0-1`, preload the library in both the normal and `MISTER_DEBUG` paths alongside any heap-checking preload, and append the swap-in and swap-out page counts accumulated during the run to `last-run.log`; `MISTER_CPUS=0` reproduces the previous CPU-0-only layout. Renderer, FPGA, audio and GemRB sources are unchanged.
+Threads inherit the affinity of the thread that creates them, so pinning the main thread alone would also confine every later thread to CPU 0. Source `8b0c829` adds `tools/mister-affinity.c`, built into the bundle as `libs/libmister-affinity.so`. When preloaded it records the process mask applied by `run.sh`, pins the main thread in its constructor to `MISTER_MAIN_CPUS`, default CPU 0, and wraps `pthread_create` so each new SDL or GemRB thread, including threads created by other threads, restores the recorded process mask before running its start routine. It reports the applied masks once on standard error, adds no watcher process or polling, and wraps nothing when the two masks are equal; an invalid `MISTER_MAIN_CPUS` or one outside the process mask leaves every thread on the process mask with a message. `run.sh` now defaults `MISTER_CPUS` to `0-1`, preloads the library in the normal path and after any heap-checking library in the `MISTER_DEBUG` path, and appends the swap-in and swap-out page counts accumulated during the run to `last-run.log`; `MISTER_CPUS=0` reproduces the previous CPU-0-only layout. Renderer, FPGA, audio and GemRB sources are unchanged. A host build of the library confirmed the main, child and grandchild masks for pthread and `std::thread` creation with default, custom, out-of-range and invalid main-CPU lists. The bundle built with the library warning-free under `-Werror`; its SHA256 is `25418a29743d4f23e8b8e8cc8602bf34ca10c57b5ae4e0b22feaef087097487c` and `run.sh` is `216fc0445bdf8ef049bfe5f8e5b010b622fab009e8d7df2f03d42d128694b6d3`, while the core library `19dbda6e6de5ed717fcb93e2cf247118f422fde1e01bc1bda9254c024d467e3e` and SDLVideo `5d76ce7c30287bd55734cd63aa126406cc6bbd2d77bfc8c376f8dfa6547e00ba` match the accepted `c904d9a` normal build. Deployment was not possible because the MiSTer at 10.10.0.22 did not answer ping or ssh.
 
 #### Next Steps:
 
-Build and deploy the bundle, then enable the existing USB swap for this regression only by setting `MISTER_SWAP=usb` in the MiSTer's `env.sh`, because Entry 41 showed the no-swap target reaching the OOM killer after the next area loaded. Verify the thread masks once after startup, then repeat a short diagnostics-off panning, depleted-ammunition Kobold combat and area-transition regression, and record smoothness together with the swap counts. The memory-growth investigation follows as a separate cycle.
+When the MiSTer is reachable, deploy the bundle and set `MISTER_SWAP=usb` in its `env.sh` for this regression only, because Entry 41 showed the no-swap target reaching the OOM killer after the next area loaded. Verify the main and non-main thread masks once after startup, then repeat a short diagnostics-off panning, depleted-ammunition Kobold combat and area-transition regression and record smoothness together with the swap counts from `last-run.log`. The memory-growth investigation follows as a separate cycle.
 
 #### Files Modified:
 
@@ -1298,7 +1298,7 @@ Build and deploy the bundle, then enable the existing USB swap for this regressi
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
