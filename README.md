@@ -186,7 +186,9 @@ SDL command-queue time, presentation submission time, deferred presentation-wait
 Detailed timing separates fills, sprite batches and synchronization. `SDL_RenderPresent` leaves one submitted frame in
 flight so the application can prepare its next SDL command list while the FPGA renders and performs the vertical-blank
 handoff. The next renderer operation that needs the Noodles link resolves that fence first, preserving command order,
-buffer ownership and texture hazards; the reported presentation wait is only the completion time that could not overlap.
+buffer ownership and texture hazards. Texture updates made while a frame is in flight accumulate in their CPU shadows;
+their dirty rectangles are uploaded after the fence and before the next draw that uses them. The reported presentation
+wait is only the completion time that could not overlap.
 The summary
 also reports accelerated opaque-fill, blended-fill, plain-draw and flagged-draw counts and pixels, fill- and sprite-batch
 counts and maximum sizes, submission stalls, CPU fallback work, uploads, readbacks, evictions, drains and current FPGA

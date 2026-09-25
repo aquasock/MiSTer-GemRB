@@ -109,7 +109,8 @@ static int render_copy(SDL_Renderer *renderer, SDL_Texture *texture, int x,
 }
 
 static int draw_display_and_check(SDL_Renderer *renderer, SDL_Texture *target,
-                                  uint32_t expected, const char *phase)
+                                  uint32_t expected, SDL_Texture *marker,
+                                  uint32_t marker_expected, const char *phase)
 {
     SDL_Rect rect;
     uint32_t pixel;
@@ -126,6 +127,17 @@ static int draw_display_and_check(SDL_Renderer *renderer, SDL_Texture *target,
         SDL_RenderCopy(renderer, target, NULL, &rect) < 0) {
         fprintf(stderr, "%s display copy: %s\n", phase, SDL_GetError());
         return -1;
+    }
+    if (marker) {
+        rect = (SDL_Rect){ 700, 500, 16, 16 };
+        if (SDL_SetTextureBlendMode(marker, SDL_BLENDMODE_NONE) < 0 ||
+            SDL_SetTextureColorMod(marker, 255, 255, 255) < 0 ||
+            SDL_SetTextureAlphaMod(marker, 255) < 0 ||
+            SDL_RenderCopy(renderer, marker, NULL, &rect) < 0) {
+            fprintf(stderr, "%s deferred-update copy: %s\n",
+                    phase, SDL_GetError());
+            return -1;
+        }
     }
     rect = (SDL_Rect){ 10, 10, 4, 4 };
     if (SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND) < 0 ||
@@ -145,6 +157,16 @@ static int draw_display_and_check(SDL_Renderer *renderer, SDL_Texture *target,
         fprintf(stderr, "%s default-target regional result: got %08x\n",
                 phase, pixel);
         return -1;
+    }
+    if (marker) {
+        rect = (SDL_Rect){ 700, 500, 1, 1 };
+        if (SDL_RenderReadPixels(renderer, &rect, SDL_PIXELFORMAT_ABGR8888,
+                                 &pixel, 4) < 0 || pixel != marker_expected) {
+            fprintf(stderr,
+                    "%s deferred-update result: got %08x expected %08x\n",
+                    phase, pixel, marker_expected);
+            return -1;
+        }
     }
     rect = (SDL_Rect){ (800 - WIDTH) / 2 + 25,
                        (600 - HEIGHT) / 2 + 100, 1, 1 };
@@ -745,7 +767,7 @@ int main(int argc, char **argv)
         goto done;
     }
 
-    if (draw_display_and_check(renderer, target, p2, "initial") < 0) {
+    if (draw_display_and_check(renderer, target, p2, NULL, 0, "initial") < 0) {
         goto done;
     }
     SDL_ClearError();
@@ -757,7 +779,13 @@ int main(int argc, char **argv)
     /* The first present remains in flight. These commands and their readback
        require the renderer to resolve that fence before using the next back
        buffer, then the second present tests another asynchronous handoff. */
-    if (draw_display_and_check(renderer, target, p2, "post-present") < 0) {
+    rect = (SDL_Rect){ 0, 0, 1, 1 };
+    if (SDL_UpdateTexture(texture, &rect, &p4, 4) < 0) {
+        fprintf(stderr, "deferred texture update: %s\n", SDL_GetError());
+        goto done;
+    }
+    if (draw_display_and_check(renderer, target, p2, texture, p4,
+                               "post-present") < 0) {
         goto done;
     }
     SDL_ClearError();

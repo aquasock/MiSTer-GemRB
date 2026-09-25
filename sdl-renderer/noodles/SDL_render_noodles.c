@@ -53,6 +53,8 @@ typedef struct NOODLES_TextureData
     SDL_bool keep_shadow;
     SDL_Rect lock_rect;
     SDL_bool locked;
+    SDL_Rect dirty_rect;
+    SDL_bool dirty_valid;
     SDL_bool pinned;
     size_t resident_bytes;
     Uint64 last_use;
@@ -140,6 +142,7 @@ typedef struct NOODLES_RenderData
     Uint64 stats_update_ticks;
     Uint64 stats_update_calls;
     Uint64 stats_update_bytes;
+    Uint64 stats_update_deferred;
     Uint64 stats_lock_ticks;
     Uint64 stats_lock_calls;
     Uint64 stats_lock_bytes;
@@ -337,6 +340,28 @@ static void NOODLES_DropRedundantShadow(NOODLES_RenderData *data,
     }
 }
 
+static void NOODLES_ClearDirty(NOODLES_TextureData *surface)
+{
+    surface->dirty_valid = SDL_FALSE;
+}
+
+static void NOODLES_MarkDirty(NOODLES_TextureData *surface,
+                              const SDL_Rect *rect)
+{
+    if (surface->dirty_valid) {
+        SDL_UnionRect(&surface->dirty_rect, rect, &surface->dirty_rect);
+    } else {
+        surface->dirty_rect = *rect;
+        surface->dirty_valid = SDL_TRUE;
+    }
+}
+
+static void NOODLES_MarkAllDirty(NOODLES_TextureData *surface)
+{
+    SDL_Rect rect = { 0, 0, surface->width, surface->height };
+    NOODLES_MarkDirty(surface, &rect);
+}
+
 static int NOODLES_InitSurface(NOODLES_RenderData *data, int width, int height,
                                SDL_bool pinned, NOODLES_TextureData *surface)
 {
@@ -519,6 +544,8 @@ static int NOODLES_MakeResident(NOODLES_RenderData *data,
 static int NOODLES_EnsureGPU(NOODLES_RenderData *data, NOODLES_TextureData *surface)
 {
     noodles_rect_t rect;
+    const void *pixels;
+    const SDL_bool partial = surface->surface && surface->dirty_valid;
     if ((((surface != &data->composition) && !surface->surface) ||
          !surface->gpu_valid) &&
         NOODLES_FlushQueued(data) < 0) {
@@ -534,12 +561,23 @@ static int NOODLES_EnsureGPU(NOODLES_RenderData *data, NOODLES_TextureData *surf
     if (!surface->cpu_valid) {
         return SDL_SetError("Noodles surface has no current contents");
     }
-    rect.x = 0;
-    rect.y = 0;
-    rect.width = (Uint32)surface->width;
-    rect.height = (Uint32)surface->height;
+    if (partial) {
+        rect.x = surface->dirty_rect.x;
+        rect.y = surface->dirty_rect.y;
+        rect.width = (Uint32)surface->dirty_rect.w;
+        rect.height = (Uint32)surface->dirty_rect.h;
+        pixels = (const Uint8 *)surface->shadow->pixels +
+                 surface->dirty_rect.y * surface->shadow->pitch +
+                 surface->dirty_rect.x * 4;
+    } else {
+        rect.x = 0;
+        rect.y = 0;
+        rect.width = (Uint32)surface->width;
+        rect.height = (Uint32)surface->height;
+        pixels = surface->shadow->pixels;
+    }
     if (NOODLES_SurfaceUpdate(data, surface->surface, &rect,
-                              surface->shadow->pixels,
+                              pixels,
                               (size_t)surface->shadow->pitch) < 0) {
         return NOODLES_SetErrno("fallback upload");
     }
@@ -548,6 +586,7 @@ static int NOODLES_EnsureGPU(NOODLES_RenderData *data, NOODLES_TextureData *surf
         data->stats_upload_bytes += (Uint64)rect.width * rect.height * 4u;
     }
     surface->gpu_valid = SDL_TRUE;
+    NOODLES_ClearDirty(surface);
     NOODLES_DropRedundantShadow(data, surface);
     return 0;
 }
@@ -609,6 +648,7 @@ static int NOODLES_CommitCPURegion(NOODLES_RenderData *data,
         data->stats_upload_bytes += (Uint64)rect.width * rect.height * 4u;
     }
     surface->gpu_valid = SDL_TRUE;
+    NOODLES_ClearDirty(surface);
     NOODLES_TouchSurface(data, surface);
     return 0;
 }
@@ -617,12 +657,14 @@ static void NOODLES_MarkGPUWrite(NOODLES_TextureData *surface)
 {
     surface->gpu_valid = SDL_TRUE;
     surface->cpu_valid = SDL_FALSE;
+    NOODLES_ClearDirty(surface);
 }
 
 static void NOODLES_MarkCPUWrite(NOODLES_TextureData *surface)
 {
     surface->cpu_valid = SDL_TRUE;
     surface->gpu_valid = SDL_FALSE;
+    NOODLES_MarkAllDirty(surface);
 }
 
 static int NOODLES_FlushFills(NOODLES_RenderData *data)
@@ -936,9 +978,7 @@ static int NOODLES_UpdateTextureImpl(SDL_Renderer *renderer, SDL_Texture *textur
     int row;
     const SDL_bool gpu_was_valid = texturedata->gpu_valid;
 
-    if (!texturedata->shadow && texturedata->gpu_valid) {
-        texturedata->keep_shadow = SDL_TRUE;
-    }
+    texturedata->keep_shadow = SDL_TRUE;
     if (NOODLES_EnsureCPU(data, texturedata) < 0) {
         return -1;
     }
@@ -953,7 +993,8 @@ static int NOODLES_UpdateTextureImpl(SDL_Renderer *renderer, SDL_Texture *textur
 
     texturedata->cpu_valid = SDL_TRUE;
     texturedata->gpu_valid = SDL_FALSE;
-    if (texturedata->surface && gpu_was_valid) {
+    NOODLES_MarkDirty(texturedata, rect);
+    if (texturedata->surface && gpu_was_valid && !data->present_pending) {
         update_rect.x = rect->x;
         update_rect.y = rect->y;
         update_rect.width = (Uint32)rect->w;
@@ -967,8 +1008,11 @@ static int NOODLES_UpdateTextureImpl(SDL_Renderer *renderer, SDL_Texture *textur
             data->stats_upload_bytes += (Uint64)update_rect.width * update_rect.height * 4u;
         }
         texturedata->gpu_valid = SDL_TRUE;
+        NOODLES_ClearDirty(texturedata);
         NOODLES_TouchSurface(data, texturedata);
         NOODLES_DropRedundantShadow(data, texturedata);
+    } else if (data->present_pending && data->stats_enabled) {
+        data->stats_update_deferred++;
     }
     return 0;
 }
@@ -977,8 +1021,10 @@ static int NOODLES_UpdateTexture(SDL_Renderer *renderer, SDL_Texture *texture,
                                  const SDL_Rect *rect, const void *pixels, int pitch)
 {
     NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
+    NOODLES_TextureData *texturedata = (NOODLES_TextureData *)texture->driverdata;
     Uint64 start;
-    if (NOODLES_WaitPresent(data) < 0) {
+    if ((!texturedata->shadow || !texturedata->cpu_valid) &&
+        NOODLES_WaitPresent(data) < 0) {
         return -1;
     }
     start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
@@ -1000,9 +1046,7 @@ static int NOODLES_LockTextureImpl(SDL_Renderer *renderer, SDL_Texture *texture,
     if (texturedata->locked) {
         return SDL_SetError("Noodles texture is not lockable");
     }
-    if (!texturedata->shadow && texturedata->gpu_valid) {
-        texturedata->keep_shadow = SDL_TRUE;
-    }
+    texturedata->keep_shadow = SDL_TRUE;
     if (NOODLES_EnsureCPU(data, texturedata) < 0) {
         return -1;
     }
@@ -1018,8 +1062,10 @@ static int NOODLES_LockTexture(SDL_Renderer *renderer, SDL_Texture *texture,
                                const SDL_Rect *rect, void **pixels, int *pitch)
 {
     NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
+    NOODLES_TextureData *texturedata = (NOODLES_TextureData *)texture->driverdata;
     Uint64 start;
-    if (NOODLES_WaitPresent(data) < 0) {
+    if ((!texturedata->shadow || !texturedata->cpu_valid) &&
+        NOODLES_WaitPresent(data) < 0) {
         return -1;
     }
     start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
@@ -1047,6 +1093,7 @@ static void NOODLES_UnlockTextureImpl(SDL_Renderer *renderer, SDL_Texture *textu
     texturedata->locked = SDL_FALSE;
     texturedata->cpu_valid = SDL_TRUE;
     texturedata->gpu_valid = SDL_FALSE;
+    NOODLES_MarkDirty(texturedata, &texturedata->lock_rect);
     if (!texturedata->surface) {
         return;
     }
@@ -1067,6 +1114,12 @@ static void NOODLES_UnlockTextureImpl(SDL_Renderer *renderer, SDL_Texture *textu
         pixels = texturedata->shadow->pixels;
         pitch = (size_t)texturedata->shadow->pitch;
     }
+    if (data->present_pending) {
+        if (data->stats_enabled) {
+            data->stats_update_deferred++;
+        }
+        return;
+    }
     if (NOODLES_SurfaceUpdate(data, texturedata->surface, &rect,
                               pixels, pitch) == 0) {
         if (data->stats_enabled) {
@@ -1074,6 +1127,7 @@ static void NOODLES_UnlockTextureImpl(SDL_Renderer *renderer, SDL_Texture *textu
             data->stats_upload_bytes += (Uint64)rect.width * rect.height * 4u;
         }
         texturedata->gpu_valid = SDL_TRUE;
+        NOODLES_ClearDirty(texturedata);
         NOODLES_TouchSurface(data, texturedata);
         NOODLES_DropRedundantShadow(data, texturedata);
     } else {
@@ -1085,9 +1139,6 @@ static void NOODLES_UnlockTexture(SDL_Renderer *renderer, SDL_Texture *texture)
 {
     NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
     Uint64 start;
-    if (NOODLES_WaitPresent(data) < 0) {
-        return;
-    }
     start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
     NOODLES_UnlockTextureImpl(renderer, texture);
     if (data->stats_enabled) {
@@ -2217,7 +2268,7 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
                     (double)data->shadow_peak_bytes / (1024.0 * 1024.0),
                     (unsigned long long)data->stats_shadow_allocations,
                     (unsigned long long)data->stats_shadow_releases);
-            SDL_Log("Noodles callbacks: build=%.3fms/%llu calls (state=%llu primitive=%llu fill=%llu merged=%llu copy=%llu copyex=%llu geometry=%llu) create=%.3fms/%llu update=%.3fms/%llu/%.3fMiB lock=%.3fms/%llu/%.3fMiB unlock=%.3fms/%llu target=%.3fms/%llu read=%.3fms/%llu/%.3fMiB destroy=%.3fms/%llu avg/frame",
+            SDL_Log("Noodles callbacks: build=%.3fms/%llu calls (state=%llu primitive=%llu fill=%llu merged=%llu copy=%llu copyex=%llu geometry=%llu) create=%.3fms/%llu update=%.3fms/%llu/%.3fMiB deferred=%llu lock=%.3fms/%llu/%.3fMiB unlock=%.3fms/%llu target=%.3fms/%llu read=%.3fms/%llu/%.3fMiB destroy=%.3fms/%llu avg/frame",
                     (double)data->stats_build_ticks * milliseconds / frame_count,
                     (unsigned long long)data->stats_build_calls,
                     (unsigned long long)data->stats_build_state_calls,
@@ -2232,6 +2283,7 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
                     (double)data->stats_update_ticks * milliseconds / frame_count,
                     (unsigned long long)data->stats_update_calls,
                     (double)data->stats_update_bytes / (1024.0 * 1024.0),
+                    (unsigned long long)data->stats_update_deferred,
                     (double)data->stats_lock_ticks * milliseconds / frame_count,
                     (unsigned long long)data->stats_lock_calls,
                     (double)data->stats_lock_bytes / (1024.0 * 1024.0),
@@ -2303,6 +2355,7 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
             data->stats_update_ticks = 0;
             data->stats_update_calls = 0;
             data->stats_update_bytes = 0;
+            data->stats_update_deferred = 0;
             data->stats_lock_ticks = 0;
             data->stats_lock_calls = 0;
             data->stats_lock_bytes = 0;
