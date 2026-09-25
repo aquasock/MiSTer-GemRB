@@ -1069,7 +1069,7 @@ None.
 
 ---
 
-## 35 COMMIT Unreleased ??? 2026-09-25T11:41:35-07:00
+## 35 COMMIT Unreleased 35409f1 2026-09-25T11:41:35-07:00
 
 #### Coming From:
 
@@ -1081,11 +1081,11 @@ Capture the reproducible Baldur's Gate II Kobold Commando heap corruption at its
 
 #### Outcome:
 
-The approved diagnostic will keep the accepted CPU 0 affinity, protocol-1.7 seed-13 core, default MPFE arbitration and renderer statistics disabled, build and deploy matching unstripped GemRB and SDL debug files, and launch the same AR4000 save with `MISTER_DEBUG=1` and `MISTER_MALLOC_CHECK=1`. Gdb will record the stopping signal, primary backtrace, all thread backtraces and bounded raw main-thread stack in `crash.log`, while glibc's checking allocator and perturbation aim to stop closer to the corrupting operation than the normal `malloc(): unaligned tcache chunk detected` abort.
+The accepted CPU 0 affinity, protocol-1.7 seed-13 core, default MPFE arbitration and statistics-disabled renderer reproduced the fault under matching debug symbols and glibc allocator checks. The first capture stopped on `malloc(): smallbin double linked list corrupted`; its raw stack showed that allocation detected earlier heap damage while resolving `SPWI214`, not that the resource lookup caused it. A temporary ARM AddressSanitizer build then reproduced the Kobold failure as a main-thread heap use-after-free at `Actor::UpdateActorState` line 7866. The 76-byte `Animation` was allocated by `AnimationFactory::GetCycle` for `currentStance`, then freed when the last ranged charge passed through `Actor::ChargeItem`, `Inventory::BreakItemSlot`, `Inventory::UpdateWeaponAnimation`, `Actor::SetUsedWeapon` and `CharAnimations::DropAnims`; `UpdateActorState` subsequently read `first->endReached` through the stale raw pointer. This conclusively excludes the FPGA renderer, SDL, audio and CPU affinity. The ASan report is preserved locally as `work/asan-kobold-35409f1.log` with SHA256 `a93982920ef2bee34a081d0713a38408866f324b1c286e93cc3adcdf8b9ffc2e`, and the normal `35409f1` bundle and original target environment were restored after capture.
 
 #### Next Steps:
 
-Reproduce the Kobold Commando `SHOOT` failure once, retrieve and symbolize `crash.log`, identify the earliest supported ownership or bounds violation, and propose the smallest source correction only after the captured evidence distinguishes GemRB, SDL and renderer involvement.
+Propose a narrow backport of the relevant part of upstream GemRB commit `6041dd8c`: retain the stance animations with `Holder<Animation>` instead of borrowing raw pointers from the cache, update the affected local uses, build normally and with AddressSanitizer, then repeat the same depleted-ammunition Kobold battle before resuming performance work.
 
 #### Files Modified:
 
@@ -1093,7 +1093,7 @@ None.
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
