@@ -855,7 +855,7 @@ Stationary scenes are engine-bound and quantized by PRESENT holding the command 
 
 ---
 
-## 28 COMMIT Unreleased ??? 2026-09-25T08:46:09-07:00
+## 28 COMMIT Unreleased 5b103be 2026-09-25T08:46:09-07:00
 
 #### Coming From:
 
@@ -867,11 +867,11 @@ Adopt the opt-in MiSTer-Noodles third display buffer so GemRB's next frame rende
 
 #### Outcome:
 
-Entry 27 showed stationary scenes are engine-bound at about 35ms per frame and locked to 20fps because PRESENT holds the Noodles command queue until vertical blank, while combat and panning are limited by main-thread blocking and SDL command construction. The user approved a third display buffer as the first cycle of a sequence that uses the core's spare resources, which the accepted image leaves at about 64% of ALMs, 86% of RAM blocks and 46% of DSP blocks while timing at 100MHz remains the tight constraint. The companion MiSTer-Noodles proposal adds protocol 1.7 with a third fixed buffer, a queued PRESENT whose fence completes on acceptance, and an opt-in SDK 0.12 three-buffer mode. The proposed source pins that SDK, enables three buffers in the SDL renderer when the core advertises them with `SDL_RENDER_NOODLES_BUFFERS=2` forcing the previous double-buffer path for comparison, extends the throughput tool's pacing and behind-PRESENT tests to both modes, corrects the thread-usage parser that read `/proc/thread-self/stat` one field late, and updates the launcher's exact RBF check, the generated MGL and the documentation for the new image.
+Sources `c30d29b` and `5b103be` pin MiSTer-Noodles `26acb9c`, whose protocol 1.7 and SDK 0.12 add a third display buffer and queued PRESENT, and make the SDL renderer enable three buffers whenever the core advertises them, with `SDL_RENDER_NOODLES_BUFFERS=2` keeping two, skip the presentation wait before back-buffer CPU transfers in that mode and log the buffer count. They also correct the thread-usage parser, run the throughput tool's pacing and behind-PRESENT tests in both modes, and point the launcher's exact RBF check and generated MGL at `pet/Noodles_triple_seed13.rbf`. SDL, diagnostic and bundle builds passed with only the three existing SDL warnings; the bundle SDL SHA256 is `87b8a6586cee6ea905b8efb58596ce4f9b877052a4aa1593e7c2f3d50e1b3dac`, the diagnostic SDL SHA256 is `db45abd606b08aa509de496c7bfd33291ee24a98e616e991ac8c03232ee7eb7f`, and the throughput tool SHA256 is `581c6fec8345fa946e9576e8e7216aba8263fd2400bd68a62d46c77b7bda57fa`. The first Noodles image, from `ca23af4`, still held later commands until each flip, which the throughput tool exposed; the corrected RBF SHA256 `ae0159da05a78b3209a6f3619173bb83cff84ca319d24c62159b2156a7e0fcd9` passed the exact-pixel diagnostic with hash `93f8e614` and audio in both modes, left engine rates unchanged, completed a fill behind a queued flip 2.76ms after acceptance and ran 35.5ms off-screen frames at 28.1fps instead of 20fps. In the AR4000 save, the paused scene rose from 19.84-19.91fps to 29.15-29.23fps with presentation wait near 0.02ms against GemRB's 30fps cap, uncontrolled panning windows ran at 15.8-27.3fps, the menu felt smoother and the user saw no ghosting. Spell-heavy combat instead ran at 7.8-10fps with every frame drawn before the wait, 88-117ms per frame outside the renderer, 18-21% main-thread user and 12-16% system CPU and 22-25 involuntary context switches per frame, and the user found it laggier than before; the known Kobold Commando projectile fault then ended GemRB with signal 11 while the core stayed loaded.
 
 #### Next Steps:
 
-After the MiSTer-Noodles image passes its simulation and four-corner timing gates, rebuild SDL, the diagnostic package and the bundle, deploy the RBF under its distinct name and run the exact-pixel diagnostic, HDMI audio and throughput tool in both modes. Repeat the paused, panning and combat captures and accept the change only with exact pixels, no ghosting and stationary pacing above the 20fps baseline. The approved sequence then continues with attribution of combat main-thread blocking, an on-chip wall-occlusion stencil with a polygon span rasterizer for panning, per-tile alpha summaries for GPU-written render targets, and paletted textures with hardware palette lookup if combat attribution shows texture conversion and upload cost; an SDRAM texture channel, which the user's 128MB module supports, and concurrent fill and draw engines follow when throughput again limits, while FPGA audio mixing and MVE decoding remain deferred.
+Measure directly whether concurrent Noodles engine traffic slows ARM memory latency and bandwidth through the shared DDR3 controller, then run a controlled two- versus three-buffer combat comparison on this core, before choosing between controller priority, renderer pacing or read-only texture sources in board SDRAM. Capture the Kobold Commando fault with `MISTER_DEBUG=1`, because it now ends every combat measurement.
 
 #### Files Modified:
 
@@ -881,6 +881,37 @@ After the MiSTer-Noodles image passes its simulation and four-corner timing gate
 - sdl-renderer/noodles/SDL_render_noodles.c
 - tools/noodles-launcher.c
 - tools/noodles-throughput.c
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
+
+## 29 COMMIT Unreleased ??? 2026-09-25T09:50:40-07:00
+
+#### Coming From:
+
+Unreleased 5b103be
+
+#### Purpose:
+
+Measure whether Noodles engine traffic slows ARM memory access through the shared DDR3 controller.
+
+#### Outcome:
+
+Three-buffer presentation removed the engine's idle vertical-blank interval and lifted engine-bound scenes, but CPU-bound combat became slower while the renderer waited on nothing, and the main thread's user time per frame rose. The leading explanation is contention: the HPS and the FPGA share one DDR3 device, and ARM cache misses may queue behind FPGA bursts even though total traffic stays well below the device's bandwidth. The proposed source adds `tools/noodles-contention.c` to the renderer diagnostic package. Pinned to one ARM core, it measures dependent-load latency over a buffer much larger than the caches, streaming read bandwidth and copy bandwidth, first with the engine idle and then while a second thread keeps the engine busy with full-surface fills, plain draws and standard-alpha blends between off-screen surfaces, reporting the engine rate achieved in each phase and the ARM results with the engine loaded relative to idle. GemRB, SDL, the SDK and the RBF are unchanged.
+
+#### Next Steps:
+
+Build and deploy the tool with the diagnostic package, run it on the protocol-1.7 image with GemRB stopped, and record latency and bandwidth for each engine load. If loaded ARM latency or bandwidth degrades materially, compare HPS controller port priority, renderer pacing and read-only texture sources in board SDRAM; otherwise look for the combat slowdown in main-thread blocking. Then run the controlled two- versus three-buffer combat comparison.
+
+#### Files Modified:
+
+- README.md
+- scripts/build-noodles-test.sh
+- tools/noodles-contention.c
 
 #### Status:
 
