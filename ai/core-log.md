@@ -36,6 +36,8 @@ Run `/media/fat/gemrb-noodles-test/run.sh` while the timing-qualified Noodles pr
 
 
 
+
+
 ## 3 COMMIT Unreleased e2fb908 2026-09-24T00:52:47-07:00
 
 #### Coming From:
@@ -726,5 +728,37 @@ Keep the profiler as the non-stopping CPU diagnostic and investigate a generic o
 
 - [x] Built
 - [x] Passed
+
+---
+
+## 24 COMMIT Unreleased ??? 2026-09-25T03:17:01-07:00
+
+#### Coming From:
+
+Unreleased 2d409e3
+
+#### Purpose:
+
+Overlap GemRB's next-frame preparation with Noodles rendering and vertical blank by keeping one submitted presentation in flight.
+
+#### Outcome:
+
+The proposed SDL-only change replaces the unconditional end-of-frame `noodles_present_and_wait` with a tracked asynchronous present fence. The backend will wait for that fence at the next operation that needs the Noodles link, preserving buffer ownership, texture hazards, command ordering and error propagation while allowing GemRB's CPU work after `SDL_RenderPresent` to overlap the prior frame's measured 28-32ms completion interval. GemRB and the RBF remain unchanged.
+
+#### Next Steps:
+
+Implement the one-frame present fence in the canonical renderer and generated SDL patch, extend the diagnostic to exercise immediate post-present drawing and readback boundaries, rebuild SDL and the bundle, and require exact pixels with no protocol, input or audio regression before repeating stationary and combat frame measurements.
+
+#### Files Modified:
+
+- README.md
+- patches/sdl2/noodles-renderer.patch
+- sdl-renderer/noodles/SDL_render_noodles.c
+- tools/noodles-render-test.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
 
 ---
