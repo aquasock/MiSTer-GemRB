@@ -1155,3 +1155,32 @@ Deploy the ARM AddressSanitizer bundle with USB swap, repeat only the depleted-a
 - [ ] Passed
 
 ---
+
+## 38 COMMIT Unreleased c904d9a 2026-09-25T13:12:50-07:00
+
+#### Coming From:
+
+Unreleased c904d9a
+
+#### Purpose:
+
+Qualify the shared weapon-item cache correction through depleted-ammunition combat under ARM AddressSanitizer and restore the normal target afterward.
+
+#### Outcome:
+
+The correctly packaged sanitizer build, with core-library SHA256 `fb07c059e587788222a201ff686628fcdc4d004c5a84625f40a35d0ba9c941df` and build ID `07eb6a104138de34f725d46bddb9aeaae22c375d`, loaded the original AR4000 save with a 384 MiB USB swap file. Multiple Kobold Commandos reached zero ammunition, continued evaluating and performing attacks beyond the former `ITMExtHeader` failure point, and the user completed combat, the endgame video and the game-over screen without an AddressSanitizer report. The clean game log is preserved locally as `work/asan-cachefix-pass-c904d9a.log` with SHA256 `2c9c3294f36bc7efa774021d244360666aa4ebeedb7afa0420f2584e301a8cbd`. After the completed test the user reset the FPGA core while GemRB remained at its main menu, so the still-audible diagnostic process was deliberately terminated and its resulting exit 137 is not a test failure or an out-of-memory event. The normal bundle was restored with core-library SHA256 `19dbda6e6de5ed717fcb93e2cf247118f422fde1e01bc1bda9254c024d467e3e` and SDLVideo SHA256 `5d76ce7c30287bd55734cd63aa126406cc6bbd2d77bfc8c376f8dfa6547e00ba`; sanitizer files, diagnostic environment settings and active swap were removed.
+
+#### Next Steps:
+
+Resume the deferred diagnostics-off performance work on the normal `c904d9a` build, beginning with the narrowly scoped hybrid CPU-affinity comparison whose panning result was promising but whose combat qualification had previously been blocked by the Kobold crash.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
