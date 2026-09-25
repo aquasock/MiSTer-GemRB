@@ -889,7 +889,7 @@ Measure directly whether concurrent Noodles engine traffic slows ARM memory late
 
 ---
 
-## 29 COMMIT Unreleased ??? 2026-09-25T09:50:40-07:00
+## 29 COMMIT Unreleased 00b3678 2026-09-25T09:50:40-07:00
 
 #### Coming From:
 
@@ -901,11 +901,11 @@ Measure whether Noodles engine traffic slows ARM memory access through the share
 
 #### Outcome:
 
-Three-buffer presentation removed the engine's idle vertical-blank interval and lifted engine-bound scenes, but CPU-bound combat became slower while the renderer waited on nothing, and the main thread's user time per frame rose. The leading explanation is contention: the HPS and the FPGA share one DDR3 device, and ARM cache misses may queue behind FPGA bursts even though total traffic stays well below the device's bandwidth. The proposed source adds `tools/noodles-contention.c` to the renderer diagnostic package. Pinned to one ARM core, it measures dependent-load latency over a buffer much larger than the caches, streaming read bandwidth and copy bandwidth, first with the engine idle and then while a second thread keeps the engine busy with full-surface fills, plain draws and standard-alpha blends between off-screen surfaces, reporting the engine rate achieved in each phase and the ARM results with the engine loaded relative to idle. GemRB, SDL, the SDK and the RBF are unchanged.
+Three-buffer presentation removed the engine's idle vertical-blank interval and lifted engine-bound scenes, but CPU-bound combat became slower while the renderer waited on nothing and the main thread's user time per frame rose, suggesting contention in the DDR3 device the HPS and FPGA share. Sources `1029d8d` and `00b3678` add `tools/noodles-contention.c` to the renderer diagnostic package: pinned to CPU 0 it measures dependent-load latency over a 64MiB chain and streaming read, write and copy bandwidth over 16MiB buffers while a thread on CPU 1 keeps the engine idle or busy with full-surface fills, plain draws, standard-alpha blends or a mix; the first build's copy figure was invalid because the compiler removed the unobserved copy, which `00b3678` corrects. The build passed without warnings and the tool SHA256 is `316b240ed0617c9be52d38ac67ba32e8dc61ff62c9f28aaa564c8767e059b106`. On the protocol-1.7 image with GemRB stopped, two runs agreed closely. With the engine idle the ARM measured 246-251ns latency, 695MB/s reads, 1,235-1,273MB/s writes and 393MB/s copies. Engine fills raised ARM latency 2.1-2.2 times and cut reads 42%, writes 54% and copies 48-49%; plain draws raised latency 1.9 times and cut reads about 40%, writes about 60% and copies about 51%; blends raised latency only 1.07-1.08 times and cut reads 4-6%, writes 32-35% and copies 16%; the mix raised latency 1.7-1.8 times and cut reads 32%, writes 56% and copies 45%. The contention is mutual, because engine fills fell from 175 Mpixel/s alone to 101-139 Mpixel/s while the ARM streamed. ARM impact follows the rate at which the engine issues memory requests more than its bytes moved, since blends move more nominal bytes than plain draws yet disturb the ARM far less. Three buffers keep the engine busy through most of each CPU-bound combat frame instead of idling for about 15ms at vertical blank, which is consistent with the slower combat, though the controlled two- versus three-buffer comparison remains outstanding.
 
 #### Next Steps:
 
-Build and deploy the tool with the diagnostic package, run it on the protocol-1.7 image with GemRB stopped, and record latency and bandwidth for each engine load. If loaded ARM latency or bandwidth degrades materially, compare HPS controller port priority, renderer pacing and read-only texture sources in board SDRAM; otherwise look for the combat slowdown in main-thread blocking. Then run the controlled two- versus three-buffer combat comparison.
+Obtain user approval for the next mitigation. Candidates are measuring HPS SDRAM controller port priority or weights with this tool before any change, removing redundant GemRB render-target clears because full-screen fills cause the largest ARM slowdown, pacing the renderer so the engine does not run a full frame ahead during CPU-bound scenes, and moving read-only texture sources to board SDRAM, which relieves reads but not fill writes. Run the controlled two- versus three-buffer combat comparison and capture the Kobold Commando fault with `MISTER_DEBUG=1`.
 
 #### Files Modified:
 
@@ -915,7 +915,7 @@ Build and deploy the tool with the diagnostic package, run it on the protocol-1.
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
