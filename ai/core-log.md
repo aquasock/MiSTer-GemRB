@@ -696,3 +696,35 @@ Keep the SDL coalescer as a correct generic reduction, profile the remaining sta
 - [x] Passed
 
 ---
+
+## 23 COMMIT Unreleased ??? 2026-09-24T17:40:49-07:00
+
+#### Coming From:
+
+Unreleased f06343e
+
+#### Purpose:
+
+Measure GemRB's spell-heavy ARM instruction profile without stopping the process or modifying the engine.
+
+#### Outcome:
+
+The proposed tooling uses the MiSTer kernel's enabled performance-event interface to sample the running GemRB main thread without `ptrace`, records its executable mappings and instruction counts even if the known kobold fault ends the process, and symbolicates the result against the existing unstripped ARM binaries while leaving GemRB, SDL and the RBF unchanged.
+
+#### Next Steps:
+
+Build and validate the sampler on a harmless process, deploy it separately from the game bundle, capture a short stationary spell-heavy window before the kobolds can fault, and rank GemRB, SDL and library symbols by sampled CPU time before selecting any optimization.
+
+#### Files Modified:
+
+- README.md
+- scripts/build-profiler.sh
+- tools/noodles-perf-sampler.c
+- tools/symbolize-perf-samples.py
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
