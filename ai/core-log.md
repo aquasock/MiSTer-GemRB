@@ -1271,3 +1271,34 @@ None.
 - [ ] Passed
 
 ---
+
+## 42 COMMIT Unreleased ??? 2026-09-25T13:35:54-07:00
+
+#### Coming From:
+
+Unreleased c904d9a
+
+#### Purpose:
+
+Implement the accepted hybrid CPU-affinity layout deterministically in the launcher so GemRB's main thread stays on CPU 0 while every other GemRB thread may use CPUs 0-1.
+
+#### Outcome:
+
+Planned. Threads inherit the affinity of the thread that creates them, so pinning the main thread alone would also confine every later thread to CPU 0. A small preloaded library, built from a new `tools/mister-affinity.c` into the bundle's `libs`, will record the process mask applied by `run.sh`, pin the main thread in its constructor to `MISTER_MAIN_CPUS`, default CPU 0, and wrap `pthread_create` so each new SDL or GemRB thread restores the recorded process mask before running its start routine. It logs the applied masks once, adds no watcher process or polling, and leaves the main thread unpinned with a message if its CPUs are outside the process mask. `run.sh` will default `MISTER_CPUS` to `0-1`, preload the library in both the normal and `MISTER_DEBUG` paths alongside any heap-checking preload, and append the swap-in and swap-out page counts accumulated during the run to `last-run.log`; `MISTER_CPUS=0` reproduces the previous CPU-0-only layout. Renderer, FPGA, audio and GemRB sources are unchanged.
+
+#### Next Steps:
+
+Build and deploy the bundle, then enable the existing USB swap for this regression only by setting `MISTER_SWAP=usb` in the MiSTer's `env.sh`, because Entry 41 showed the no-swap target reaching the OOM killer after the next area loaded. Verify the thread masks once after startup, then repeat a short diagnostics-off panning, depleted-ammunition Kobold combat and area-transition regression, and record smoothness together with the swap counts. The memory-growth investigation follows as a separate cycle.
+
+#### Files Modified:
+
+- tools/mister-affinity.c
+- scripts/bundle.sh
+- README.md
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
