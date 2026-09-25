@@ -731,7 +731,7 @@ Keep the profiler as the non-stopping CPU diagnostic and investigate a generic o
 
 ---
 
-## 24 COMMIT Unreleased ??? 2026-09-25T03:17:01-07:00
+## 24 COMMIT Unreleased b404508 2026-09-25T03:17:01-07:00
 
 #### Coming From:
 
@@ -743,22 +743,21 @@ Overlap GemRB's next-frame preparation with Noodles rendering and vertical blank
 
 #### Outcome:
 
-The proposed SDL-only change replaces the unconditional end-of-frame `noodles_present_and_wait` with a tracked asynchronous present fence. The backend will wait for that fence at the next operation that needs the Noodles link, preserving buffer ownership, texture hazards, command ordering and error propagation while allowing GemRB's CPU work after `SDL_RenderPresent` to overlap the prior frame's measured 28-32ms completion interval. GemRB and the RBF remain unchanged.
+Sources `159ce0f`, `fa21192`, `43f60aa`, `b77f77c` and `b404508` implement the SDL-only asynchronous path while leaving GemRB and the RBF unchanged. The renderer keeps one presentation in flight, submits safe following commands through Noodles SDK `973dfb6`, predicts back-buffer parity, defers managed texture uploads by rotating surfaces that remain in use, and resolves transient queue or descriptor pressure with bounded progress rather than a whole-stream drain. Native builds, the complete bundle build and the expanded MiSTer diagnostic passed; the diagnostic twice produced exact framebuffer hash `93f8e614` and audio passed. The menu reached its 30fps cap. In the controlled paused scene, texture rotation removed 30-38ms update waits and bounded retries reduced queue time from 21-24ms to 3.8-4.5ms with zero drains, but that time moved to a 32-35ms presentation wait and the scene remained at 20.1fps with unchanged visible stutter. Each frame issues about 0.96 million opaque-fill, 0.043 million blended-fill, 0.48 million plain-copy and 1.16 million flagged-draw pixel operations, so the experiment rules out remaining ARM submission serialization and identifies FPGA engine throughput as the active limit.
 
 #### Next Steps:
 
-Implement the one-frame present fence in the canonical renderer and generated SDL patch, extend the diagnostic to exercise immediate post-present drawing and readback boundaries, rebuild SDL and the bundle, and require exact pixels with no protocol, input or audio regression before repeating stationary and combat frame measurements.
+Retain the asynchronous SDL path because it removes avoidable host serialization, measure the accepted RBF's fill, copy and blend rates independently, and use those rates with the captured frame mix to choose a generic RTL throughput improvement. Require exact pixels, audio and the same paused-scene timing before accepting the next RBF, and use combat only after the stationary bottleneck improves.
 
 #### Files Modified:
 
 - README.md
-- patches/sdl2/noodles-renderer.patch
 - sdl-renderer/noodles/SDL_render_noodles.c
 - tools/noodles-render-test.c
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
