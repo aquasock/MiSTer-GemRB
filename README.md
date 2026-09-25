@@ -187,15 +187,15 @@ Detailed timing separates fills, sprite batches and synchronization. `SDL_Render
 flight so the application can prepare and submit the next frame's commands while the FPGA renders and performs the
 vertical-blank handoff. The Noodles SDK keeps those commands ordered after the flip and predicts the buffer they will
 target. Texture updates made while a frame is in flight accumulate in their CPU shadows; their dirty rectangles are
-uploaded after each texture's prior use and before the next draw that uses it. A second presentation, direct display
-readback or renderer teardown resolves the outstanding fence. The reported presentation wait is only the completion
-time that could not overlap.
+uploaded to fresh managed surfaces when their previous surfaces are still in use, letting the SDK retire the old copies
+at their fences. A second presentation, direct display readback or renderer teardown resolves the outstanding fence.
+The reported presentation wait is only the completion time that could not overlap.
 The summary
 also reports accelerated opaque-fill, blended-fill, plain-draw and flagged-draw counts and pixels, fill- and sprite-batch
 counts and maximum sizes, submission stalls, CPU fallback work, uploads, readbacks, evictions, drains and current FPGA
 texture residency. A callback line attributes CPU time and call volume to SDL command construction, texture creation,
 updates, locks, target changes, readback and destruction; its merged-fill count reports compatible calls appended to an
-existing SDL command. The counters and their performance-clock reads are disabled
+existing SDL command, and its rotated count reports updated textures moved away from in-flight storage. The counters and their performance-clock reads are disabled
 otherwise; asynchronous presentation and its synchronization boundaries are unchanged.
 Opaque points and simple lines use the FPGA fill engine. Operations that still need SDL's software rasterizer keep the
 FPGA result coherent by reading and uploading only the affected target region.

@@ -56,6 +56,7 @@ typedef struct NOODLES_TextureData
     SDL_Rect dirty_rect;
     SDL_bool dirty_valid;
     SDL_bool pinned;
+    SDL_bool gpu_in_use;
     size_t resident_bytes;
     Uint64 last_use;
     struct NOODLES_TextureData *next;
@@ -143,6 +144,7 @@ typedef struct NOODLES_RenderData
     Uint64 stats_update_calls;
     Uint64 stats_update_bytes;
     Uint64 stats_update_deferred;
+    Uint64 stats_update_rotated;
     Uint64 stats_lock_ticks;
     Uint64 stats_lock_calls;
     Uint64 stats_lock_bytes;
@@ -446,6 +448,7 @@ static int NOODLES_EnsureCPU(NOODLES_RenderData *data, NOODLES_TextureData *surf
         data->stats_readback_bytes += (Uint64)rect.width * rect.height * 4u;
     }
     surface->cpu_valid = SDL_TRUE;
+    surface->gpu_in_use = SDL_FALSE;
     NOODLES_TouchSurface(data, surface);
     return 0;
 }
@@ -596,9 +599,68 @@ static int NOODLES_EnsureGPU(NOODLES_RenderData *data, NOODLES_TextureData *surf
         data->stats_upload_bytes += (Uint64)rect.width * rect.height * 4u;
     }
     surface->gpu_valid = SDL_TRUE;
+    surface->gpu_in_use = SDL_FALSE;
     NOODLES_ClearDirty(surface);
     NOODLES_DropRedundantShadow(data, surface);
     return 0;
+}
+
+/* Replace a texture still referenced by queued GPU work with a fresh managed
+   surface. The old allocation remains alive in the SDK until its last-use
+   fence retires, while the new full image is ready for commands after the
+   pending presentation. Return one when rotated, zero when allocation pressure
+   requires the ordinary deferred upload path, and minus one on a hard error. */
+static int NOODLES_TryRotateTexture(NOODLES_RenderData *data,
+                                    NOODLES_TextureData *texture)
+{
+    noodles_surface_t *replacement;
+    noodles_surface_t *old_surface;
+    noodles_rect_t rect;
+
+    if (!data->present_pending || !texture->surface ||
+        !texture->gpu_in_use || !texture->cpu_valid || !texture->shadow) {
+        return 0;
+    }
+    if (NOODLES_FlushQueued(data) < 0) {
+        return -1;
+    }
+    if (noodles_surface_create(data->link, (Uint32)texture->width,
+                               (Uint32)texture->height, &replacement) < 0) {
+        if (errno == ENOMEM || errno == EAGAIN) {
+            return 0;
+        }
+        return NOODLES_SetErrno("texture rotation allocation");
+    }
+    rect.x = 0;
+    rect.y = 0;
+    rect.width = (Uint32)texture->width;
+    rect.height = (Uint32)texture->height;
+    if (NOODLES_SurfaceUpdate(data, replacement, &rect,
+                              texture->shadow->pixels,
+                              (size_t)texture->shadow->pitch) < 0) {
+        const int saved_errno = errno;
+        (void)noodles_surface_destroy(replacement);
+        errno = saved_errno;
+        return NOODLES_SetErrno("texture rotation upload");
+    }
+    old_surface = texture->surface;
+    if (noodles_surface_destroy(old_surface) < 0) {
+        const int saved_errno = errno;
+        (void)noodles_surface_destroy(replacement);
+        errno = saved_errno;
+        return NOODLES_SetErrno("texture rotation retirement");
+    }
+    texture->surface = replacement;
+    texture->gpu_valid = SDL_TRUE;
+    texture->gpu_in_use = SDL_FALSE;
+    NOODLES_ClearDirty(texture);
+    NOODLES_TouchSurface(data, texture);
+    if (data->stats_enabled) {
+        data->stats_uploads++;
+        data->stats_upload_bytes += (Uint64)rect.width * rect.height * 4u;
+        data->stats_update_rotated++;
+    }
+    return 1;
 }
 
 static int NOODLES_PrepareCPURegion(NOODLES_RenderData *data,
@@ -633,6 +695,7 @@ static int NOODLES_PrepareCPURegion(NOODLES_RenderData *data,
         data->stats_readbacks++;
         data->stats_readback_bytes += (Uint64)rect.width * rect.height * 4u;
     }
+    surface->gpu_in_use = SDL_FALSE;
     NOODLES_TouchSurface(data, surface);
     return 0;
 }
@@ -658,6 +721,7 @@ static int NOODLES_CommitCPURegion(NOODLES_RenderData *data,
         data->stats_upload_bytes += (Uint64)rect.width * rect.height * 4u;
     }
     surface->gpu_valid = SDL_TRUE;
+    surface->gpu_in_use = SDL_FALSE;
     NOODLES_ClearDirty(surface);
     NOODLES_TouchSurface(data, surface);
     return 0;
@@ -667,6 +731,7 @@ static void NOODLES_MarkGPUWrite(NOODLES_TextureData *surface)
 {
     surface->gpu_valid = SDL_TRUE;
     surface->cpu_valid = SDL_FALSE;
+    surface->gpu_in_use = SDL_TRUE;
     NOODLES_ClearDirty(surface);
 }
 
@@ -986,6 +1051,7 @@ static int NOODLES_UpdateTextureImpl(SDL_Renderer *renderer, SDL_Texture *textur
     Uint8 *destination;
     const Uint8 *source;
     int row;
+    int rotated;
     const SDL_bool gpu_was_valid = texturedata->gpu_valid;
 
     texturedata->keep_shadow = SDL_TRUE;
@@ -1004,7 +1070,15 @@ static int NOODLES_UpdateTextureImpl(SDL_Renderer *renderer, SDL_Texture *textur
     texturedata->cpu_valid = SDL_TRUE;
     texturedata->gpu_valid = SDL_FALSE;
     NOODLES_MarkDirty(texturedata, rect);
-    if (texturedata->surface && gpu_was_valid && !data->present_pending) {
+    rotated = gpu_was_valid ? NOODLES_TryRotateTexture(data, texturedata) : 0;
+    if (rotated < 0) {
+        return -1;
+    }
+    if (rotated > 0) {
+        return 0;
+    }
+    if (texturedata->surface && gpu_was_valid &&
+        (!data->present_pending || !texturedata->gpu_in_use)) {
         update_rect.x = rect->x;
         update_rect.y = rect->y;
         update_rect.width = (Uint32)rect->w;
@@ -1018,6 +1092,7 @@ static int NOODLES_UpdateTextureImpl(SDL_Renderer *renderer, SDL_Texture *textur
             data->stats_upload_bytes += (Uint64)update_rect.width * update_rect.height * 4u;
         }
         texturedata->gpu_valid = SDL_TRUE;
+        texturedata->gpu_in_use = SDL_FALSE;
         NOODLES_ClearDirty(texturedata);
         NOODLES_TouchSurface(data, texturedata);
         NOODLES_DropRedundantShadow(data, texturedata);
@@ -1096,6 +1171,7 @@ static void NOODLES_UnlockTextureImpl(SDL_Renderer *renderer, SDL_Texture *textu
     const SDL_bool gpu_was_valid = texturedata->gpu_valid;
     const void *pixels;
     size_t pitch;
+    int rotated;
 
     if (!texturedata->locked) {
         return;
@@ -1105,6 +1181,13 @@ static void NOODLES_UnlockTextureImpl(SDL_Renderer *renderer, SDL_Texture *textu
     texturedata->gpu_valid = SDL_FALSE;
     NOODLES_MarkDirty(texturedata, &texturedata->lock_rect);
     if (!texturedata->surface) {
+        return;
+    }
+    rotated = gpu_was_valid ? NOODLES_TryRotateTexture(data, texturedata) : 0;
+    if (rotated < 0) {
+        return;
+    }
+    if (rotated > 0) {
         return;
     }
     if (gpu_was_valid) {
@@ -1124,7 +1207,7 @@ static void NOODLES_UnlockTextureImpl(SDL_Renderer *renderer, SDL_Texture *textu
         pixels = texturedata->shadow->pixels;
         pitch = (size_t)texturedata->shadow->pitch;
     }
-    if (data->present_pending) {
+    if (data->present_pending && texturedata->gpu_in_use) {
         if (data->stats_enabled) {
             data->stats_update_deferred++;
         }
@@ -1137,6 +1220,7 @@ static void NOODLES_UnlockTextureImpl(SDL_Renderer *renderer, SDL_Texture *textu
             data->stats_upload_bytes += (Uint64)rect.width * rect.height * 4u;
         }
         texturedata->gpu_valid = SDL_TRUE;
+        texturedata->gpu_in_use = SDL_FALSE;
         NOODLES_ClearDirty(texturedata);
         NOODLES_TouchSurface(data, texturedata);
         NOODLES_DropRedundantShadow(data, texturedata);
@@ -1679,6 +1763,7 @@ static int NOODLES_RunCopy(NOODLES_RenderData *data, NOODLES_TextureData *target
             target == &data->composition ? NULL : target->surface, &draw) < 0) {
         return -1;
     }
+    texturedata->gpu_in_use = SDL_TRUE;
     NOODLES_MarkGPUWrite(target);
     return 0;
 }
@@ -2275,7 +2360,7 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
                     (double)data->shadow_peak_bytes / (1024.0 * 1024.0),
                     (unsigned long long)data->stats_shadow_allocations,
                     (unsigned long long)data->stats_shadow_releases);
-            SDL_Log("Noodles callbacks: build=%.3fms/%llu calls (state=%llu primitive=%llu fill=%llu merged=%llu copy=%llu copyex=%llu geometry=%llu) create=%.3fms/%llu update=%.3fms/%llu/%.3fMiB deferred=%llu lock=%.3fms/%llu/%.3fMiB unlock=%.3fms/%llu target=%.3fms/%llu read=%.3fms/%llu/%.3fMiB destroy=%.3fms/%llu avg/frame",
+            SDL_Log("Noodles callbacks: build=%.3fms/%llu calls (state=%llu primitive=%llu fill=%llu merged=%llu copy=%llu copyex=%llu geometry=%llu) create=%.3fms/%llu update=%.3fms/%llu/%.3fMiB deferred=%llu rotated=%llu lock=%.3fms/%llu/%.3fMiB unlock=%.3fms/%llu target=%.3fms/%llu read=%.3fms/%llu/%.3fMiB destroy=%.3fms/%llu avg/frame",
                     (double)data->stats_build_ticks * milliseconds / frame_count,
                     (unsigned long long)data->stats_build_calls,
                     (unsigned long long)data->stats_build_state_calls,
@@ -2291,6 +2376,7 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
                     (unsigned long long)data->stats_update_calls,
                     (double)data->stats_update_bytes / (1024.0 * 1024.0),
                     (unsigned long long)data->stats_update_deferred,
+                    (unsigned long long)data->stats_update_rotated,
                     (double)data->stats_lock_ticks * milliseconds / frame_count,
                     (unsigned long long)data->stats_lock_calls,
                     (double)data->stats_lock_bytes / (1024.0 * 1024.0),
@@ -2363,6 +2449,7 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
             data->stats_update_calls = 0;
             data->stats_update_bytes = 0;
             data->stats_update_deferred = 0;
+            data->stats_update_rotated = 0;
             data->stats_lock_ticks = 0;
             data->stats_lock_calls = 0;
             data->stats_lock_bytes = 0;
