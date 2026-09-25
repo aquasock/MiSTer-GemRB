@@ -243,11 +243,16 @@ static int NOODLES_SurfaceRead(NOODLES_RenderData *data,
                                size_t pitch)
 {
     const Uint64 start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
-    const int result = surface
-        ? noodles_surface_read(surface, rect, pixels, pitch,
-                               NOODLES_DEFAULT_TIMEOUT_MS)
-        : noodles_back_buffer_read(data->link, rect, pixels, pitch,
-                                   NOODLES_DEFAULT_TIMEOUT_MS);
+    int result;
+    if (surface) {
+        result = noodles_surface_read(surface, rect, pixels, pitch,
+                                      NOODLES_DEFAULT_TIMEOUT_MS);
+    } else if (NOODLES_WaitPresent(data) < 0) {
+        result = -1;
+    } else {
+        result = noodles_back_buffer_read(data->link, rect, pixels, pitch,
+                                          NOODLES_DEFAULT_TIMEOUT_MS);
+    }
     if (data->stats_enabled) {
         const Uint64 elapsed = SDL_GetPerformanceCounter() - start;
         data->stats_sync_ticks += elapsed;
@@ -264,11 +269,16 @@ static int NOODLES_SurfaceUpdate(NOODLES_RenderData *data,
                                  const void *pixels, size_t pitch)
 {
     const Uint64 start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
-    const int result = surface
-        ? noodles_surface_update(surface, rect, pixels, pitch,
-                                 NOODLES_DEFAULT_TIMEOUT_MS)
-        : noodles_back_buffer_update(data->link, rect, pixels, pitch,
-                                     NOODLES_DEFAULT_TIMEOUT_MS);
+    int result;
+    if (surface) {
+        result = noodles_surface_update(surface, rect, pixels, pitch,
+                                        NOODLES_DEFAULT_TIMEOUT_MS);
+    } else if (NOODLES_WaitPresent(data) < 0) {
+        result = -1;
+    } else {
+        result = noodles_back_buffer_update(data->link, rect, pixels, pitch,
+                                            NOODLES_DEFAULT_TIMEOUT_MS);
+    }
     if (data->stats_enabled) {
         const Uint64 elapsed = SDL_GetPerformanceCounter() - start;
         data->stats_sync_ticks += elapsed;
@@ -2099,9 +2109,6 @@ static int NOODLES_RunCommandQueue(SDL_Renderer *renderer, SDL_RenderCommand *cm
     NOODLES_RenderData *data = (NOODLES_RenderData *)renderer->driverdata;
     Uint64 start = 0;
     int result;
-    if (NOODLES_WaitPresent(data) < 0) {
-        return -1;
-    }
     if (data->stats_enabled) {
         start = SDL_GetPerformanceCounter();
     }

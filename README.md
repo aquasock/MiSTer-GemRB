@@ -184,11 +184,12 @@ sets `SDL_MISTER_FORMAT=xrgb` (an alpha-less screen, which lets SDL use its fast
 Set `SDL_RENDER_NOODLES_STATS=1` when starting a Noodles launcher to log a five-second summary of observed frame rate,
 SDL command-queue time, presentation submission time, deferred presentation-wait time, and the remaining per-frame time.
 Detailed timing separates fills, sprite batches and synchronization. `SDL_RenderPresent` leaves one submitted frame in
-flight so the application can prepare its next SDL command list while the FPGA renders and performs the vertical-blank
-handoff. The next renderer operation that needs the Noodles link resolves that fence first, preserving command order,
-buffer ownership and texture hazards. Texture updates made while a frame is in flight accumulate in their CPU shadows;
-their dirty rectangles are uploaded after the fence and before the next draw that uses them. The reported presentation
-wait is only the completion time that could not overlap.
+flight so the application can prepare and submit the next frame's commands while the FPGA renders and performs the
+vertical-blank handoff. The Noodles SDK keeps those commands ordered after the flip and predicts the buffer they will
+target. Texture updates made while a frame is in flight accumulate in their CPU shadows; their dirty rectangles are
+uploaded after each texture's prior use and before the next draw that uses it. A second presentation, direct display
+readback or renderer teardown resolves the outstanding fence. The reported presentation wait is only the completion
+time that could not overlap.
 The summary
 also reports accelerated opaque-fill, blended-fill, plain-draw and flagged-draw counts and pixels, fill- and sprite-batch
 counts and maximum sizes, submission stalls, CPU fallback work, uploads, readbacks, evictions, drains and current FPGA
