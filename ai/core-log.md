@@ -1126,3 +1126,32 @@ Repeat the depleted-ammunition Kobold battle with the deployed normal build; if 
 - [ ] Passed
 
 ---
+
+## 37 COMMIT Unreleased ??? 2026-09-25T12:46:37-07:00
+
+#### Coming From:
+
+Unreleased 6bcd48e
+
+#### Purpose:
+
+Prevent depleted ranged ammunition from force-evicting a shared cached item definition while other actors retain weapon-header pointers into it.
+
+#### Outcome:
+
+The normal `6bcd48e` build completed the previously crashing Kobold battle and reached the game-over screen, confirming that its 76-byte `Animation` use-after-free was removed. The matching AddressSanitizer run then exposed a separate main-thread heap use-after-free: `Actor::GetCombatDetails` read `ITMExtHeader::THAC0Bonus` at offset 28 in an exactly 72-byte freed `ITMExtHeader` after a Kobold exhausted its ammunition. Static tracing shows that `Inventory::BreakItemSlot` uniquely force-evicts the globally shared item resource even though other actors can retain raw `WeaponInfo::extHeader` pointers into that resource. The proposed correction changes this release to the normal non-evicting cache path, preserving the existing weapon-header lifetime contract without retaining ammunition instances or changing renderer, FPGA, audio, affinity or launcher behavior.
+
+#### Next Steps:
+
+Add the one-line GemRB patch with an explanatory lifetime comment, verify clean and idempotent patch application, build normal and ARM AddressSanitizer bundles, repeat the depleted-ammunition Kobold battle under AddressSanitizer, and restore the normal build after the diagnostic result.
+
+#### Files Modified:
+
+- patches/0005-gemrb-preserve-cached-weapon-items.patch
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
