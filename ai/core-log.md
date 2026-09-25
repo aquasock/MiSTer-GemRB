@@ -979,3 +979,33 @@ Reduce the statistics mode's overhead before further CPU-bound measurement, in p
 - [x] Passed
 
 ---
+
+## 32 COMMIT Unreleased ??? 2026-09-25T11:00:34-07:00
+
+#### Coming From:
+
+Unreleased 1eb84fc
+
+#### Purpose:
+
+Record the prioritized plan that follows the CPU affinity fix so the next agent can continue from an approved sequence.
+
+#### Outcome:
+
+This is a handoff proposal; no source has changed since `1eb84fc`. The MiSTer at 10.10.0.21 is deployed with bundle `1eb84fc`, whose `run.sh` places GemRB on CPU 0 by default, SDK and SDL from MiSTer-Noodles `26acb9c`, and `pet/Noodles_triple_seed13.rbf` with RBF SHA256 `ae0159da05a78b3209a6f3619173bb83cff84ca319d24c62159b2156a7e0fcd9`, which the launcher requires; the previous protocol-1.6 image remains as `pet/Noodles_fill_batch_seed13.rbf`, the binary-alpha candidate as `pet/Noodles_alpha_fast2_seed13.rbf` and the first protocol-1.7 image as `pet/Noodles_triple_ca23af4_seed13.rbf`. `SDL_RENDER_NOODLES_STATS=1` is commented out in `/media/fat/gemrb/env.sh` so play runs without diagnostics, and the HPS SDRAM controller uses its preloader arbitration, which `tools/mister-mpfe.sh default` or a reboot restores. The proposed sequence, in order, is: first, reduce the statistics mode's overhead by replacing the 20us raw-fence polling in `NOODLES_WaitPresent` with sparse or coarser timing so enabled statistics no longer distort CPU-bound results; second, compare `MISTER_CPUS=0-1` with the CPU 0 default in combat with diagnostics off, because a secondary GemRB thread queues behind the main thread on CPU 0; third, capture the Kobold Commando heap fault, reported as `malloc(): unaligned tcache chunk detected` or signal 11 after that creature's missed `SHOOT`, with `MISTER_DEBUG=1` and `MISTER_MALLOC_CHECK=1` after `scripts/debug-symbols.sh` and `scripts/deploy.sh debug`; fourth, support the MiSTer-Noodles formal-verification and pipeline-buffer cycle proposed in its entry 14; and fifth, submit one batched fill per GemRB wall polygon, which is now lower priority because panning is nearly smooth. The deferred items remain board-SDRAM texture sources, FPGA audio mixing and MVE decoding, and the `mpu` arbitration profile as a later controlled comparison. The user directed that CERN's colibri library be used only as a design-practice reference, with our own SystemVerilog, and will add a release disclaimer. Judge smoothness with diagnostics off, because the user observed a large improvement once they were removed.
+
+#### Next Steps:
+
+Obtain user approval for the first item before implementation, replace this entry's placeholder with the resulting source commit, and record each later item as its own entry once approved.
+
+#### Files Modified:
+
+- sdl-renderer/noodles/SDL_render_noodles.c
+- README.md
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
