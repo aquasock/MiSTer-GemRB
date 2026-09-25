@@ -41,6 +41,7 @@
 #define NOODLES_DRAW_BATCH_MAX 64u
 #define NOODLES_FILL_BATCH_MAX 64u
 #define NOODLES_SIZE_BUCKETS 5u
+#define NOODLES_ALPHA_PROBE_MAX 16u
 
 enum
 {
@@ -75,6 +76,12 @@ typedef struct NOODLES_TextureData
     Uint64 last_use;
     struct NOODLES_TextureData *next;
 } NOODLES_TextureData;
+
+typedef struct NOODLES_AlphaProbeKey
+{
+    NOODLES_TextureData *texture;
+    SDL_Rect source;
+} NOODLES_AlphaProbeKey;
 
 typedef struct NOODLES_RenderData
 {
@@ -141,6 +148,8 @@ typedef struct NOODLES_RenderData
     Uint64 stats_alpha_pair_mixed;
     Uint64 stats_alpha_unavailable_draws;
     Uint64 stats_alpha_unavailable_pixels;
+    NOODLES_AlphaProbeKey alpha_probe_keys[NOODLES_ALPHA_PROBE_MAX];
+    size_t alpha_probe_count;
     Uint64 stats_draw_stalls;
     Uint64 stats_draw_batches;
     Uint64 stats_draw_batch_max;
@@ -1802,6 +1811,50 @@ static int NOODLES_RunCopy(NOODLES_RenderData *data, NOODLES_TextureData *target
     if (!NOODLES_EffectiveClip(target, viewport, clip, clip_enabled, &effective_clip) ||
         !NOODLES_ClipDraw(&source, &destination, &effective_clip, flip)) {
         return 0;
+    }
+
+    if (data->stats_enabled && cmd->data.draw.blend == SDL_BLENDMODE_BLEND &&
+        cmd->data.draw.a == 255 && (Uint64)source.w * source.h > 16384u &&
+        data->alpha_probe_count < NOODLES_ALPHA_PROBE_MAX) {
+        size_t probe;
+        SDL_bool seen = SDL_FALSE;
+        for (probe = 0; probe < data->alpha_probe_count; ++probe) {
+            const NOODLES_AlphaProbeKey *key = &data->alpha_probe_keys[probe];
+            if (key->texture == texturedata && SDL_RectEquals(&key->source, &source)) {
+                seen = SDL_TRUE;
+                break;
+            }
+        }
+        if (!seen) {
+            Uint64 opaque = 0, zero = 0, mixed = 0;
+            int y;
+            if (NOODLES_EnsureCPU(data, texturedata) < 0) {
+                return -1;
+            }
+            data->alpha_probe_keys[data->alpha_probe_count].texture = texturedata;
+            data->alpha_probe_keys[data->alpha_probe_count].source = source;
+            data->alpha_probe_count++;
+            for (y = 0; y < source.h; ++y) {
+                const Uint32 *row = (const Uint32 *)((const Uint8 *)texturedata->shadow->pixels +
+                    (source.y + y) * texturedata->shadow->pitch) + source.x;
+                int x;
+                for (x = 0; x + 1 < source.w; x += 2) {
+                    const Uint32 a0 = row[x] >> 24;
+                    const Uint32 a1 = row[x + 1] >> 24;
+                    if (a0 == 255 && a1 == 255) {
+                        opaque++;
+                    } else if (a0 == 0 && a1 == 0) {
+                        zero++;
+                    } else {
+                        mixed++;
+                    }
+                }
+            }
+            SDL_Log("Noodles alpha probe: texture=%dx%d source=%d,%d %dx%d pairs opaque=%llu zero=%llu partial-or-edge=%llu",
+                    texturedata->width, texturedata->height, source.x, source.y,
+                    source.w, source.h, (unsigned long long)opaque,
+                    (unsigned long long)zero, (unsigned long long)mixed);
+        }
     }
 
     if (NOODLES_EnsureGPU(data, target) < 0 ||
