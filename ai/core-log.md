@@ -665,7 +665,7 @@ Replace GemRB's one-`SDL_RenderDrawLine`-per-wall-span path with one exact `SDL_
 
 ---
 
-## 22 COMMIT Unreleased ??? 2026-09-24T15:26:00-07:00
+## 22 COMMIT Unreleased f06343e 2026-09-24T15:42:59-07:00
 
 #### Coming From:
 
@@ -677,11 +677,11 @@ Coalesce compatible consecutive fill commands inside the Noodles SDL renderer to
 
 #### Outcome:
 
-The revised proposal leaves GemRB unchanged and gives only the Noodles SDL backend an internal opt-in path that appends consecutive rectangles to one compatible fill command when target, color, blend, viewport and clip state are unchanged, while every intervening state or drawing command remains an ordering boundary and protocol-1.6 fill descriptors remain the hardware submission path.
+Source `f06343e` leaves GemRB, the launcher and the RBF unchanged and gives only the Noodles SDL backend an internal opt-in path that appends consecutive rectangles to one compatible fill command when target, color, blend, viewport and clip state are unchanged. Fresh SDL and diagnostic builds passed, a clean-tree replay verified the SDL patch, and the expanded diagnostic twice produced exact framebuffer hash `93f8e614` for inclusive forward and reverse spans plus clipping, color, blend, viewport and draw-order boundaries; the deployed SDL SHA256 is `90d08e7fccfb942ccffc1c105c617b67b4b880de258a07bfb6c8fdd99c4c2c19`. In the paused Throne of Bhaal scene, stationary operation held 19.9-20.0fps and returned after movement with 2.91-3.23ms of renderer queue time, while continuous panning ran at 10.8-13.8fps with 11.3-15.1ms of queue time. The merge absorbed approximately 98-99% of 5,400-9,800 span-fill callbacks per panning frame without ordering errors, but command construction still took 9.5-15.5ms and the observed panning range remained close to the prior 10.8-13.0fps result, so eliminating command objects alone produced only a modest benefit.
 
 #### Next Steps:
 
-Implement the SDL-only coalescing path, extend the renderer diagnostic for inclusive horizontal-line endpoints, clipping and state and ordering boundaries, rebuild and deploy only `libSDL2-2.0.so.0`, and repeat the same paused stationary and continuous-panning measurements before profiling the remaining stationary spell-animation cost.
+Keep the SDL coalescer as a correct generic reduction, profile the remaining stationary spell-animation cost in the current save without changing GemRB, and distinguish texture-update and game work from viewport regeneration. Consider a larger generic span-list submission only if later measurements show descriptor submission remains material after SDL profiling overhead is excluded, because the retained per-span SDL calls and hardware fill volume now dominate movement more than command-object traversal.
 
 #### Files Modified:
 
@@ -692,7 +692,7 @@ Implement the SDL-only coalescing path, extend the renderer diagnostic for inclu
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
