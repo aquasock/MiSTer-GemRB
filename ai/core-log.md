@@ -1068,3 +1068,32 @@ None.
 - [x] Passed
 
 ---
+
+## 35 COMMIT Unreleased ??? 2026-09-25T11:41:35-07:00
+
+#### Coming From:
+
+Unreleased 35409f1
+
+#### Purpose:
+
+Capture the reproducible Baldur's Gate II Kobold Commando heap corruption at its earliest detectable failure with matching debug symbols.
+
+#### Outcome:
+
+The approved diagnostic will keep the accepted CPU 0 affinity, protocol-1.7 seed-13 core, default MPFE arbitration and renderer statistics disabled, build and deploy matching unstripped GemRB and SDL debug files, and launch the same AR4000 save with `MISTER_DEBUG=1` and `MISTER_MALLOC_CHECK=1`. Gdb will record the stopping signal, primary backtrace, all thread backtraces and bounded raw main-thread stack in `crash.log`, while glibc's checking allocator and perturbation aim to stop closer to the corrupting operation than the normal `malloc(): unaligned tcache chunk detected` abort.
+
+#### Next Steps:
+
+Reproduce the Kobold Commando `SHOOT` failure once, retrieve and symbolize `crash.log`, identify the earliest supported ownership or bounds violation, and propose the smallest source correction only after the captured evidence distinguishes GemRB, SDL and renderer involvement.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
