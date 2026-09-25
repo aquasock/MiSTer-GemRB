@@ -1,0 +1,14 @@
+diff --git a/gemrb/core/Inventory.cpp b/gemrb/core/Inventory.cpp
+index aabecb80..5422db4a 100644
+--- a/gemrb/core/Inventory.cpp
++++ b/gemrb/core/Inventory.cpp
+@@ -1727,7 +1727,8 @@ void Inventory::BreakItemSlot(ieDword slot)
+ 	} else {
+ 		newItem = itm->ReplacementItem;
+ 	}
+-	gamedata->FreeItem(itm, Slot->ItemResRef, true);
++	// WeaponInfo caches pointers into this globally shared Item, so do not force-evict it.
++	gamedata->FreeItem(itm, Slot->ItemResRef, false);
+ 	//this depends on setslotitemres using setslotitem
+ 	SetSlotItemRes(newItem, slot, 0, 0, 0);
+ 	ieDword slotEffects = core->QuerySlotEffects(slot);
