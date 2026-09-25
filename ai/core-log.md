@@ -1127,7 +1127,7 @@ Repeat the depleted-ammunition Kobold battle with the deployed normal build; if 
 
 ---
 
-## 37 COMMIT Unreleased ??? 2026-09-25T12:46:37-07:00
+## 37 COMMIT Unreleased c904d9a 2026-09-25T12:46:37-07:00
 
 #### Coming From:
 
@@ -1139,11 +1139,11 @@ Prevent depleted ranged ammunition from force-evicting a shared cached item defi
 
 #### Outcome:
 
-The normal `6bcd48e` build completed the previously crashing Kobold battle and reached the game-over screen, confirming that its 76-byte `Animation` use-after-free was removed. The matching AddressSanitizer run then exposed a separate main-thread heap use-after-free: `Actor::GetCombatDetails` read `ITMExtHeader::THAC0Bonus` at offset 28 in an exactly 72-byte freed `ITMExtHeader` after a Kobold exhausted its ammunition. Static tracing shows that `Inventory::BreakItemSlot` uniquely force-evicts the globally shared item resource even though other actors can retain raw `WeaponInfo::extHeader` pointers into that resource. The proposed correction changes this release to the normal non-evicting cache path, preserving the existing weapon-header lifetime contract without retaining ammunition instances or changing renderer, FPGA, audio, affinity or launcher behavior.
+The normal `6bcd48e` build completed the previously crashing Kobold battle and reached the game-over screen, confirming that its 76-byte `Animation` use-after-free was removed. The matching AddressSanitizer run then exposed a separate main-thread heap use-after-free: `Actor::GetCombatDetails` read `ITMExtHeader::THAC0Bonus` at offset 28 in an exactly 72-byte freed `ITMExtHeader` after a Kobold exhausted its ammunition. Static tracing showed that `Inventory::BreakItemSlot` uniquely force-evicted the globally shared item resource even though other actors could retain raw `WeaponInfo::extHeader` pointers into that resource. Source `c904d9a` changes that release to the normal non-evicting cache path and documents the lifetime constraint, preserving the existing weapon-header contract without retaining ammunition instances or changing renderer, FPGA, audio, affinity or launcher behavior. Patch application and reverse-application checks passed, and normal and ARM AddressSanitizer builds completed with only the existing SDL alignment warning. The staged normal core-library SHA256 is `19dbda6e6de5ed717fcb93e2cf247118f422fde1e01bc1bda9254c024d467e3e`, the sanitizer core-library SHA256 is `9c87466c65135d848ed463ddd08b67dc2a146a4a33c6f367ab859da2a06c46d5`, and the sanitizer core build ID is `07eb6a104138de34f725d46bddb9aeaae22c375d`.
 
 #### Next Steps:
 
-Add the one-line GemRB patch with an explanatory lifetime comment, verify clean and idempotent patch application, build normal and ARM AddressSanitizer bundles, repeat the depleted-ammunition Kobold battle under AddressSanitizer, and restore the normal build after the diagnostic result.
+Deploy the ARM AddressSanitizer bundle with USB swap, repeat only the depleted-ammunition Kobold battle to catch this or any subsequent memory error at its first invalid access, then preserve any report and restore the staged normal build without requiring a second normal battle repetition.
 
 #### Files Modified:
 
@@ -1151,7 +1151,7 @@ Add the one-line GemRB patch with an explanatory lifetime comment, verify clean 
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
