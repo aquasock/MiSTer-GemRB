@@ -309,7 +309,9 @@ the command queue as off-screen draw work before it grows, whether a command que
 flip completes, and how long the SDK's confirmed wait trails the core's raw completion count while later commands run. Its
 `contention.sh` measures whether engine traffic slows the ARM: pinned to CPU 0, it times dependent-load latency, streaming
 reads and copies while CPU 1 keeps the engine idle or busy with fills, plain draws, blends or a mix, and reports each
-result relative to the idle engine.
+result relative to the idle engine. `MISTER_HOST=<ip> tools/mister-mpfe.sh show` decodes the HPS SDRAM controller's port
+priorities and weights, which decide how the ARM and FPGA share DDR3; `default`, `equal`, `mpu`, `mpu-priority` and
+`mpu-remap` apply a validated profile until the next boot, and `default` restores the preloader values.
 
 The sampler uses Linux `perf_event_open`, samples only the main thread, and does not pause or trace the game process.
 Keep the matching unstripped `work/gemrb-install` and `work/prefix` trees on the PC for useful function names.
