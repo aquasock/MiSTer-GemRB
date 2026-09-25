@@ -697,7 +697,7 @@ Keep the SDL coalescer as a correct generic reduction, profile the remaining sta
 
 ---
 
-## 23 COMMIT Unreleased ??? 2026-09-24T17:40:49-07:00
+## 23 COMMIT Unreleased 2d409e3 2026-09-24T17:46:07-07:00
 
 #### Coming From:
 
@@ -709,11 +709,11 @@ Measure GemRB's spell-heavy ARM instruction profile without stopping the process
 
 #### Outcome:
 
-The proposed tooling uses the MiSTer kernel's enabled performance-event interface to sample the running GemRB main thread without `ptrace`, records its executable mappings and instruction counts even if the known kobold fault ends the process, and symbolicates the result against the existing unstripped ARM binaries while leaving GemRB, SDL and the RBF unchanged.
+Source `2d409e3` adds a static ARM `perf_event_open` sampler and host symbolicator that profile GemRB without stopping it or changing GemRB, SDL or the RBF. A two-second MiSTer smoke test collected 975 samples with zero loss while its target continued running, and build IDs for the executable, core library and SDLVideo plugin matched the deployed files. The valid paused capture collected 503 main-thread user samples over 8.02 seconds with zero loss; all GemRB threads used 1.82 CPU seconds over a separate 5.02-second window, equal to 36.3% of one core or 18.1% of the dual-core ARM. The valid combat capture collected 1,122 main-thread user samples over 12.02 seconds with zero loss; all threads used 5.58 CPU seconds over 12.04 seconds, equal to 46.3% of one core or 23.2% of the chip, while the main thread used 2.41 seconds in user mode and 2.03 seconds in the kernel. A whole-system combat sample was 66.4% busy, with the MiSTer frontend pinned to CPU 1 and consuming approximately one core. Combat user samples were 41.7% SDL2, 30.3% GemRB core plus SDLVideo and 20.4% libc; audio conversion accounted for 19.0% of all samples, while direct Noodles symbols were 14.2% and remained nearly flat at 13.25 samples per second versus 12.38 paused. The ARM therefore has substantial headroom and combat logic is not the frame-rate limit; the remaining evidence points to serialized presentation and waiting, consistent with the earlier 28-32ms `noodles_present_and_wait` interval on every frame.
 
 #### Next Steps:
 
-Build and validate the sampler on a harmless process, deploy it separately from the game bundle, capture a short stationary spell-heavy window before the kobolds can fault, and rank GemRB, SDL and library symbols by sampled CPU time before selecting any optimization.
+Keep the profiler as the non-stopping CPU diagnostic and investigate a generic one-frame asynchronous presentation path so CPU frame preparation can overlap FPGA rendering and vertical blank instead of blocking in `noodles_present_and_wait`. Preserve render ordering, buffer ownership and tear-free output, then compare paused and combat frame pacing directly against both the synchronous Noodles path and the original software renderer before considering lower-value audio conversion work.
 
 #### Files Modified:
 
@@ -724,7 +724,7 @@ Build and validate the sampler on a harmless process, deploy it separately from 
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
