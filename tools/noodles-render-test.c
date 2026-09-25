@@ -108,6 +108,183 @@ static int render_copy(SDL_Renderer *renderer, SDL_Texture *texture, int x,
     return SDL_RenderCopyEx(renderer, texture, NULL, &destination, 0.0, NULL, flip);
 }
 
+static int check_alpha_state_paths(SDL_Renderer *renderer)
+{
+    const uint32_t background = rgba(9, 19, 29, 255);
+    const uint32_t opaque_color = rgba(101, 151, 201, 255);
+    const uint32_t partial_color = rgba(211, 71, 31, 255);
+    const uint32_t transparent_color = rgba(241, 181, 121, 0);
+    uint32_t zero_pixels[4] = {
+        rgba(20, 30, 40, 0), rgba(50, 60, 70, 0),
+        rgba(80, 90, 100, 0), rgba(110, 120, 130, 0)
+    };
+    uint32_t opaque_pixels[4] = {
+        opaque_color, opaque_color, opaque_color, opaque_color
+    };
+    uint32_t result[4];
+    SDL_Texture *zero = NULL;
+    SDL_Texture *opaque = NULL;
+    SDL_Texture *generated = NULL;
+    SDL_Texture *target = NULL;
+    SDL_Rect pixel;
+    int rc = -1;
+    int i;
+
+    zero = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
+                             SDL_TEXTUREACCESS_STATIC, 4, 1);
+    opaque = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
+                               SDL_TEXTUREACCESS_STATIC, 4, 1);
+    target = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
+                               SDL_TEXTUREACCESS_TARGET, 4, 1);
+    generated = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
+                                  SDL_TEXTUREACCESS_TARGET, 4, 1);
+    if (!zero || !opaque || !generated || !target ||
+        SDL_UpdateTexture(zero, NULL, zero_pixels, sizeof(zero_pixels)) < 0 ||
+        SDL_UpdateTexture(opaque, NULL, opaque_pixels, sizeof(opaque_pixels)) < 0 ||
+        SDL_SetTextureBlendMode(zero, SDL_BLENDMODE_BLEND) < 0 ||
+        SDL_SetTextureBlendMode(opaque, SDL_BLENDMODE_BLEND) < 0 ||
+        SDL_SetRenderTarget(renderer, target) < 0) {
+        fprintf(stderr, "alpha-state texture setup: %s\n", SDL_GetError());
+        goto done;
+    }
+
+    if (SDL_SetRenderDrawColor(renderer, 9, 19, 29, 255) < 0 ||
+        SDL_RenderClear(renderer) < 0 ||
+        SDL_RenderCopy(renderer, zero, NULL, NULL) < 0 ||
+        SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_ABGR8888,
+                             result, sizeof(result)) < 0) {
+        fprintf(stderr, "transparent-source check: %s\n", SDL_GetError());
+        goto done;
+    }
+    for (i = 0; i < 4; ++i) {
+        if (result[i] != background) {
+            fprintf(stderr, "transparent-source skip at %d: got %08x expected %08x\n",
+                    i, result[i], background);
+            goto done;
+        }
+    }
+
+    if (SDL_RenderClear(renderer) < 0 ||
+        SDL_RenderCopy(renderer, opaque, NULL, NULL) < 0 ||
+        SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_ABGR8888,
+                             result, sizeof(result)) < 0) {
+        fprintf(stderr, "opaque-source check: %s\n", SDL_GetError());
+        goto done;
+    }
+    for (i = 0; i < 4; ++i) {
+        if (result[i] != opaque_color) {
+            fprintf(stderr, "opaque-source copy at %d: got %08x expected %08x\n",
+                    i, result[i], opaque_color);
+            goto done;
+        }
+    }
+
+    pixel = (SDL_Rect){ 1, 0, 1, 1 };
+    if (SDL_UpdateTexture(zero, &pixel, &partial_color, 4) < 0 ||
+        SDL_RenderClear(renderer) < 0 ||
+        SDL_RenderCopy(renderer, zero, NULL, NULL) < 0 ||
+        SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_ABGR8888,
+                             result, sizeof(result)) < 0) {
+        fprintf(stderr, "transparent partial-update check: %s\n", SDL_GetError());
+        goto done;
+    }
+    if (result[0] != background || result[1] != partial_color ||
+        result[2] != background || result[3] != background) {
+        fprintf(stderr, "transparent partial update: got %08x %08x %08x %08x\n",
+                result[0], result[1], result[2], result[3]);
+        goto done;
+    }
+
+    pixel.x = 2;
+    if (SDL_UpdateTexture(opaque, &pixel, &transparent_color, 4) < 0 ||
+        SDL_RenderClear(renderer) < 0 ||
+        SDL_RenderCopy(renderer, opaque, NULL, NULL) < 0 ||
+        SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_ABGR8888,
+                             result, sizeof(result)) < 0) {
+        fprintf(stderr, "opaque partial-update check: %s\n", SDL_GetError());
+        goto done;
+    }
+    if (result[0] != opaque_color || result[1] != opaque_color ||
+        result[2] != background || result[3] != opaque_color) {
+        fprintf(stderr, "opaque partial update: got %08x %08x %08x %08x\n",
+                result[0], result[1], result[2], result[3]);
+        goto done;
+    }
+
+    if (SDL_SetRenderTarget(renderer, generated) < 0 ||
+        SDL_SetRenderDrawColor(renderer, 20, 30, 40, 0) < 0 ||
+        SDL_RenderClear(renderer) < 0 ||
+        SDL_SetTextureBlendMode(generated, SDL_BLENDMODE_BLEND) < 0 ||
+        SDL_SetRenderTarget(renderer, target) < 0 ||
+        SDL_SetRenderDrawColor(renderer, 9, 19, 29, 255) < 0 ||
+        SDL_RenderClear(renderer) < 0 ||
+        SDL_RenderCopy(renderer, generated, NULL, NULL) < 0 ||
+        SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_ABGR8888,
+                             result, sizeof(result)) < 0) {
+        fprintf(stderr, "transparent render-target check: %s\n", SDL_GetError());
+        goto done;
+    }
+    for (i = 0; i < 4; ++i) {
+        if (result[i] != background) {
+            fprintf(stderr, "transparent render target at %d: got %08x expected %08x\n",
+                    i, result[i], background);
+            goto done;
+        }
+    }
+
+    if (SDL_SetRenderTarget(renderer, generated) < 0 ||
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE) < 0 ||
+        SDL_SetRenderDrawColor(renderer, 101, 151, 201, 255) < 0 ||
+        SDL_RenderFillRect(renderer, NULL) < 0 ||
+        SDL_SetRenderTarget(renderer, target) < 0 ||
+        SDL_SetRenderDrawColor(renderer, 9, 19, 29, 255) < 0 ||
+        SDL_RenderClear(renderer) < 0 ||
+        SDL_RenderCopy(renderer, generated, NULL, NULL) < 0 ||
+        SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_ABGR8888,
+                             result, sizeof(result)) < 0) {
+        fprintf(stderr, "opaque render-target check: %s\n", SDL_GetError());
+        goto done;
+    }
+    for (i = 0; i < 4; ++i) {
+        if (result[i] != opaque_color) {
+            fprintf(stderr, "opaque render target at %d: got %08x expected %08x\n",
+                    i, result[i], opaque_color);
+            goto done;
+        }
+    }
+
+    pixel = (SDL_Rect){ 1, 0, 1, 1 };
+    if (SDL_SetRenderTarget(renderer, generated) < 0 ||
+        SDL_SetRenderDrawColor(renderer, 20, 30, 40, 0) < 0 ||
+        SDL_RenderClear(renderer) < 0 ||
+        SDL_SetRenderDrawColor(renderer, 211, 71, 31, 255) < 0 ||
+        SDL_RenderFillRect(renderer, &pixel) < 0 ||
+        SDL_SetRenderTarget(renderer, target) < 0 ||
+        SDL_SetRenderDrawColor(renderer, 9, 19, 29, 255) < 0 ||
+        SDL_RenderClear(renderer) < 0 ||
+        SDL_RenderCopy(renderer, generated, NULL, NULL) < 0 ||
+        SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_ABGR8888,
+                             result, sizeof(result)) < 0) {
+        fprintf(stderr, "render-target partial-fill check: %s\n", SDL_GetError());
+        goto done;
+    }
+    if (result[0] != background || result[1] != partial_color ||
+        result[2] != background || result[3] != background) {
+        fprintf(stderr, "render-target partial fill: got %08x %08x %08x %08x\n",
+                result[0], result[1], result[2], result[3]);
+        goto done;
+    }
+    rc = 0;
+
+done:
+    SDL_SetRenderTarget(renderer, NULL);
+    SDL_DestroyTexture(target);
+    SDL_DestroyTexture(generated);
+    SDL_DestroyTexture(opaque);
+    SDL_DestroyTexture(zero);
+    return rc;
+}
+
 static int draw_display_and_check(SDL_Renderer *renderer, SDL_Texture *target,
                                   uint32_t expected, SDL_Texture *marker,
                                   uint32_t marker_expected, const char *phase)
@@ -310,6 +487,9 @@ int main(int argc, char **argv)
     }
     if (strcmp(info.name, "noodles") != 0) {
         fprintf(stderr, "selected renderer is %s, expected noodles\n", info.name);
+        goto done;
+    }
+    if (check_alpha_state_paths(renderer) < 0) {
         goto done;
     }
     if (SDL_RenderSetLogicalSize(renderer, 800, 600) < 0) {

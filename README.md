@@ -198,9 +198,10 @@ counts and maximum sizes, submission stalls, CPU fallback work, uploads, readbac
 texture residency. Draw classes separate safe 64-bit copies, alignment reroutes, standard and explicit blend modes,
 mirroring and modulation; draw and fill size buckets show how much traffic falls into each pixel-area range. While
 statistics are enabled, a sparse sample of CPU-valid, unmodulated standard-alpha sources classifies adjacent pixel pairs
-as opaque, transparent or partial so destination-read fast paths can be sized without scanning every rendered pixel. The
-profiler also performs one read-only capture of each unique large GPU-generated blend source and logs its complete alpha
-pair distribution; those first captures deliberately stall their frame and are excluded from performance comparisons. A callback line attributes CPU time and call volume to SDL command construction, texture creation,
+as opaque, transparent or partial. The renderer also conservatively tracks textures proven entirely transparent or
+opaque by full-surface writes. Standard-alpha draws from transparent textures are skipped, while identity-modulated draws
+from opaque textures use the plain copy path; partial or ambiguous writes invalidate that state. The alpha line reports
+the skipped and converted work. A callback line attributes CPU time and call volume to SDL command construction, texture creation,
 updates, locks, target changes, readback and destruction; its merged-fill count reports compatible calls appended to an
 existing SDL command, and its rotated count reports updated textures moved away from in-flight storage. The counters and their performance-clock reads are disabled
 otherwise; asynchronous presentation and its synchronization boundaries are unchanged.

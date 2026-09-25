@@ -41,7 +41,13 @@
 #define NOODLES_DRAW_BATCH_MAX 64u
 #define NOODLES_FILL_BATCH_MAX 64u
 #define NOODLES_SIZE_BUCKETS 5u
-#define NOODLES_ALPHA_PROBE_MAX 16u
+
+typedef enum NOODLES_AlphaState
+{
+    NOODLES_ALPHA_UNKNOWN,
+    NOODLES_ALPHA_ZERO,
+    NOODLES_ALPHA_OPAQUE
+} NOODLES_AlphaState;
 
 enum
 {
@@ -72,16 +78,11 @@ typedef struct NOODLES_TextureData
     SDL_bool dirty_valid;
     SDL_bool pinned;
     SDL_bool gpu_in_use;
+    NOODLES_AlphaState alpha_state;
     size_t resident_bytes;
     Uint64 last_use;
     struct NOODLES_TextureData *next;
 } NOODLES_TextureData;
-
-typedef struct NOODLES_AlphaProbeKey
-{
-    NOODLES_TextureData *texture;
-    SDL_Rect source;
-} NOODLES_AlphaProbeKey;
 
 typedef struct NOODLES_RenderData
 {
@@ -148,8 +149,10 @@ typedef struct NOODLES_RenderData
     Uint64 stats_alpha_pair_mixed;
     Uint64 stats_alpha_unavailable_draws;
     Uint64 stats_alpha_unavailable_pixels;
-    NOODLES_AlphaProbeKey alpha_probe_keys[NOODLES_ALPHA_PROBE_MAX];
-    size_t alpha_probe_count;
+    Uint64 stats_alpha_skipped_draws;
+    Uint64 stats_alpha_skipped_pixels;
+    Uint64 stats_alpha_copy_draws;
+    Uint64 stats_alpha_copy_pixels;
     Uint64 stats_draw_stalls;
     Uint64 stats_draw_batches;
     Uint64 stats_draw_batch_max;
@@ -232,6 +235,115 @@ static int NOODLES_SetErrno(const char *operation)
 static Uint32 NOODLES_PackRGBA(Uint8 r, Uint8 g, Uint8 b, Uint8 a)
 {
     return (Uint32)r | ((Uint32)g << 8) | ((Uint32)b << 16) | ((Uint32)a << 24);
+}
+
+static NOODLES_AlphaState NOODLES_AlphaFromByte(Uint8 alpha)
+{
+    return alpha == 0 ? NOODLES_ALPHA_ZERO :
+           alpha == 255 ? NOODLES_ALPHA_OPAQUE : NOODLES_ALPHA_UNKNOWN;
+}
+
+static SDL_bool NOODLES_FullRect(const NOODLES_TextureData *surface,
+                                 const SDL_Rect *rect)
+{
+    return rect->x == 0 && rect->y == 0 &&
+           rect->w == surface->width && rect->h == surface->height;
+}
+
+static NOODLES_AlphaState NOODLES_ClassifyPixels(const void *pixels, int pitch,
+                                                 int width, int height)
+{
+    SDL_bool all_zero = SDL_TRUE;
+    SDL_bool all_opaque = SDL_TRUE;
+    int y;
+    for (y = 0; y < height; ++y) {
+        const Uint8 *row = (const Uint8 *)pixels + y * pitch;
+        int x;
+        for (x = 0; x < width; ++x) {
+            const Uint32 alpha = row[x * 4 + 3];
+            all_zero = all_zero && alpha == 0;
+            all_opaque = all_opaque && alpha == 255;
+            if (!all_zero && !all_opaque) {
+                return NOODLES_ALPHA_UNKNOWN;
+            }
+        }
+    }
+    return all_zero ? NOODLES_ALPHA_ZERO :
+           all_opaque ? NOODLES_ALPHA_OPAQUE : NOODLES_ALPHA_UNKNOWN;
+}
+
+static void NOODLES_UpdateAlphaPixels(NOODLES_TextureData *surface,
+                                      const SDL_Rect *rect, const void *pixels,
+                                      int pitch)
+{
+    const NOODLES_AlphaState incoming =
+        NOODLES_ClassifyPixels(pixels, pitch, rect->w, rect->h);
+    if (NOODLES_FullRect(surface, rect)) {
+        surface->alpha_state = incoming;
+    } else if (incoming == NOODLES_ALPHA_UNKNOWN ||
+               surface->alpha_state != incoming) {
+        surface->alpha_state = NOODLES_ALPHA_UNKNOWN;
+    }
+}
+
+static NOODLES_AlphaState NOODLES_FillAlphaState(
+    const NOODLES_TextureData *target, NOODLES_AlphaState current,
+    const SDL_Rect *rect, Uint8 alpha, SDL_BlendMode blend)
+{
+    const NOODLES_AlphaState source = NOODLES_AlphaFromByte(alpha);
+    const SDL_bool full = NOODLES_FullRect(target, rect);
+    if (blend == SDL_BLENDMODE_NONE) {
+        if (full) {
+            return source;
+        }
+        return current == source ? current : NOODLES_ALPHA_UNKNOWN;
+    }
+    if (blend == SDL_BLENDMODE_BLEND) {
+        if (current == NOODLES_ALPHA_OPAQUE || source == NOODLES_ALPHA_ZERO) {
+            return current;
+        }
+        if (full && source == NOODLES_ALPHA_OPAQUE) {
+            return NOODLES_ALPHA_OPAQUE;
+        }
+        return NOODLES_ALPHA_UNKNOWN;
+    }
+    if (blend == SDL_BLENDMODE_ADD || blend == SDL_BLENDMODE_MOD ||
+        blend == SDL_BLENDMODE_MUL) {
+        return current;
+    }
+    return NOODLES_ALPHA_UNKNOWN;
+}
+
+static NOODLES_AlphaState NOODLES_CopyAlphaState(
+    const NOODLES_TextureData *target, const SDL_Rect *destination,
+    NOODLES_AlphaState source, Uint8 alpha_mod, SDL_BlendMode blend)
+{
+    const SDL_bool full = NOODLES_FullRect(target, destination);
+    if (blend == SDL_BLENDMODE_NONE) {
+        const NOODLES_AlphaState output =
+            source == NOODLES_ALPHA_ZERO ? NOODLES_ALPHA_ZERO :
+            source == NOODLES_ALPHA_OPAQUE && alpha_mod == 255
+                ? NOODLES_ALPHA_OPAQUE : NOODLES_ALPHA_UNKNOWN;
+        if (full) {
+            return output;
+        }
+        return target->alpha_state == output ? output : NOODLES_ALPHA_UNKNOWN;
+    }
+    if (blend == SDL_BLENDMODE_BLEND) {
+        if (source == NOODLES_ALPHA_ZERO) {
+            return target->alpha_state;
+        }
+        if (target->alpha_state == NOODLES_ALPHA_OPAQUE ||
+            (full && source == NOODLES_ALPHA_OPAQUE && alpha_mod == 255)) {
+            return NOODLES_ALPHA_OPAQUE;
+        }
+        return NOODLES_ALPHA_UNKNOWN;
+    }
+    if (blend == SDL_BLENDMODE_ADD || blend == SDL_BLENDMODE_MOD ||
+        blend == SDL_BLENDMODE_MUL) {
+        return target->alpha_state;
+    }
+    return NOODLES_ALPHA_UNKNOWN;
 }
 
 static int NOODLES_FlushFills(NOODLES_RenderData *data);
@@ -438,6 +550,7 @@ static int NOODLES_InitSurface(NOODLES_RenderData *data, int width, int height,
     SDL_memset(surface->shadow->pixels, 0,
                (size_t)surface->shadow->pitch * (size_t)surface->shadow->h);
     surface->cpu_valid = SDL_TRUE;
+    surface->alpha_state = NOODLES_ALPHA_ZERO;
     surface->pinned = pinned;
     surface->resident_bytes = NOODLES_SurfaceBytes(width, height);
     surface->next = data->surfaces;
@@ -481,6 +594,7 @@ static int NOODLES_EnsureCPU(NOODLES_RenderData *data, NOODLES_TextureData *surf
         SDL_memset(surface->shadow->pixels, 0,
                    (size_t)surface->shadow->pitch * (size_t)surface->shadow->h);
         surface->cpu_valid = SDL_TRUE;
+        surface->alpha_state = NOODLES_ALPHA_ZERO;
         return 0;
     }
     if (!surface->surface && surface != &data->composition) {
@@ -774,16 +888,19 @@ static int NOODLES_CommitCPURegion(NOODLES_RenderData *data,
     }
     surface->gpu_valid = SDL_TRUE;
     surface->gpu_in_use = SDL_FALSE;
+    surface->alpha_state = NOODLES_ALPHA_UNKNOWN;
     NOODLES_ClearDirty(surface);
     NOODLES_TouchSurface(data, surface);
     return 0;
 }
 
-static void NOODLES_MarkGPUWrite(NOODLES_TextureData *surface)
+static void NOODLES_MarkGPUWriteState(NOODLES_TextureData *surface,
+                                      NOODLES_AlphaState alpha_state)
 {
     surface->gpu_valid = SDL_TRUE;
     surface->cpu_valid = SDL_FALSE;
     surface->gpu_in_use = SDL_TRUE;
+    surface->alpha_state = alpha_state;
     NOODLES_ClearDirty(surface);
 }
 
@@ -791,6 +908,7 @@ static void NOODLES_MarkCPUWrite(NOODLES_TextureData *surface)
 {
     surface->cpu_valid = SDL_TRUE;
     surface->gpu_valid = SDL_FALSE;
+    surface->alpha_state = NOODLES_ALPHA_UNKNOWN;
     NOODLES_MarkAllDirty(surface);
 }
 
@@ -1153,6 +1271,7 @@ static int NOODLES_UpdateTextureImpl(SDL_Renderer *renderer, SDL_Texture *textur
         destination += texturedata->shadow->pitch;
         source += pitch;
     }
+    NOODLES_UpdateAlphaPixels(texturedata, rect, pixels, pitch);
 
     texturedata->cpu_valid = SDL_TRUE;
     texturedata->gpu_valid = SDL_FALSE;
@@ -1264,6 +1383,12 @@ static void NOODLES_UnlockTextureImpl(SDL_Renderer *renderer, SDL_Texture *textu
         return;
     }
     texturedata->locked = SDL_FALSE;
+    pixels = (const Uint8 *)texturedata->shadow->pixels +
+             texturedata->lock_rect.y * texturedata->shadow->pitch +
+             texturedata->lock_rect.x * 4;
+    pitch = (size_t)texturedata->shadow->pitch;
+    NOODLES_UpdateAlphaPixels(texturedata, &texturedata->lock_rect,
+                              pixels, (int)pitch);
     texturedata->cpu_valid = SDL_TRUE;
     texturedata->gpu_valid = SDL_FALSE;
     NOODLES_MarkDirty(texturedata, &texturedata->lock_rect);
@@ -1798,6 +1923,11 @@ static int NOODLES_RunCopy(NOODLES_RenderData *data, NOODLES_TextureData *target
         (NOODLES_TextureData *)cmd->data.draw.texture->driverdata;
     noodles_surface_draw_t draw;
     SDL_Rect effective_clip;
+    NOODLES_AlphaState target_alpha;
+    SDL_BlendMode effective_blend;
+    SDL_bool alpha_skip;
+    SDL_bool alpha_copy;
+    Uint64 pixels;
     Uint32 flags;
     Uint32 modulation;
 
@@ -1813,56 +1943,33 @@ static int NOODLES_RunCopy(NOODLES_RenderData *data, NOODLES_TextureData *target
         return 0;
     }
 
-    if (data->stats_enabled && cmd->data.draw.blend == SDL_BLENDMODE_BLEND &&
-        cmd->data.draw.a == 255 && (Uint64)source.w * source.h > 16384u &&
-        data->alpha_probe_count < NOODLES_ALPHA_PROBE_MAX) {
-        size_t probe;
-        SDL_bool seen = SDL_FALSE;
-        for (probe = 0; probe < data->alpha_probe_count; ++probe) {
-            const NOODLES_AlphaProbeKey *key = &data->alpha_probe_keys[probe];
-            if (key->texture == texturedata && SDL_RectEquals(&key->source, &source)) {
-                seen = SDL_TRUE;
-                break;
-            }
+    pixels = (Uint64)source.w * source.h;
+    alpha_skip = cmd->data.draw.blend == SDL_BLENDMODE_BLEND &&
+                 texturedata->alpha_state == NOODLES_ALPHA_ZERO;
+    alpha_copy = cmd->data.draw.blend == SDL_BLENDMODE_BLEND &&
+                 texturedata->alpha_state == NOODLES_ALPHA_OPAQUE &&
+                 cmd->data.draw.r == 255 && cmd->data.draw.g == 255 &&
+                 cmd->data.draw.b == 255 && cmd->data.draw.a == 255 &&
+                 flip == SDL_FLIP_NONE;
+    if (alpha_skip) {
+        if (data->stats_enabled) {
+            data->stats_alpha_skipped_draws++;
+            data->stats_alpha_skipped_pixels += pixels;
         }
-        if (!seen) {
-            Uint64 opaque = 0, zero = 0, mixed = 0;
-            int y;
-            if (NOODLES_EnsureCPU(data, texturedata) < 0) {
-                return -1;
-            }
-            data->alpha_probe_keys[data->alpha_probe_count].texture = texturedata;
-            data->alpha_probe_keys[data->alpha_probe_count].source = source;
-            data->alpha_probe_count++;
-            for (y = 0; y < source.h; ++y) {
-                const Uint32 *row = (const Uint32 *)((const Uint8 *)texturedata->shadow->pixels +
-                    (source.y + y) * texturedata->shadow->pitch) + source.x;
-                int x;
-                for (x = 0; x + 1 < source.w; x += 2) {
-                    const Uint32 a0 = row[x] >> 24;
-                    const Uint32 a1 = row[x + 1] >> 24;
-                    if (a0 == 255 && a1 == 255) {
-                        opaque++;
-                    } else if (a0 == 0 && a1 == 0) {
-                        zero++;
-                    } else {
-                        mixed++;
-                    }
-                }
-            }
-            SDL_Log("Noodles alpha probe: texture=%dx%d source=%d,%d %dx%d pairs opaque=%llu zero=%llu partial-or-edge=%llu",
-                    texturedata->width, texturedata->height, source.x, source.y,
-                    source.w, source.h, (unsigned long long)opaque,
-                    (unsigned long long)zero, (unsigned long long)mixed);
-        }
+        return 0;
     }
+    target_alpha = NOODLES_CopyAlphaState(target, &destination,
+                                           texturedata->alpha_state,
+                                           cmd->data.draw.a,
+                                           cmd->data.draw.blend);
 
     if (NOODLES_EnsureGPU(data, target) < 0 ||
         NOODLES_EnsureGPU(data, texturedata) < 0) {
         return -1;
     }
 
-    flags = NOODLES_BlendFlags(cmd->data.draw.blend);
+    effective_blend = alpha_copy ? SDL_BLENDMODE_NONE : cmd->data.draw.blend;
+    flags = NOODLES_BlendFlags(effective_blend);
     if (flip & SDL_FLIP_HORIZONTAL) {
         flags |= NOODLES_DRAW_MIRROR_X;
     }
@@ -1883,7 +1990,6 @@ static int NOODLES_RunCopy(NOODLES_RenderData *data, NOODLES_TextureData *target
 
     if (data->stats_enabled && cmd->data.draw.blend == SDL_BLENDMODE_BLEND &&
         cmd->data.draw.a == 255) {
-        const Uint64 pixels = (Uint64)source.w * source.h;
         if (texturedata->shadow && texturedata->cpu_valid && source.w >= 2) {
             int y;
             data->stats_alpha_sample_draws++;
@@ -1923,8 +2029,12 @@ static int NOODLES_RunCopy(NOODLES_RenderData *data, NOODLES_TextureData *target
             target == &data->composition ? NULL : target->surface, &draw) < 0) {
         return -1;
     }
+    if (data->stats_enabled && alpha_copy) {
+        data->stats_alpha_copy_draws++;
+        data->stats_alpha_copy_pixels += pixels;
+    }
     texturedata->gpu_in_use = SDL_TRUE;
-    NOODLES_MarkGPUWrite(target);
+    NOODLES_MarkGPUWriteState(target, target_alpha);
     return 0;
 }
 
@@ -1978,6 +2088,8 @@ static int NOODLES_SubmitOpaquePrimitives(NOODLES_RenderData *data,
                                           const SDL_Rect *clip, Uint32 color)
 {
     SDL_bool drew = SDL_FALSE;
+    NOODLES_AlphaState alpha_state = target->alpha_state;
+    const Uint8 alpha = (Uint8)(color >> 24);
     int i;
     if (NOODLES_EnsureGPU(data, target) < 0) {
         return -1;
@@ -1994,6 +2106,13 @@ static int NOODLES_SubmitOpaquePrimitives(NOODLES_RenderData *data,
             fill.height = 1;
             if (NOODLES_SubmitFill(data, target, &fill, color) < 0) {
                 return -1;
+            }
+            {
+                const SDL_Rect written = { fill.x, fill.y,
+                                           (int)fill.width, (int)fill.height };
+                alpha_state = NOODLES_FillAlphaState(target, alpha_state,
+                                                     &written, alpha,
+                                                     SDL_BLENDMODE_NONE);
             }
             drew = SDL_TRUE;
         }
@@ -2038,11 +2157,18 @@ static int NOODLES_SubmitOpaquePrimitives(NOODLES_RenderData *data,
                     }
                 }
             }
+            {
+                const SDL_Rect written = { fill.x, fill.y,
+                                           (int)fill.width, (int)fill.height };
+                alpha_state = NOODLES_FillAlphaState(target, alpha_state,
+                                                     &written, alpha,
+                                                     SDL_BLENDMODE_NONE);
+            }
             drew = SDL_TRUE;
         }
     }
     if (drew) {
-        NOODLES_MarkGPUWrite(target);
+        NOODLES_MarkGPUWriteState(target, alpha_state);
     }
     return 0;
 }
@@ -2083,12 +2209,15 @@ static int NOODLES_RunCommandQueueImpl(SDL_Renderer *renderer, SDL_RenderCommand
                                      cmd->data.color.b, cmd->data.color.a)) < 0) {
                 return -1;
             }
-            NOODLES_MarkGPUWrite(target);
+            NOODLES_MarkGPUWriteState(target,
+                                      NOODLES_AlphaFromByte(cmd->data.color.a));
             break;
         }
         case SDL_RENDERCMD_FILL_RECTS: {
             SDL_Rect *rects = (SDL_Rect *)((Uint8 *)vertices + cmd->data.draw.first);
             SDL_Rect effective_clip;
+            NOODLES_AlphaState alpha_state = target->alpha_state;
+            SDL_bool drew = SDL_FALSE;
             size_t i;
             if (!NOODLES_EffectiveClip(target, &viewport, &clip, clip_enabled,
                                        &effective_clip)) {
@@ -2172,8 +2301,15 @@ static int NOODLES_RunCommandQueueImpl(SDL_Renderer *renderer, SDL_RenderCommand
                             NOODLES_FillBlendMode(cmd->data.draw.blend))) < 0) {
                     return -1;
                 }
+                alpha_state = NOODLES_FillAlphaState(target, alpha_state,
+                                                     &visible,
+                                                     cmd->data.draw.a,
+                                                     cmd->data.draw.blend);
+                drew = SDL_TRUE;
             }
-            NOODLES_MarkGPUWrite(target);
+            if (drew) {
+                NOODLES_MarkGPUWriteState(target, alpha_state);
+            }
             break;
         }
         case SDL_RENDERCMD_DRAW_POINTS:
@@ -2550,14 +2686,18 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
                     (double)data->stats_fill_size_pixels[3] / 1000000.0,
                     (unsigned long long)data->stats_fill_size_commands[4],
                     (double)data->stats_fill_size_pixels[4] / 1000000.0);
-            SDL_Log("Noodles alpha sample: draws=%llu/%.3fMpx pairs opaque=%llu zero=%llu partial-or-edge=%llu unavailable=%llu/%.3fMpx",
+            SDL_Log("Noodles alpha: sample=%llu/%.3fMpx pairs opaque=%llu zero=%llu partial-or-edge=%llu unavailable=%llu/%.3fMpx skipped=%llu/%.3fMpx copied=%llu/%.3fMpx",
                     (unsigned long long)data->stats_alpha_sample_draws,
                     (double)data->stats_alpha_sample_pixels / 1000000.0,
                     (unsigned long long)data->stats_alpha_pair_opaque,
                     (unsigned long long)data->stats_alpha_pair_zero,
                     (unsigned long long)data->stats_alpha_pair_mixed,
                     (unsigned long long)data->stats_alpha_unavailable_draws,
-                    (double)data->stats_alpha_unavailable_pixels / 1000000.0);
+                    (double)data->stats_alpha_unavailable_pixels / 1000000.0,
+                    (unsigned long long)data->stats_alpha_skipped_draws,
+                    (double)data->stats_alpha_skipped_pixels / 1000000.0,
+                    (unsigned long long)data->stats_alpha_copy_draws,
+                    (double)data->stats_alpha_copy_pixels / 1000000.0);
             SDL_Log("Noodles sync: uploads=%llu/%.3fMiB readbacks=%llu/%.3fMiB evictions=%llu drains=%llu progress=%llu resident=%.1fMiB shadow=%.1fMiB/%.1fMiB peak alloc=%llu free=%llu",
                     (unsigned long long)data->stats_uploads,
                     (double)data->stats_upload_bytes / (1024.0 * 1024.0),
@@ -2649,6 +2789,10 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
             data->stats_alpha_pair_mixed = 0;
             data->stats_alpha_unavailable_draws = 0;
             data->stats_alpha_unavailable_pixels = 0;
+            data->stats_alpha_skipped_draws = 0;
+            data->stats_alpha_skipped_pixels = 0;
+            data->stats_alpha_copy_draws = 0;
+            data->stats_alpha_copy_pixels = 0;
             data->stats_draw_stalls = 0;
             data->stats_draw_batches = 0;
             data->stats_draw_batch_max = 0;
@@ -2705,6 +2849,7 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
        FPGA rendering and vertical blank. */
     data->composition.gpu_valid = SDL_TRUE;
     data->composition.cpu_valid = SDL_FALSE;
+    data->composition.alpha_state = NOODLES_ALPHA_UNKNOWN;
     return 0;
 }
 
@@ -2807,6 +2952,7 @@ static int NOODLES_CreateRenderer(SDL_Renderer *renderer, SDL_Window *window, Ui
     }
     data->composition.cpu_valid = SDL_FALSE;
     data->composition.gpu_valid = SDL_TRUE;
+    data->composition.alpha_state = NOODLES_ALPHA_UNKNOWN;
     data->target = &data->composition;
 
     renderer->GetOutputSize = NOODLES_GetOutputSize;
