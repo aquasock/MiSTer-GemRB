@@ -1361,3 +1361,32 @@ Test the same stationary AR0015 scene with `DrawFPS=1` and diagnostics off again
 - [ ] Passed
 
 ---
+
+## 45 COMMIT Unreleased f4b56eb 2026-09-25T14:39:01-07:00
+
+#### Coming From:
+
+Unreleased f4b56eb
+
+#### Purpose:
+
+Record hardware qualification of the Noodles renderer's written-region clearing and blending and the resulting fog-of-war workload measurement.
+
+#### Outcome:
+
+With the `f4b56eb` bundle, `DrawFPS=1`, USB swap and diagnostics off, the stationary AR0015 scene that had shown about 27fps reached GemRB's 30fps cap, and the user found the cursor, tooltips, window borders, menus and videos visually correct. Panning into explored-but-unseen areas still dropped occasionally to 28fps. Kernel counters during such a view showed the main thread running about 42% of the time with no swap activity and no new log errors, so the limit remained FPGA drawing. GemRB's `FogRenderer` darkens those areas with rows of half-transparent black rectangles, plus blended edge sprites under `SpriteFogOfWar=1`, which the renderer submits as Noodles blended fills. A statistics-enabled relaunch, which does not alter FPGA workload, produced 39 five-second windows in AR0015. Heavy fog added up to 0.44 Mpx of blended fills per frame, close to a full 800x600 screen. The trimmed HUD area still cleared and blended each frame varied from 0.014 to 0.30 Mpx with the cursor position, because GemRB draws both its FPS counter at the top left and the cursor into the HUD buffer and the renderer's single bounding rectangle spans both. Estimated engine time at Entry 27's rates, with an assumed 69 Mpixel/s blended-fill rate, was 22-30ms per frame, leaving little of the 33.3ms two-refresh budget in heavy fog when the cursor is far from the counter. Statistics were disabled again in the device `env.sh` afterwards.
+
+#### Next Steps:
+
+The user chose to investigate raising MiSTer-Noodles engine throughput next, particularly for blended fills, copies and blends, following that repository's own project policies. Renderer-side candidates remain available for later approval: tracking several content rectangles per texture so separated overlay elements do not merge into one large area, and dropping a display clear that the next opaque full-screen copy overwrites.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
