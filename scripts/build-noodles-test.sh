@@ -14,6 +14,9 @@ mkdir -p "$OUT/libs"
 "$CROSS-gcc" -O2 -Wall -Wextra $ARCH_FLAGS -I"$PREFIX/include" \
 	"$ROOT/tools/noodles-throughput.c" -L"$PREFIX/lib" -lnoodles \
 	-Wl,-rpath,'$ORIGIN/libs' -o "$OUT/noodles-throughput"
+"$CROSS-gcc" -O2 -Wall -Wextra $ARCH_FLAGS -I"$PREFIX/include" \
+	"$ROOT/tools/noodles-contention.c" -L"$PREFIX/lib" -lnoodles -lpthread \
+	-Wl,-rpath,'$ORIGIN/libs' -o "$OUT/noodles-contention"
 
 cp -L "$PREFIX/lib/libSDL2-2.0.so.0" "$OUT/libs/libSDL2-2.0.so.0"
 cp -L /usr/arm-linux-gnueabihf/lib/ld-linux-armhf.so.3 "$OUT/libs/ld-linux-armhf.so.3"
@@ -33,8 +36,16 @@ set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 exec "$D/libs/ld-linux-armhf.so.3" --library-path "$D/libs" "$D/noodles-throughput" "$@"
 EOF2
-chmod +x "$OUT/run.sh" "$OUT/throughput.sh" "$OUT/noodles-render-test" "$OUT/noodles-throughput"
+cat >"$OUT/contention.sh" <<'EOF2'
+#!/bin/bash
+set -e
+D="$(cd "$(dirname "$0")" && pwd)"
+exec "$D/libs/ld-linux-armhf.so.3" --library-path "$D/libs" "$D/noodles-contention" "$@"
+EOF2
+chmod +x "$OUT/run.sh" "$OUT/throughput.sh" "$OUT/contention.sh" "$OUT/noodles-render-test" \
+	"$OUT/noodles-throughput" "$OUT/noodles-contention"
 
 "$CROSS-readelf" -d "$OUT/noodles-render-test" | grep NEEDED
-sha256sum "$OUT/noodles-render-test" "$OUT/noodles-throughput" "$OUT/libs/libSDL2-2.0.so.0"
+sha256sum "$OUT/noodles-render-test" "$OUT/noodles-throughput" "$OUT/noodles-contention" \
+	"$OUT/libs/libSDL2-2.0.so.0"
 echo "built: $OUT"

@@ -306,7 +306,10 @@ To measure the loaded core's engine rates and `PRESENT` pacing without GemRB, bu
 `work/noodles-test` to the MiSTer and run its `throughput.sh` while the Noodles core is loaded and GemRB is stopped. It
 times full-surface fills, copies and blends between off-screen managed surfaces, then shows how long `PRESENT` occupies
 the command queue as off-screen draw work before it grows, whether a command queued behind `PRESENT` can run before the
-flip completes, and how long the SDK's confirmed wait trails the core's raw completion count while later commands run.
+flip completes, and how long the SDK's confirmed wait trails the core's raw completion count while later commands run. Its
+`contention.sh` measures whether engine traffic slows the ARM: pinned to CPU 0, it times dependent-load latency, streaming
+reads and copies while CPU 1 keeps the engine idle or busy with fills, plain draws, blends or a mix, and reports each
+result relative to the idle engine.
 
 The sampler uses Linux `perf_event_open`, samples only the main thread, and does not pause or trace the game process.
 Keep the matching unstripped `work/gemrb-install` and `work/prefix` trees on the PC for useful function names.
