@@ -1213,3 +1213,32 @@ None.
 - [ ] Passed
 
 ---
+
+## 40 COMMIT Unreleased c904d9a 2026-09-25T13:23:16-07:00
+
+#### Coming From:
+
+Unreleased c904d9a
+
+#### Purpose:
+
+Record the completed hardware comparison of hybrid GemRB thread affinity against the CPU-0-only launcher default.
+
+#### Outcome:
+
+On the normal diagnostics-off `c904d9a` build, GemRB's main thread remained fixed to CPU 0 while its four non-main threads, including `SDLAudioP2`, retained CPU 0-1 masks throughout the test. The user reported that panning was essentially perfect and that combat, loading and scene changes all ran better than with every thread restricted to CPU 0, although combat still stuttered occasionally. The depleted-ammunition Kobold encounter completed without a crash, the enemies were defeated and the game loaded the next area successfully. The hybrid layout therefore passes this comparison and supersedes CPU-0-only as the preferred affinity design, while unrestricted migration of the main thread remains rejected.
+
+#### Next Steps:
+
+Obtain approval to implement the accepted hybrid layout deterministically in the launcher, ensuring that the main GemRB thread remains on CPU 0 while current and subsequently created non-main threads may use CPUs 0-1, then rebuild and repeat a short panning, combat and area-transition regression without diagnostic instrumentation.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
