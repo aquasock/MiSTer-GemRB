@@ -112,6 +112,7 @@ typedef struct NOODLES_RenderData
     noodles_fence_t present_draw_fence;
     Uint64 pacing_wait_sequence;
     SDL_bool stats_enabled;
+    SDL_bool pacing_enabled;
     SDL_bool in_command_queue;
     Uint64 stats_start;
     Uint64 stats_frames;
@@ -430,7 +431,7 @@ static int NOODLES_WaitPresent(NOODLES_RenderData *data)
     }
     start = data->stats_enabled ? SDL_GetPerformanceCounter() : 0;
     drawn = flipped = start;
-    if (data->stats_enabled) {
+    if (data->pacing_enabled) {
         sample_pacing = (data->pacing_wait_sequence++ %
                          NOODLES_PACING_SAMPLE_PERIOD) == 0;
     }
@@ -2752,15 +2753,18 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
                                                           &involuntary);
                 const SDL_bool have_usage = usage == 0 && data->stats_thread_user +
                     data->stats_thread_system + data->stats_thread_voluntary != 0;
-                SDL_Log("Noodles pacing: present-wait draw=%.3f ms flip=%.3f ms avg/%.3f max confirm=%.3f ms sampled=%llu/%llu drawn-before-wait=%llu/%llu; main thread user=%.1f%% sys=%.1f%% voluntary-switches=%.1f involuntary=%.1f per frame",
-                        (double)data->stats_present_draw_wait_ticks * milliseconds / pacing_count,
-                        (double)data->stats_present_flip_wait_ticks * milliseconds / pacing_count,
-                        (double)data->stats_present_flip_wait_max_ticks * milliseconds,
-                        (double)data->stats_present_confirm_ticks * milliseconds / pacing_count,
-                        (unsigned long long)data->stats_present_pacing_samples,
-                        (unsigned long long)data->stats_present_waits,
-                        (unsigned long long)data->stats_present_drawn_early,
-                        (unsigned long long)data->stats_present_pacing_samples,
+                if (data->pacing_enabled) {
+                    SDL_Log("Noodles pacing: present-wait draw=%.3f ms flip=%.3f ms avg/%.3f max confirm=%.3f ms sampled=%llu/%llu drawn-before-wait=%llu/%llu",
+                            (double)data->stats_present_draw_wait_ticks * milliseconds / pacing_count,
+                            (double)data->stats_present_flip_wait_ticks * milliseconds / pacing_count,
+                            (double)data->stats_present_flip_wait_max_ticks * milliseconds,
+                            (double)data->stats_present_confirm_ticks * milliseconds / pacing_count,
+                            (unsigned long long)data->stats_present_pacing_samples,
+                            (unsigned long long)data->stats_present_waits,
+                            (unsigned long long)data->stats_present_drawn_early,
+                            (unsigned long long)data->stats_present_pacing_samples);
+                }
+                SDL_Log("Noodles thread: main user=%.1f%% sys=%.1f%% voluntary-switches=%.1f involuntary=%.1f per frame",
                         have_usage ? (double)(user - data->stats_thread_user) * 100.0 /
                                      (double)clock_ticks / seconds : 0.0,
                         have_usage ? (double)(system - data->stats_thread_system) * 100.0 /
@@ -3085,11 +3089,15 @@ static int NOODLES_CreateRenderer(SDL_Renderer *renderer, SDL_Window *window, Ui
     }
     data->resident_budget = (size_t)budget_mb * 1024u * 1024u;
     data->stats_enabled = SDL_getenv("SDL_RENDER_NOODLES_STATS") != NULL;
+    data->pacing_enabled = data->stats_enabled &&
+        SDL_getenv("SDL_RENDER_NOODLES_PACING") != NULL;
     if (data->stats_enabled) {
         data->stats_start = SDL_GetPerformanceCounter();
         NOODLES_ReadThreadUsage(&data->stats_thread_user, &data->stats_thread_system,
                                 &data->stats_thread_voluntary,
                                 &data->stats_thread_involuntary);
+        SDL_Log("Noodles statistics: raw pacing samples %s",
+                data->pacing_enabled ? "enabled" : "disabled");
     }
     if (noodles_link_open(&data->link) < 0) {
         const int saved_errno = errno;
