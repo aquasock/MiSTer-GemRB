@@ -1302,3 +1302,32 @@ When the MiSTer is reachable, deploy the bundle and set `MISTER_SWAP=usb` in its
 - [ ] Passed
 
 ---
+
+## 43 COMMIT Unreleased 8b0c829 2026-09-25T13:48:30-07:00
+
+#### Coming From:
+
+Unreleased 8b0c829
+
+#### Purpose:
+
+Qualify the launcher's deterministic hybrid CPU-affinity layout on hardware with the USB swap safety file enabled.
+
+#### Outcome:
+
+The target had rebooted and is now at 10.10.0.21. Its last pre-reboot session, from 20:28 to 20:34 UTC on the old `c904d9a` bundle, saved a game and then logged two Noodles draw-batch timeouts and exit 139 as the FPGA and Main were reset under it; the user directed that this reset-induced exit be disregarded. The `8b0c829` bundle was deployed with all device hashes matching the build, and `MISTER_SWAP=usb` was added to the device `env.sh` for this regression. A normal Noodles launch at 20:43 UTC logged `mister-affinity: main thread CPUs 0, other threads CPUs 0-1`, and a single check found main thread 1616 on CPU 0 and its four non-main threads, including `SDLAudioP2`, on CPUs 0-1, the same layout that passed in Entry 40; the masks were unchanged when checked again after the test. With no diagnostics running, the main thread had run 73.7s against 14.5s waiting to run, the process's resident peak was 367520 KiB with about 118 MiB still available, and 284 pages were swapped out with none swapped in while the process itself held no swapped pages, so paging did not affect smoothness. The inspected log for that process shows the AR4000 load and battle music without errors other than the usual missing optional resources, but no subsequent area load; the user independently verified panning, the depleted-ammunition Kobold combat, the area transition and further progress into the game and reported that everything passed. GemRB was still running at the time of recording, so `last-run.log` holds no exit record for it. The temporary `MISTER_SWAP=usb` line was then removed from the device `env.sh`, restoring the Noodles no-swap default for later launches.
+
+#### Next Steps:
+
+Keep the hybrid layout as the launcher default. Begin the separate low-overhead memory-growth investigation from Entry 41, determining whether the approximately 463 MiB resident peak that reached the OOM killer without swap is reclaimable cache, retention across area lifetimes or required working data, and whether the Noodles path should keep its no-swap default.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
