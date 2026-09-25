@@ -823,7 +823,7 @@ Retain conservative alpha state because it safely removes work when future consu
 
 ---
 
-## 27 COMMIT Unreleased ??? 2026-09-25T07:39:15-07:00
+## 27 COMMIT Unreleased ??? 2026-09-25T08:17:15-07:00
 
 #### Coming From:
 
@@ -831,21 +831,22 @@ Unreleased cb02171
 
 #### Purpose:
 
-Use MiSTer-GemRB as the unchanged validation client for a generic Noodles DDR3 write-burst throughput improvement.
+Measure the loaded core's engine rates and PRESENT pacing and split GemRB's presentation wait before committing to an RTL throughput change.
 
 #### Outcome:
 
-The protocol-preserving MiSTer-Noodles binary-alpha source `eb5886f` passed exact pixels and audio and gave an initial paused result of 20.9-21.6fps, but the user observed unchanged panning and combat stutter, panning remained 16.6-17.9fps, and combat fell to 12.1-14.5fps before the known Kobold Commando projectile fault terminated GemRB with signal 11 while the core stayed alive. A later valid 15.036-second active-combat profile collected 2,508 main-thread samples with none lost: all GemRB threads used about 60% of one Cortex-A9 core, main-thread user work was about 33% of one core versus 20% paused, audio decoding and resampling used about 6.5% of one core, and named Noodles ARM work stayed approximately 3.6% in both states. Matching renderer windows reached 15.7-19.8fps with 5.9-6.7ms of queue work, 21.0-27.3ms of presentation completion wait and 18.9-34.6ms elsewhere. The ARM is therefore not saturated, removing all observed audio conversion would recover only about 3-4ms per frame, and the approved next experiment is an internal Noodles producer-declared DDR3 write-burst path for contiguous full-word fill, copy and blend output. No GemRB engine modification is proposed.
+The protocol-preserving MiSTer-Noodles binary-alpha source `eb5886f` passed exact pixels and audio and gave an initial paused result of 20.9-21.6fps, but the user observed unchanged panning and combat stutter, panning remained 16.6-17.9fps, and combat fell to 12.1-14.5fps before the known Kobold Commando projectile fault terminated GemRB with signal 11 while the core stayed alive. A later valid 15.036-second active-combat profile collected 2,508 main-thread samples with none lost: all GemRB threads used about 60% of one Cortex-A9 core, main-thread user work was about 33% of one core versus 20% paused, audio decoding and resampling used about 6.5% of one core, and named Noodles ARM work stayed approximately 3.6% in both states. Matching renderer windows reached 15.7-19.8fps with 5.9-6.7ms of queue work, 21.0-27.3ms of presentation completion wait and 18.9-34.6ms elsewhere. The previously approved DDR3 write-burst proposal is deferred because no engine rate had been measured, the presentation wait combines FPGA completion with the vertical-blank handoff, and removing most binary-alpha destination traffic barely moved the paused rate. Review of MiSTer-Noodles records OUT-004 and OUT-007 through OUT-010 and `rtl/present.sv` adds a competing hypothesis: PRESENT occupies the command queue from its dispatch through a fresh vertical-blank edge, ascal's retirement acknowledgement and one further vertical-blank edge, so no later command runs during that interval and frame time may be quantized to whole refresh periods regardless of engine throughput. The proposed source adds `tools/noodles-throughput.c`, a standalone SDK client packaged with the renderer diagnostic that times full-surface fills, fill batches, blend fills, copies, plain and blended draws with opaque, transparent and partial sources, mirroring, modulation and small-draw batches, then sweeps off-screen draw load before PRESENT and times a fill queued behind PRESENT. Statistics-enabled SDL presentation waits first for the draws queued before the pending PRESENT, reporting draw and flip wait separately, frames already drawn when the wait began, and the rendering thread's user and system CPU share and context switches per frame. Statistics-disabled behavior, GemRB, the SDK and the RBF remain unchanged.
 
 #### Next Steps:
 
-Keep the current SDL renderer, launcher and save as the comparison client while MiSTer-Noodles implements and timing-qualifies write bursts with no more than two Quartus builds in parallel. If the candidate passes the complete Noodles tests, deploy it under a distinct RBF name, update the generated MGL and launcher's exact RBF check, and run the existing framebuffer diagnostic and HDMI audio test before repeating stationary, panning and spell-heavy combat with the same statistics and non-stopping profiler. Retain the RBF and integrate its provenance only if it gives a material end-to-end gain without pixel, input, audio or pacing regressions; otherwise restore the accepted protocol-1.6 image and record the negative result.
+Commit the source, rebuild SDL, the diagnostic package and the bundle, and deploy them. Run the throughput tool on the currently installed binary-alpha candidate, restore the accepted protocol-1.6 image, rerun it and repeat the paused, panning and combat statistics captures. Choose between a PRESENT pacing change, such as letting off-screen work proceed during retirement or adding a third buffer, and an engine throughput change such as DDR3 write bursts according to the measured rates and the draw and flip split, and obtain user approval for that plan before implementation.
 
 #### Files Modified:
 
 - README.md
-- scripts/bundle.sh
-- tools/noodles-launcher.c
+- scripts/build-noodles-test.sh
+- sdl-renderer/noodles/SDL_render_noodles.c
+- tools/noodles-throughput.c
 
 #### Status:
 
