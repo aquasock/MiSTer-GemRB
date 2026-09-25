@@ -1010,7 +1010,7 @@ Obtain user approval to remove raw-fence pacing probes from ordinary `SDL_RENDER
 
 ---
 
-## 33 COMMIT Unreleased ??? 2026-09-25T11:24:28-07:00
+## 33 COMMIT Unreleased 35409f1 2026-09-25T11:24:28-07:00
 
 #### Coming From:
 
@@ -1022,11 +1022,11 @@ Remove raw-fence pacing probes from ordinary Noodles statistics while retaining 
 
 #### Outcome:
 
-The approved change will make `SDL_RENDER_NOODLES_STATS=1` use the same SDK presentation wait as normal play while retaining its workload, callback, aggregate timing and scheduler counters. A new `SDL_RENDER_NOODLES_PACING=1` setting, effective only with statistics enabled, will opt into the sampled raw draw and flip boundary measurements from `c80f452`; logs and documentation will distinguish ordinary statistics from the intentionally intrusive pacing diagnostic.
+Source `35409f1` makes `SDL_RENDER_NOODLES_STATS=1` use the same SDK presentation wait as normal play while retaining workload, callback, aggregate timing and scheduler counters, and moves the sampled raw draw and flip measurements behind the additional `SDL_RENDER_NOODLES_PACING=1` setting. SDL, the diagnostic package and the complete bundle built; the diagnostic SDL SHA256 is `4001089fb15f35395a20ecbd77904050580d6eb5b58d21e0e51b1ffd372c452c` and the deployed stripped SDL SHA256 is `ebbd9a711b29e3d17f924cb5b25b8976f5f0a6c0cdea06f82a2972c274edcb46`. The protocol-1.7 seed-13 core passed exact pixels with hash `93f8e614` and passed HDMI audio. Hardware logs confirmed that ordinary statistics reported raw pacing disabled, emitted no pacing samples and retained the separate thread metrics. The menu reached 28.5fps, and in AR4000 the user found combat and the endgame video effectively indistinguishable from the statistics-disabled control and reached the game-over screen, but panning felt between the earlier statistics-on and statistics-off runs. Panning and combat windows still made about 29,000-53,000 timed SDL queue callbacks per five seconds and used 14-17% system CPU versus 5.9% in the earlier statistics-disabled battle sample; video windows with only 213 callbacks used about 3% system CPU. Raw pacing is therefore isolated successfully, but ordinary statistics still do not fully pass because performance-clock reads around every queue callback measurably affect the callback-heavy panning path.
 
 #### Next Steps:
 
-Build SDL, the exact-pixel diagnostic and the complete bundle, pass exact pixels and HDMI audio on the protocol-1.7 seed-13 core, then compare ordinary statistics against statistics-disabled AR4000 panning, combat and video before accepting the change or proceeding to the CPU-affinity comparison.
+Obtain user approval to retain queue-callback counts in ordinary statistics while moving only their per-call performance-clock timing behind a separate explicit callback-timing diagnostic, then repeat the same panning comparison before proceeding to the CPU-affinity test.
 
 #### Files Modified:
 
@@ -1035,7 +1035,7 @@ Build SDL, the exact-pixel diagnostic and the complete bundle, pass exact pixels
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
