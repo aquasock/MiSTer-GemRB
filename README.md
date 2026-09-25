@@ -196,7 +196,9 @@ The summary
 also reports accelerated opaque-fill, blended-fill, plain-draw and flagged-draw counts and pixels, fill- and sprite-batch
 counts and maximum sizes, submission stalls, CPU fallback work, uploads, readbacks, evictions, drains and current FPGA
 texture residency. Draw classes separate safe 64-bit copies, alignment reroutes, standard and explicit blend modes,
-mirroring and modulation; draw and fill size buckets show how much traffic falls into each pixel-area range. A callback line attributes CPU time and call volume to SDL command construction, texture creation,
+mirroring and modulation; draw and fill size buckets show how much traffic falls into each pixel-area range. While
+statistics are enabled, a sparse sample of CPU-valid, unmodulated standard-alpha sources classifies adjacent pixel pairs
+as opaque, transparent or partial so destination-read fast paths can be sized without scanning every rendered pixel. A callback line attributes CPU time and call volume to SDL command construction, texture creation,
 updates, locks, target changes, readback and destruction; its merged-fill count reports compatible calls appended to an
 existing SDL command, and its rotated count reports updated textures moved away from in-flight storage. The counters and their performance-clock reads are disabled
 otherwise; asynchronous presentation and its synchronization boundaries are unchanged.

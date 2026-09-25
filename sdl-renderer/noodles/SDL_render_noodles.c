@@ -134,6 +134,13 @@ typedef struct NOODLES_RenderData
     Uint64 stats_mirrored_draw_pixels;
     Uint64 stats_modulated_draws;
     Uint64 stats_modulated_draw_pixels;
+    Uint64 stats_alpha_sample_draws;
+    Uint64 stats_alpha_sample_pixels;
+    Uint64 stats_alpha_pair_opaque;
+    Uint64 stats_alpha_pair_zero;
+    Uint64 stats_alpha_pair_mixed;
+    Uint64 stats_alpha_unavailable_draws;
+    Uint64 stats_alpha_unavailable_pixels;
     Uint64 stats_draw_stalls;
     Uint64 stats_draw_batches;
     Uint64 stats_draw_batch_max;
@@ -1821,6 +1828,35 @@ static int NOODLES_RunCopy(NOODLES_RenderData *data, NOODLES_TextureData *target
                                         NOODLES_BLENDOP_ADD);
     }
 
+    if (data->stats_enabled && cmd->data.draw.blend == SDL_BLENDMODE_BLEND &&
+        cmd->data.draw.a == 255) {
+        const Uint64 pixels = (Uint64)source.w * source.h;
+        if (texturedata->shadow && texturedata->cpu_valid && source.w >= 2) {
+            int y;
+            data->stats_alpha_sample_draws++;
+            data->stats_alpha_sample_pixels += pixels;
+            for (y = 0; y < source.h; y += 8) {
+                const Uint32 *row = (const Uint32 *)((const Uint8 *)texturedata->shadow->pixels +
+                    (source.y + y) * texturedata->shadow->pitch) + source.x;
+                int x;
+                for (x = 0; x + 1 < source.w; x += 32) {
+                    const Uint32 a0 = row[x] >> 24;
+                    const Uint32 a1 = row[x + 1] >> 24;
+                    if (a0 == 255 && a1 == 255) {
+                        data->stats_alpha_pair_opaque++;
+                    } else if (a0 == 0 && a1 == 0) {
+                        data->stats_alpha_pair_zero++;
+                    } else {
+                        data->stats_alpha_pair_mixed++;
+                    }
+                }
+            }
+        } else {
+            data->stats_alpha_unavailable_draws++;
+            data->stats_alpha_unavailable_pixels += pixels;
+        }
+    }
+
     draw.source = texturedata->surface;
     draw.source_rect.x = source.x;
     draw.source_rect.y = source.y;
@@ -2461,6 +2497,14 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
                     (double)data->stats_fill_size_pixels[3] / 1000000.0,
                     (unsigned long long)data->stats_fill_size_commands[4],
                     (double)data->stats_fill_size_pixels[4] / 1000000.0);
+            SDL_Log("Noodles alpha sample: draws=%llu/%.3fMpx pairs opaque=%llu zero=%llu partial-or-edge=%llu unavailable=%llu/%.3fMpx",
+                    (unsigned long long)data->stats_alpha_sample_draws,
+                    (double)data->stats_alpha_sample_pixels / 1000000.0,
+                    (unsigned long long)data->stats_alpha_pair_opaque,
+                    (unsigned long long)data->stats_alpha_pair_zero,
+                    (unsigned long long)data->stats_alpha_pair_mixed,
+                    (unsigned long long)data->stats_alpha_unavailable_draws,
+                    (double)data->stats_alpha_unavailable_pixels / 1000000.0);
             SDL_Log("Noodles sync: uploads=%llu/%.3fMiB readbacks=%llu/%.3fMiB evictions=%llu drains=%llu progress=%llu resident=%.1fMiB shadow=%.1fMiB/%.1fMiB peak alloc=%llu free=%llu",
                     (unsigned long long)data->stats_uploads,
                     (double)data->stats_upload_bytes / (1024.0 * 1024.0),
@@ -2545,6 +2589,13 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
             data->stats_mirrored_draw_pixels = 0;
             data->stats_modulated_draws = 0;
             data->stats_modulated_draw_pixels = 0;
+            data->stats_alpha_sample_draws = 0;
+            data->stats_alpha_sample_pixels = 0;
+            data->stats_alpha_pair_opaque = 0;
+            data->stats_alpha_pair_zero = 0;
+            data->stats_alpha_pair_mixed = 0;
+            data->stats_alpha_unavailable_draws = 0;
+            data->stats_alpha_unavailable_pixels = 0;
             data->stats_draw_stalls = 0;
             data->stats_draw_batches = 0;
             data->stats_draw_batch_max = 0;
