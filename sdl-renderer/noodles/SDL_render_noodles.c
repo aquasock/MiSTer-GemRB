@@ -83,6 +83,13 @@ typedef struct NOODLES_TextureData
     SDL_bool pinned;
     SDL_bool gpu_in_use;
     NOODLES_AlphaState alpha_state;
+    /* Every pixel outside content equals outside_pixel. The whole texture
+       means nothing is known; an empty rectangle means every pixel is known.
+       The display composition target is not tracked because its hardware
+       buffers rotate. */
+    SDL_Rect content;
+    Uint32 outside_pixel;
+    SDL_bool content_tracked;
     size_t resident_bytes;
     Uint64 last_use;
     struct NOODLES_TextureData *next;
@@ -171,6 +178,10 @@ typedef struct NOODLES_RenderData
     Uint64 stats_alpha_skipped_pixels;
     Uint64 stats_alpha_copy_draws;
     Uint64 stats_alpha_copy_pixels;
+    Uint64 stats_content_trimmed_draws;
+    Uint64 stats_content_trimmed_pixels;
+    Uint64 stats_content_trimmed_fills;
+    Uint64 stats_content_trimmed_fill_pixels;
     Uint64 stats_draw_stalls;
     Uint64 stats_draw_batches;
     Uint64 stats_draw_batch_max;
@@ -660,6 +671,75 @@ static void NOODLES_MarkAllDirty(NOODLES_TextureData *surface)
     NOODLES_MarkDirty(surface, &rect);
 }
 
+static SDL_bool NOODLES_ContentEmpty(const NOODLES_TextureData *surface)
+{
+    return surface->content.w <= 0 || surface->content.h <= 0;
+}
+
+static SDL_bool NOODLES_RectContains(const SDL_Rect *outer, const SDL_Rect *inner)
+{
+    return inner->x >= outer->x && inner->y >= outer->y &&
+           inner->x + inner->w <= outer->x + outer->w &&
+           inner->y + inner->h <= outer->y + outer->h;
+}
+
+static void NOODLES_SetContentFull(NOODLES_TextureData *surface)
+{
+    surface->content.x = 0;
+    surface->content.y = 0;
+    surface->content.w = surface->width;
+    surface->content.h = surface->height;
+}
+
+static void NOODLES_ResetContent(NOODLES_TextureData *surface, Uint32 pixel)
+{
+    if (!surface->content_tracked) {
+        return;
+    }
+    SDL_zero(surface->content);
+    surface->outside_pixel = pixel;
+}
+
+static void NOODLES_AddContent(NOODLES_TextureData *surface, const SDL_Rect *rect)
+{
+    if (!surface->content_tracked || rect->w <= 0 || rect->h <= 0) {
+        return;
+    }
+    if (NOODLES_ContentEmpty(surface)) {
+        surface->content = *rect;
+    } else {
+        SDL_UnionRect(&surface->content, rect, &surface->content);
+    }
+}
+
+/* Account for an unblended fill of rect with pixel and return in write the
+   part that still has to be written, or SDL_FALSE when nothing does. Pixels
+   outside the content rectangle already hold outside_pixel, so a fill of that
+   value covering the rectangle only needs the rectangle itself. The FPGA copy
+   must be current, since the skipped pixels are not rewritten. */
+static SDL_bool NOODLES_OpaqueFillRegion(NOODLES_TextureData *surface,
+                                         const SDL_Rect *rect, Uint32 pixel,
+                                         SDL_Rect *write)
+{
+    *write = *rect;
+    if (!surface->content_tracked) {
+        return SDL_TRUE;
+    }
+    if (surface->gpu_valid && pixel == surface->outside_pixel &&
+        NOODLES_RectContains(rect, &surface->content)) {
+        const SDL_bool any = !NOODLES_ContentEmpty(surface);
+        *write = surface->content;
+        SDL_zero(surface->content);
+        return any;
+    }
+    if (NOODLES_FullRect(surface, rect)) {
+        NOODLES_ResetContent(surface, pixel);
+    } else {
+        NOODLES_AddContent(surface, rect);
+    }
+    return SDL_TRUE;
+}
+
 static int NOODLES_InitSurface(NOODLES_RenderData *data, int width, int height,
                                SDL_bool pinned, NOODLES_TextureData *surface)
 {
@@ -673,6 +753,9 @@ static int NOODLES_InitSurface(NOODLES_RenderData *data, int width, int height,
                (size_t)surface->shadow->pitch * (size_t)surface->shadow->h);
     surface->cpu_valid = SDL_TRUE;
     surface->alpha_state = NOODLES_ALPHA_ZERO;
+    surface->content_tracked = !pinned;
+    NOODLES_SetContentFull(surface);
+    NOODLES_ResetContent(surface, 0);
     surface->pinned = pinned;
     surface->resident_bytes = NOODLES_SurfaceBytes(width, height);
     surface->next = data->surfaces;
@@ -717,6 +800,7 @@ static int NOODLES_EnsureCPU(NOODLES_RenderData *data, NOODLES_TextureData *surf
                    (size_t)surface->shadow->pitch * (size_t)surface->shadow->h);
         surface->cpu_valid = SDL_TRUE;
         surface->alpha_state = NOODLES_ALPHA_ZERO;
+        NOODLES_ResetContent(surface, 0);
         return 0;
     }
     if (!surface->surface && surface != &data->composition) {
@@ -1011,6 +1095,7 @@ static int NOODLES_CommitCPURegion(NOODLES_RenderData *data,
     surface->gpu_valid = SDL_TRUE;
     surface->gpu_in_use = SDL_FALSE;
     surface->alpha_state = NOODLES_ALPHA_UNKNOWN;
+    NOODLES_AddContent(surface, region);
     NOODLES_ClearDirty(surface);
     NOODLES_TouchSurface(data, surface);
     return 0;
@@ -1394,6 +1479,7 @@ static int NOODLES_UpdateTextureImpl(SDL_Renderer *renderer, SDL_Texture *textur
         source += pitch;
     }
     NOODLES_UpdateAlphaPixels(texturedata, rect, pixels, pitch);
+    NOODLES_AddContent(texturedata, rect);
 
     texturedata->cpu_valid = SDL_TRUE;
     texturedata->gpu_valid = SDL_FALSE;
@@ -1511,6 +1597,7 @@ static void NOODLES_UnlockTextureImpl(SDL_Renderer *renderer, SDL_Texture *textu
     pitch = (size_t)texturedata->shadow->pitch;
     NOODLES_UpdateAlphaPixels(texturedata, &texturedata->lock_rect,
                               pixels, (int)pitch);
+    NOODLES_AddContent(texturedata, &texturedata->lock_rect);
     texturedata->cpu_valid = SDL_TRUE;
     texturedata->gpu_valid = SDL_FALSE;
     NOODLES_MarkDirty(texturedata, &texturedata->lock_rect);
@@ -2024,11 +2111,16 @@ static int NOODLES_SoftwareCopy(NOODLES_RenderData *data, NOODLES_TextureData *t
     if (result < 0) {
         return -1;
     }
-    if (data->stats_enabled) {
+    {
         SDL_Rect visible;
-        data->stats_software_copies++;
         if (SDL_IntersectRect(&destination, &effective_clip, &visible)) {
-            data->stats_software_copy_pixels += (Uint64)visible.w * visible.h;
+            NOODLES_AddContent(target, &visible);
+            if (data->stats_enabled) {
+                data->stats_software_copy_pixels += (Uint64)visible.w * visible.h;
+            }
+        }
+        if (data->stats_enabled) {
+            data->stats_software_copies++;
         }
     }
     NOODLES_MarkCPUWrite(target);
@@ -2084,6 +2176,32 @@ static int NOODLES_RunCopy(NOODLES_RenderData *data, NOODLES_TextureData *target
                                            texturedata->alpha_state,
                                            cmd->data.draw.a,
                                            cmd->data.draw.blend);
+
+    /* Source pixels with zero alpha leave the destination unchanged under
+       SDL's BLEND and ADD modes, so copy only the part of the source that
+       can hold anything else. */
+    if (!alpha_copy && flip == SDL_FLIP_NONE && texturedata->content_tracked &&
+        (cmd->data.draw.blend == SDL_BLENDMODE_BLEND ||
+         cmd->data.draw.blend == SDL_BLENDMODE_ADD) &&
+        (texturedata->outside_pixel >> 24) == 0 &&
+        !NOODLES_RectContains(&texturedata->content, &source)) {
+        SDL_Rect kept;
+        if (!SDL_IntersectRect(&source, &texturedata->content, &kept)) {
+            SDL_zero(kept);
+        }
+        if (data->stats_enabled) {
+            data->stats_content_trimmed_draws++;
+            data->stats_content_trimmed_pixels += pixels - (Uint64)kept.w * kept.h;
+        }
+        if (kept.w <= 0 || kept.h <= 0) {
+            return 0;
+        }
+        destination.x += kept.x - source.x;
+        destination.y += kept.y - source.y;
+        destination.w = kept.w;
+        destination.h = kept.h;
+        source = kept;
+    }
 
     if (NOODLES_EnsureGPU(data, target) < 0 ||
         NOODLES_EnsureGPU(data, texturedata) < 0) {
@@ -2156,6 +2274,7 @@ static int NOODLES_RunCopy(NOODLES_RenderData *data, NOODLES_TextureData *target
         data->stats_alpha_copy_pixels += pixels;
     }
     texturedata->gpu_in_use = SDL_TRUE;
+    NOODLES_AddContent(target, &destination);
     NOODLES_MarkGPUWriteState(target, target_alpha);
     return 0;
 }
@@ -2235,6 +2354,7 @@ static int NOODLES_SubmitOpaquePrimitives(NOODLES_RenderData *data,
                 alpha_state = NOODLES_FillAlphaState(target, alpha_state,
                                                      &written, alpha,
                                                      SDL_BLENDMODE_NONE);
+                NOODLES_AddContent(target, &written);
             }
             drew = SDL_TRUE;
         }
@@ -2282,9 +2402,13 @@ static int NOODLES_SubmitOpaquePrimitives(NOODLES_RenderData *data,
             {
                 const SDL_Rect written = { fill.x, fill.y,
                                            (int)fill.width, (int)fill.height };
+                const SDL_Rect segment = { SDL_min(x1, x2), SDL_min(y1, y2),
+                                           SDL_abs(x2 - x1) + 1,
+                                           SDL_abs(y2 - y1) + 1 };
                 alpha_state = NOODLES_FillAlphaState(target, alpha_state,
                                                      &written, alpha,
                                                      SDL_BLENDMODE_NONE);
+                NOODLES_AddContent(target, &segment);
             }
             drew = SDL_TRUE;
         }
@@ -2318,18 +2442,29 @@ static int NOODLES_RunCommandQueueImpl(SDL_Renderer *renderer, SDL_RenderCommand
             clip_enabled = cmd->data.cliprect.enabled;
             break;
         case SDL_RENDERCMD_CLEAR: {
-            noodles_rect_t rect;
+            const SDL_Rect whole = { 0, 0, target->width, target->height };
+            const Uint32 color = NOODLES_PackRGBA(cmd->data.color.r, cmd->data.color.g,
+                                                  cmd->data.color.b, cmd->data.color.a);
+            SDL_Rect write;
             if (NOODLES_MakeResident(data, target) < 0) {
                 return -1;
             }
-            rect.x = 0;
-            rect.y = 0;
-            rect.width = (Uint32)target->width;
-            rect.height = (Uint32)target->height;
-            if (NOODLES_SubmitFill(data, target, &rect,
-                    NOODLES_PackRGBA(cmd->data.color.r, cmd->data.color.g,
-                                     cmd->data.color.b, cmd->data.color.a)) < 0) {
-                return -1;
+            if (NOODLES_OpaqueFillRegion(target, &whole, color, &write)) {
+                noodles_rect_t rect;
+                rect.x = write.x;
+                rect.y = write.y;
+                rect.width = (Uint32)write.w;
+                rect.height = (Uint32)write.h;
+                if (NOODLES_SubmitFill(data, target, &rect, color) < 0) {
+                    return -1;
+                }
+            } else {
+                SDL_zero(write);
+            }
+            if (data->stats_enabled && (write.w != whole.w || write.h != whole.h)) {
+                data->stats_content_trimmed_fills++;
+                data->stats_content_trimmed_fill_pixels +=
+                    (Uint64)whole.w * whole.h - (Uint64)write.w * write.h;
             }
             NOODLES_MarkGPUWriteState(target,
                                       NOODLES_AlphaFromByte(cmd->data.color.a));
@@ -2409,19 +2544,44 @@ static int NOODLES_RunCommandQueueImpl(SDL_Renderer *renderer, SDL_RenderCommand
                 if (!SDL_IntersectRect(&destination, &effective_clip, &visible)) {
                     continue;
                 }
-                fill.x = visible.x;
-                fill.y = visible.y;
-                fill.width = (Uint32)visible.w;
-                fill.height = (Uint32)visible.h;
-                if ((cmd->data.draw.blend == SDL_BLENDMODE_NONE
-                        ? NOODLES_SubmitFill(data, target, &fill,
-                            NOODLES_PackRGBA(cmd->data.draw.r, cmd->data.draw.g,
-                                             cmd->data.draw.b, cmd->data.draw.a))
-                        : NOODLES_SubmitBlendFill(data, target, &fill,
+                if (cmd->data.draw.blend == SDL_BLENDMODE_NONE) {
+                    const Uint32 color = NOODLES_PackRGBA(cmd->data.draw.r,
+                                                          cmd->data.draw.g,
+                                                          cmd->data.draw.b,
+                                                          cmd->data.draw.a);
+                    SDL_Rect write;
+                    const SDL_bool needed =
+                        NOODLES_OpaqueFillRegion(target, &visible, color, &write);
+                    if (!needed) {
+                        SDL_zero(write);
+                    }
+                    if (data->stats_enabled &&
+                        (write.w != visible.w || write.h != visible.h)) {
+                        data->stats_content_trimmed_fills++;
+                        data->stats_content_trimmed_fill_pixels +=
+                            (Uint64)visible.w * visible.h - (Uint64)write.w * write.h;
+                    }
+                    if (needed) {
+                        fill.x = write.x;
+                        fill.y = write.y;
+                        fill.width = (Uint32)write.w;
+                        fill.height = (Uint32)write.h;
+                        if (NOODLES_SubmitFill(data, target, &fill, color) < 0) {
+                            return -1;
+                        }
+                    }
+                } else {
+                    fill.x = visible.x;
+                    fill.y = visible.y;
+                    fill.width = (Uint32)visible.w;
+                    fill.height = (Uint32)visible.h;
+                    if (NOODLES_SubmitBlendFill(data, target, &fill,
                             NOODLES_PackRGBA(cmd->data.draw.r, cmd->data.draw.g,
                                              cmd->data.draw.b, cmd->data.draw.a),
-                            NOODLES_FillBlendMode(cmd->data.draw.blend))) < 0) {
-                    return -1;
+                            NOODLES_FillBlendMode(cmd->data.draw.blend)) < 0) {
+                        return -1;
+                    }
+                    NOODLES_AddContent(target, &visible);
                 }
                 alpha_state = NOODLES_FillAlphaState(target, alpha_state,
                                                      &visible,
@@ -2597,6 +2757,7 @@ static int NOODLES_RunCommandQueueImpl(SDL_Renderer *renderer, SDL_RenderCommand
                 data->stats_geometry_commands++;
                 data->stats_geometry_triangles += cmd->data.draw.count / 3u;
             }
+            NOODLES_SetContentFull(target);
             NOODLES_MarkCPUWrite(target);
             break;
         }
@@ -2858,6 +3019,11 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
                     (double)data->stats_alpha_skipped_pixels / 1000000.0,
                     (unsigned long long)data->stats_alpha_copy_draws,
                     (double)data->stats_alpha_copy_pixels / 1000000.0);
+            SDL_Log("Noodles content: trimmed draws=%llu/%.3fMpx fills=%llu/%.3fMpx",
+                    (unsigned long long)data->stats_content_trimmed_draws,
+                    (double)data->stats_content_trimmed_pixels / 1000000.0,
+                    (unsigned long long)data->stats_content_trimmed_fills,
+                    (double)data->stats_content_trimmed_fill_pixels / 1000000.0);
             SDL_Log("Noodles sync: uploads=%llu/%.3fMiB readbacks=%llu/%.3fMiB evictions=%llu drains=%llu progress=%llu resident=%.1fMiB shadow=%.1fMiB/%.1fMiB peak alloc=%llu free=%llu",
                     (unsigned long long)data->stats_uploads,
                     (double)data->stats_upload_bytes / (1024.0 * 1024.0),
@@ -2959,6 +3125,10 @@ static int NOODLES_RenderPresent(SDL_Renderer *renderer)
             data->stats_alpha_skipped_pixels = 0;
             data->stats_alpha_copy_draws = 0;
             data->stats_alpha_copy_pixels = 0;
+            data->stats_content_trimmed_draws = 0;
+            data->stats_content_trimmed_pixels = 0;
+            data->stats_content_trimmed_fills = 0;
+            data->stats_content_trimmed_fill_pixels = 0;
             data->stats_draw_stalls = 0;
             data->stats_draw_batches = 0;
             data->stats_draw_batch_max = 0;

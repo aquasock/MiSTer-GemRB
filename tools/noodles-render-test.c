@@ -285,6 +285,292 @@ done:
     return rc;
 }
 
+/* Transparent-overlay sequence for the renderer's content tracking: each frame
+   clears an overlay, draws into part of it and composites it onto its own band
+   of a destination. Pixels outside what a frame drew must still hold the clear
+   colour, and every composite must match the CPU reference. The first pass
+   reads the overlay back after each frame; the second replays the frames
+   without intermediate readbacks and compares the final destination. */
+#define CONTENT_W 24
+#define CONTENT_H 8
+#define CONTENT_FRAMES 12
+
+typedef struct {
+    uint8_t clear[4];
+    SDL_Rect drawn;
+    SDL_BlendMode blend;
+    uint8_t mod[4];
+    SDL_Rect source;
+    SDL_Rect clip;
+    SDL_RendererFlip flip;
+} content_frame_t;
+
+static const content_frame_t content_frames[CONTENT_FRAMES] = {
+    { { 0, 0, 0, 0 }, { 2, 1, 4, 3 }, SDL_BLENDMODE_BLEND, { 255, 255, 255, 255 },
+      { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, SDL_FLIP_NONE },
+    { { 0, 0, 0, 0 }, { 15, 4, 5, 3 }, SDL_BLENDMODE_BLEND, { 255, 255, 255, 255 },
+      { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, SDL_FLIP_NONE },
+    { { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, SDL_BLENDMODE_BLEND, { 255, 255, 255, 255 },
+      { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, SDL_FLIP_NONE },
+    { { 0, 0, 0, 0 }, { 0, 2, 13, 6 }, SDL_BLENDMODE_ADD, { 200, 150, 100, 200 },
+      { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, SDL_FLIP_NONE },
+    { { 0, 0, 0, 0 }, { 20, 0, 2, 2 }, SDL_BLENDMODE_BLEND, { 255, 255, 255, 255 },
+      { 4, 0, 18, 8 }, { 0, 0, 0, 0 }, SDL_FLIP_NONE },
+    { { 10, 20, 30, 0 }, { 5, 5, 3, 2 }, SDL_BLENDMODE_BLEND, { 255, 255, 255, 255 },
+      { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, SDL_FLIP_NONE },
+    { { 0, 0, 0, 0 }, { 1, 1, 12, 5 }, SDL_BLENDMODE_BLEND, { 255, 255, 255, 180 },
+      { 0, 0, 0, 0 }, { 0, 0, 10, 8 }, SDL_FLIP_NONE },
+    { { 0, 0, 0, 255 }, { 3, 3, 2, 2 }, SDL_BLENDMODE_BLEND, { 255, 255, 255, 255 },
+      { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, SDL_FLIP_NONE },
+    { { 0, 0, 0, 0 }, { 2, 0, 7, 7 }, SDL_BLENDMODE_BLEND, { 255, 255, 255, 255 },
+      { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, SDL_FLIP_NONE },
+    { { 0, 0, 0, 0 }, { 12, 1, 9, 7 }, SDL_BLENDMODE_BLEND, { 255, 255, 255, 255 },
+      { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, SDL_FLIP_NONE },
+    { { 0, 0, 0, 0 }, { 1, 1, 8, 6 }, SDL_BLENDMODE_BLEND, { 255, 255, 255, 255 },
+      { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, SDL_FLIP_HORIZONTAL },
+    { { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, SDL_BLENDMODE_BLEND, { 255, 255, 255, 255 },
+      { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, SDL_FLIP_NONE },
+};
+
+static uint32_t content_background(int x, int y)
+{
+    return rgba((uint8_t)(x * 10 + y), (uint8_t)(y * 30 + 5),
+                (uint8_t)(x * 7 + y * 13), (uint8_t)(128 + ((x + y) & 1) * 127));
+}
+
+static int content_draw_frame(SDL_Renderer *renderer, SDL_Texture *overlay,
+                              SDL_Texture *sprite, int frame)
+{
+    const content_frame_t *f = &content_frames[frame];
+    int rc = SDL_SetRenderTarget(renderer, overlay) |
+             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE) |
+             SDL_SetRenderDrawColor(renderer, f->clear[0], f->clear[1],
+                                    f->clear[2], f->clear[3]) |
+             SDL_RenderClear(renderer);
+    switch (frame) {
+    case 0: case 5: case 7:
+        rc |= SDL_SetRenderDrawColor(renderer, 200, 40, 40, 255) |
+              SDL_RenderFillRect(renderer, &f->drawn);
+        break;
+    case 1:
+        rc |= SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND) |
+              SDL_SetRenderDrawColor(renderer, 40, 200, 90, 128) |
+              SDL_RenderFillRect(renderer, &f->drawn);
+        break;
+    case 3: {
+        const SDL_Rect at = { 9, 2, 4, 4 };
+        rc |= SDL_SetTextureBlendMode(sprite, SDL_BLENDMODE_BLEND) |
+              SDL_SetTextureColorMod(sprite, 255, 255, 255) |
+              SDL_SetTextureAlphaMod(sprite, 255) |
+              SDL_RenderCopy(renderer, sprite, NULL, &at) |
+              SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255) |
+              SDL_RenderDrawPoint(renderer, 0, 7);
+        break;
+    }
+    case 4: {
+        const uint32_t pixels[4] = { rgba(90, 10, 200, 255), rgba(5, 6, 7, 0),
+                                     rgba(250, 250, 10, 77), rgba(30, 60, 90, 255) };
+        rc |= SDL_UpdateTexture(overlay, &f->drawn, pixels, 8);
+        break;
+    }
+    case 6: {
+        const SDL_Rect second = { 9, 3, 4, 3 };
+        rc |= SDL_SetRenderDrawColor(renderer, 60, 70, 250, 255) |
+              SDL_RenderFillRect(renderer, &(SDL_Rect){ 1, 1, 2, 2 }) |
+              SDL_SetRenderDrawColor(renderer, 250, 120, 0, 90) |
+              SDL_RenderFillRect(renderer, &second);
+        break;
+    }
+    case 8:
+        rc |= SDL_SetRenderDrawColor(renderer, 0, 255, 255, 255) |
+              SDL_RenderDrawLine(renderer, 2, 6, 8, 0);
+        break;
+    case 9: {
+        const SDL_Vertex triangle[3] = {
+            { { 12.0f, 1.0f }, { 255, 0, 0, 255 }, { 0.0f, 0.0f } },
+            { { 20.5f, 2.0f }, { 0, 255, 0, 200 }, { 0.0f, 0.0f } },
+            { { 15.0f, 7.5f }, { 0, 0, 255, 120 }, { 0.0f, 0.0f } }
+        };
+        rc |= SDL_RenderGeometry(renderer, NULL, triangle, 3, NULL, 0);
+        break;
+    }
+    case 10:
+        rc |= SDL_SetTextureBlendMode(sprite, SDL_BLENDMODE_BLEND) |
+              SDL_RenderCopy(renderer, sprite, NULL, &f->drawn);
+        break;
+    default:
+        break;
+    }
+    return rc;
+}
+
+static int content_composite(SDL_Renderer *renderer, SDL_Texture *overlay,
+                             SDL_Texture *destination, int frame)
+{
+    const content_frame_t *f = &content_frames[frame];
+    SDL_Rect source = f->source.w ? f->source : (SDL_Rect){ 0, 0, CONTENT_W, CONTENT_H };
+    SDL_Rect target = { f->source.w ? 3 : 0, frame * CONTENT_H, source.w, source.h };
+    int rc = SDL_SetRenderTarget(renderer, destination) |
+             SDL_SetTextureBlendMode(overlay, f->blend) |
+             SDL_SetTextureColorMod(overlay, f->mod[0], f->mod[1], f->mod[2]) |
+             SDL_SetTextureAlphaMod(overlay, f->mod[3]);
+    if (f->clip.w) {
+        SDL_Rect clip = f->clip;
+        clip.y += frame * CONTENT_H;
+        rc |= SDL_RenderSetClipRect(renderer, &clip);
+    }
+    rc |= SDL_RenderCopyEx(renderer, overlay, &source, &target, 0.0, NULL, f->flip);
+    if (f->clip.w) {
+        rc |= SDL_RenderSetClipRect(renderer, NULL);
+    }
+    return rc;
+}
+
+static void content_model(uint32_t *expected, const uint32_t *overlay, int frame)
+{
+    const content_frame_t *f = &content_frames[frame];
+    const SDL_Rect source = f->source.w ? f->source : (SDL_Rect){ 0, 0, CONTENT_W, CONTENT_H };
+    const int left = f->source.w ? 3 : 0;
+    const uint32_t modulation = rgba(f->mod[0], f->mod[1], f->mod[2], f->mod[3]);
+    int x, y;
+    for (y = 0; y < source.h; ++y) {
+        for (x = 0; x < source.w; ++x) {
+            const int dx = left + x;
+            const int sx = source.x + ((f->flip & SDL_FLIP_HORIZONTAL) ? source.w - 1 - x : x);
+            uint32_t *pixel = &expected[(frame * CONTENT_H + y) * CONTENT_W + dx];
+            const uint32_t src = overlay[(source.y + y) * CONTENT_W + sx];
+            if (f->clip.w && (dx < f->clip.x || dx >= f->clip.x + f->clip.w)) {
+                continue;
+            }
+            *pixel = f->blend == SDL_BLENDMODE_ADD
+                ? reference(src, *pixel, modulation, REF_SRC_ALPHA, REF_ONE, REF_ADD,
+                            REF_ZERO, REF_ONE, REF_ADD, 0)
+                : reference(src, *pixel, modulation, REF_SRC_ALPHA,
+                            REF_ONE_MINUS_SRC_ALPHA, REF_ADD, REF_ONE,
+                            REF_ONE_MINUS_SRC_ALPHA, REF_ADD, 0);
+        }
+    }
+}
+
+static int content_compare(const uint32_t *actual, const uint32_t *expected,
+                           int count, const char *label)
+{
+    int i;
+    for (i = 0; i < count; ++i) {
+        if (actual[i] != expected[i]) {
+            fprintf(stderr, "%s at %d,%d: got %08x expected %08x\n", label,
+                    i % CONTENT_W, i / CONTENT_W, actual[i], expected[i]);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int check_content_paths(SDL_Renderer *renderer)
+{
+    static uint32_t snapshots[CONTENT_FRAMES][CONTENT_W * CONTENT_H];
+    static uint32_t background[CONTENT_W * CONTENT_H * CONTENT_FRAMES];
+    static uint32_t expected[CONTENT_W * CONTENT_H * CONTENT_FRAMES];
+    static uint32_t actual[CONTENT_W * CONTENT_H * CONTENT_FRAMES];
+    const uint32_t sprite_pixels[16] = {
+        rgba(255, 0, 0, 255), rgba(9, 9, 9, 0), rgba(0, 255, 0, 128), rgba(0, 0, 255, 255),
+        rgba(77, 0, 0, 0), rgba(255, 255, 255, 255), rgba(40, 40, 40, 1), rgba(0, 90, 0, 0),
+        rgba(10, 20, 30, 254), rgba(0, 0, 0, 0), rgba(200, 100, 50, 64), rgba(5, 5, 5, 255),
+        rgba(1, 2, 3, 0), rgba(90, 80, 70, 200), rgba(0, 0, 0, 0), rgba(250, 0, 250, 30)
+    };
+    SDL_Texture *overlay = NULL, *destination = NULL, *base = NULL, *sprite = NULL;
+    const int total = CONTENT_W * CONTENT_H * CONTENT_FRAMES;
+    int rc = -1;
+    int pass, frame, x, y;
+
+    for (y = 0; y < CONTENT_H * CONTENT_FRAMES; ++y) {
+        for (x = 0; x < CONTENT_W; ++x) {
+            background[y * CONTENT_W + x] = content_background(x, y);
+        }
+    }
+    overlay = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
+                                SDL_TEXTUREACCESS_TARGET, CONTENT_W, CONTENT_H);
+    destination = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_TARGET,
+                                    CONTENT_W, CONTENT_H * CONTENT_FRAMES);
+    base = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STATIC,
+                             CONTENT_W, CONTENT_H * CONTENT_FRAMES);
+    sprite = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
+                               SDL_TEXTUREACCESS_STATIC, 4, 4);
+    if (!overlay || !destination || !base || !sprite ||
+        SDL_UpdateTexture(base, NULL, background, CONTENT_W * 4) < 0 ||
+        SDL_UpdateTexture(sprite, NULL, sprite_pixels, 16) < 0 ||
+        SDL_SetTextureBlendMode(base, SDL_BLENDMODE_NONE) < 0) {
+        fprintf(stderr, "content texture setup: %s\n", SDL_GetError());
+        goto done;
+    }
+
+    for (pass = 0; pass < 2; ++pass) {
+        if (SDL_SetRenderTarget(renderer, destination) < 0 ||
+            SDL_RenderCopy(renderer, base, NULL, NULL) < 0) {
+            fprintf(stderr, "content pass %d reset: %s\n", pass + 1, SDL_GetError());
+            goto done;
+        }
+        memcpy(expected, background, sizeof(expected));
+        for (frame = 0; frame < CONTENT_FRAMES; ++frame) {
+            const content_frame_t *f = &content_frames[frame];
+            if (content_draw_frame(renderer, overlay, sprite, frame) != 0) {
+                fprintf(stderr, "content frame %d draw: %s\n", frame, SDL_GetError());
+                goto done;
+            }
+            if (pass == 0) {
+                const uint32_t clear = rgba(f->clear[0], f->clear[1], f->clear[2], f->clear[3]);
+                if (SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_ABGR8888,
+                                         snapshots[frame], CONTENT_W * 4) < 0) {
+                    fprintf(stderr, "content frame %d readback: %s\n", frame, SDL_GetError());
+                    goto done;
+                }
+                for (y = 0; y < CONTENT_H; ++y) {
+                    for (x = 0; x < CONTENT_W; ++x) {
+                        const SDL_Point point = { x, y };
+                        const uint32_t got = snapshots[frame][y * CONTENT_W + x];
+                        if (!SDL_PointInRect(&point, &f->drawn) && got != clear) {
+                            fprintf(stderr, "content frame %d stale overlay at %d,%d: got %08x expected %08x\n",
+                                    frame, x, y, got, clear);
+                            goto done;
+                        }
+                    }
+                }
+            }
+            if (content_composite(renderer, overlay, destination, frame) != 0) {
+                fprintf(stderr, "content frame %d composite: %s\n", frame, SDL_GetError());
+                goto done;
+            }
+            content_model(expected, snapshots[frame], frame);
+        }
+        if (SDL_SetRenderTarget(renderer, destination) < 0 ||
+            SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_ABGR8888,
+                                 actual, CONTENT_W * 4) < 0) {
+            fprintf(stderr, "content pass %d readback: %s\n", pass + 1, SDL_GetError());
+            goto done;
+        }
+        if (content_compare(actual, expected, total,
+                            pass == 0 ? "content composite" : "content replay") < 0) {
+            goto done;
+        }
+    }
+    if (SDL_SetRenderTarget(renderer, overlay) < 0 ||
+        SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_ABGR8888,
+                             actual, CONTENT_W * 4) < 0 ||
+        content_compare(actual, snapshots[CONTENT_FRAMES - 1], CONTENT_W * CONTENT_H,
+                        "content replay overlay") < 0) {
+        goto done;
+    }
+    rc = 0;
+
+done:
+    SDL_SetRenderTarget(renderer, NULL);
+    SDL_DestroyTexture(sprite);
+    SDL_DestroyTexture(base);
+    SDL_DestroyTexture(destination);
+    SDL_DestroyTexture(overlay);
+    return rc;
+}
+
 static int draw_display_and_check(SDL_Renderer *renderer, SDL_Texture *target,
                                   uint32_t expected, SDL_Texture *marker,
                                   uint32_t marker_expected, const char *phase)
@@ -490,6 +776,9 @@ int main(int argc, char **argv)
         goto done;
     }
     if (check_alpha_state_paths(renderer) < 0) {
+        goto done;
+    }
+    if (check_content_paths(renderer) < 0) {
         goto done;
     }
     if (SDL_RenderSetLogicalSize(renderer, 800, 600) < 0) {
