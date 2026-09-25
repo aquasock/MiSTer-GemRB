@@ -30,8 +30,9 @@ Heart of Winter and Trials of the Luremaster), Icewind Dale II and Planescape: T
   renderer uses the protocol 1.5 descriptor ring so it can queue later sprite batches while earlier batches execute.
   When protocol 1.6 is loaded, it also combines up to 64 consecutive opaque fills into one ordered descriptor batch,
   releases redundant CPU shadows while texture contents are current in FPGA memory, retains a recreated shadow for
-  textures that return to CPU updates, and falls back to SDL only for operations the core does not implement. Protocol
-  1.4 remains compatible, with its original single in-flight descriptor table.
+  textures that return to CPU updates, and falls back to SDL only for operations the core does not implement. On
+  protocol 1.7 it uses a third display buffer, so the next frame renders while the previous flip waits for vertical
+  blank. Protocol 1.4 remains compatible, with its original single in-flight descriptor table.
 - **Fixes to GemRB's SDL plugins** — a lock-order deadlock in the audio plugin that froze the game while walking, a
   music conversion bug that played every other chunk as noise when the sound device does not run at the music's
   sample rate, and a fallback for SDL's software renderer, which lacks the custom blend modes GemRB's wall-occlusion
@@ -120,10 +121,11 @@ Notes on the GOG installers, after unpacking them with innoextract:
 
    For Noodles acceleration, run `noodles-launcher.sh` from the OSD Scripts menu. It returns immediately and waits silently
    for 30 seconds. During that interval return to the core browser and select **Utility > Baldurs Gate II (GemRB)**. The
-   MGL loads the timing-qualified protocol 1.6 core; the watcher validates the selected RBF and `CHITIN.KEY`,
+   MGL loads the timing-qualified protocol 1.7 core; the watcher validates the selected RBF and `CHITIN.KEY`,
    releases stock Main's exclusive input grabs while preserving the core display, and starts GemRB. The same process
    supervises the game and restores Main's grabs on exit. The renderer can attach to protocol 1.4, protocol 1.5 adds the
-   multi-table sprite-batch path, and protocol 1.6 also batches opaque fills. The matching `gemrb-<game>.sh` launcher remains
+   multi-table sprite-batch path, protocol 1.6 also batches opaque fills and protocol 1.7 adds the third display buffer.
+   The matching `gemrb-<game>.sh` launcher remains
    the software-renderer fallback.
 
 If you installed version 0.1.0, the first run moves its game folder, saves and settings into this layout for you.
@@ -168,6 +170,7 @@ Local settings go in `/media/fat/gemrb/env.sh`, which the launcher reads if it e
 | `MISTER_MALLOC_CHECK=1` | Developer, with `MISTER_DEBUG`: also use glibc's heap-checking allocator (slower) |
 | `MISTER_SWAP=none` or `usb` | Disable swap, or explicitly use USB swap. Noodles BG2 defaults to `none`; software launches default to `usb` |
 | `SDL_RENDER_NOODLES_RESIDENT_MB=192` | FPGA texture-residency budget used by the Noodles renderer; valid overrides are clamped to 8–220 MiB |
+| `SDL_RENDER_NOODLES_BUFFERS=2` | Keep two display buffers on a protocol 1.7 Noodles core instead of the default three |
 
 GemRB's own settings for each game are in `/media/fat/gemrb/GemRB-<game>.cfg`, which the launcher creates from
 `GemRB-<game>.cfg.default` on the first run and never overwrites, so updating keeps your edits. The defaults are the SDL
@@ -193,7 +196,9 @@ The reported presentation wait is only the completion time that could not overla
 A pacing line splits that wait, using the core's raw completion count, into draw commands still running before the
 pending `PRESENT`, the remaining flip and vertical-blank interval, and the SDK's confirmation of the completed fence, which
 the core answers only between commands. It counts frames whose draws had already finished when the wait began and reports
-the rendering thread's user and system CPU share and context switches per frame.
+the rendering thread's user and system CPU share and context switches per frame. With three display buffers the flip
+part is instead the wait for the core to accept the queued flip, which happens once the previous flip has retired.
+Set `SDL_RENDER_NOODLES_BUFFERS=2` to keep the two-buffer presentation path on a protocol 1.7 core for comparison.
 Transient command-ring or descriptor pressure waits for one verified command of forward progress before retrying; it
 does not drain through every later command or the queued presentation.
 The summary

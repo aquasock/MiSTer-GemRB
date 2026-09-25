@@ -4,7 +4,8 @@
    Rate tests repeat full-surface operations between managed off-screen
    surfaces and time them from first submission to drain. Pacing tests show
    how long PRESENT keeps the command queue busy and how that changes with
-   the amount of draw work before it. They time the raw completion count the
+   the amount of draw work before it, with two display buffers and, on
+   protocol 1.7 cores, again with three. They time the raw completion count the
    core publishes, separately from the SDK's confirmed wait, which also needs
    the core to answer a verification request. Run it alone while the core is
    loaded: it is a separate SDK client and GemRB must not be running. */
@@ -230,9 +231,10 @@ static void run_pacing(noodles_surface_t *dst, int k)
 }
 
 /* A fill pushed immediately behind PRESENT: its raw completion relative to
-   the flip shows whether later commands can execute while PRESENT waits for
-   the display, and the confirmed PRESENT wait shows whether the queued fill
-   delays the SDK's verification of the earlier fence. */
+   the PRESENT's shows whether later commands can execute while the flip
+   waits for the display, and the confirmed PRESENT wait shows whether the
+   queued fill delays the SDK's verification of the earlier fence. A
+   two-buffer PRESENT completes at the flip; a queued one on acceptance. */
 static void run_behind_present(noodles_surface_t *dst)
 {
     const noodles_rect_t all = {0, 0, W, H};
@@ -269,7 +271,7 @@ static void run_behind_present(noodles_surface_t *dst)
         const summary b = summarize(behind, PACING_FRAMES);
         const summary c = summarize(confirm, PACING_FRAMES);
         printf("fill alone %.2f ms; PRESENT raw %.2f ms (%.2f-%.2f); fill queued behind it "
-               "completes %.2f ms after the flip (%.2f-%.2f); PRESENT confirmation %.2f ms "
+               "completes %.2f ms after the PRESENT (%.2f-%.2f); PRESENT confirmation %.2f ms "
                "after its raw completion (%.2f-%.2f)\n",
                a.mean, p.mean, p.min, p.max, b.mean, b.min, b.max, c.mean, c.min, c.max);
     }
@@ -307,6 +309,19 @@ static void run_confirmation(noodles_surface_t *dst, int queued)
         const summary c = summarize(confirm, PACING_FRAMES);
         printf("%2d %7.2f %7.2f %7.2f %7.2f\n", queued, r.mean, c.mean, c.min, c.max);
     }
+}
+
+static void run_presentation(noodles_surface_t *dst, int max_k)
+{
+    int k;
+    printf("\nPRESENT pacing with %d display buffers: k full-surface off-screen fills per frame, "
+           "%d frames each (ms)\n", noodles_link_buffer_count(link), PACING_FRAMES);
+    printf("%2s %7s %7s %7s %7s %7s %7s %7s %7s %7s %6s\n", "k", "draw", "present", "min",
+           "max", "confirm", "period", "min", "median", "max", "fps");
+    for (k = 0; k <= max_k; ++k) run_pacing(dst, k);
+
+    printf("\nQueue behind PRESENT with %d display buffers\n", noodles_link_buffer_count(link));
+    run_behind_present(dst);
 }
 
 int main(int argc, char **argv)
@@ -360,14 +375,18 @@ int main(int argc, char **argv)
         for (i = 0; i < sizeof(tests) / sizeof(tests[0]); ++i) run_rate(&tests[i], dst, reps);
     }
 
-    printf("\nPRESENT pacing: k full-surface off-screen fills per frame, %d frames each (ms)\n",
-           PACING_FRAMES);
-    printf("%2s %7s %7s %7s %7s %7s %7s %7s %7s %7s %6s\n", "k", "draw", "present", "min",
-           "max", "confirm", "period", "min", "median", "max", "fps");
-    for (k = 0; k <= 10; ++k) run_pacing(dst, k);
-
-    printf("\nQueue behind PRESENT\n");
-    run_behind_present(dst);
+    run_presentation(dst, 10);
+    if (info.opcode_mask & NOODLES_CAP_QUEUED_PRESENT) {
+        if (noodles_link_enable_three_buffers(link) != 0) fail("three-buffer mode");
+        /* Show a cleared buffer C rather than stale memory. */
+        for (k = 0; k < 3; ++k) {
+            noodles_fence_t fence;
+            SUBMIT("back buffer clear", noodles_back_buffer_fill(link, &all, 0xff000000u));
+            SUBMIT("present", noodles_push_present(link, &fence));
+            confirmed_wait(fence, "present");
+        }
+        run_presentation(dst, 14);
+    }
 
     printf("\nConfirmed wait on a fill with n full-surface fills queued behind it (ms)\n");
     printf("%2s %7s %7s %7s %7s\n", "n", "raw", "confirm", "min", "max");

@@ -104,6 +104,7 @@ typedef struct NOODLES_RenderData
     noodles_surface_fill_t pending_fills[NOODLES_FILL_BATCH_MAX];
     size_t pending_fill_count;
     SDL_bool fill_batch_enabled;
+    SDL_bool three_buffers;
     SDL_bool present_pending;
     noodles_fence_t present_fence;
     noodles_fence_t present_draw_fence;
@@ -482,7 +483,7 @@ static int NOODLES_ReadThreadUsage(Uint64 *user, Uint64 *system,
     if (!field) {
         return -1;
     }
-    for (i = 3; i < 14 && field; ++i) {
+    for (i = 3; i <= 14 && field; ++i) {
         field = SDL_strchr(field + 1, ' ');
     }
     if (!field) {
@@ -521,7 +522,7 @@ static int NOODLES_SurfaceRead(NOODLES_RenderData *data,
     if (surface) {
         result = noodles_surface_read(surface, rect, pixels, pitch,
                                       NOODLES_DEFAULT_TIMEOUT_MS);
-    } else if (NOODLES_WaitPresent(data) < 0) {
+    } else if (!data->three_buffers && NOODLES_WaitPresent(data) < 0) {
         result = -1;
     } else {
         result = noodles_back_buffer_read(data->link, rect, pixels, pitch,
@@ -547,7 +548,7 @@ static int NOODLES_SurfaceUpdate(NOODLES_RenderData *data,
     if (surface) {
         result = noodles_surface_update(surface, rect, pixels, pitch,
                                         NOODLES_DEFAULT_TIMEOUT_MS);
-    } else if (NOODLES_WaitPresent(data) < 0) {
+    } else if (!data->three_buffers && NOODLES_WaitPresent(data) < 0) {
         result = -1;
     } else {
         result = noodles_back_buffer_update(data->link, rect, pixels, pitch,
@@ -3046,6 +3047,7 @@ static int NOODLES_CreateRenderer(SDL_Renderer *renderer, SDL_Window *window, Ui
 {
     NOODLES_RenderData *data;
     noodles_device_info_t info;
+    const char *buffers;
     const char *budget_hint;
     int budget_mb = (int)NOODLES_DEFAULT_RESIDENT_MB;
     (void)window;
@@ -3092,6 +3094,22 @@ static int NOODLES_CreateRenderer(SDL_Renderer *renderer, SDL_Window *window, Ui
     }
     data->fill_batch_enabled =
         (info.opcode_mask & NOODLES_CAP_FILL_BATCH) != 0;
+    /* A third display buffer lets the next frame render while a flip waits
+       for vertical blank; SDL_RENDER_NOODLES_BUFFERS=2 keeps two. */
+    buffers = SDL_getenv("SDL_RENDER_NOODLES_BUFFERS");
+    if ((info.opcode_mask & NOODLES_CAP_QUEUED_PRESENT) &&
+        !(buffers && SDL_strcmp(buffers, "2") == 0)) {
+        if (noodles_link_enable_three_buffers(data->link) < 0) {
+            const int saved_errno = errno;
+            NOODLES_DestroyRenderer(renderer);
+            errno = saved_errno;
+            return NOODLES_SetErrno("three-buffer mode");
+        }
+        data->three_buffers = SDL_TRUE;
+    }
+    SDL_Log("Noodles renderer: protocol %u.%u, %d display buffers",
+            info.protocol_version >> 16, info.protocol_version & 0xffffu,
+            noodles_link_buffer_count(data->link));
     if (NOODLES_InitSurface(data, NOODLES_BUFFER_WIDTH, NOODLES_BUFFER_HEIGHT,
                             SDL_TRUE, &data->composition) < 0) {
         NOODLES_DestroyRenderer(renderer);
