@@ -1097,3 +1097,32 @@ None.
 - [x] Passed
 
 ---
+
+## 36 COMMIT Unreleased ??? 2026-09-25T12:10:41-07:00
+
+#### Coming From:
+
+Unreleased 35409f1
+
+#### Purpose:
+
+Backport the upstream GemRB animation-ownership correction that prevents depleted ranged ammunition from leaving `Actor::currentStance` with freed animation pointers.
+
+#### Outcome:
+
+The approved change will add a narrow GemRB 0.9.5 patch derived from the `Actor.h` and `Actor.cpp` portion of upstream commit `6041dd8c`, replacing raw `Animation*` entries in `currentStance` with existing managed `Holder<Animation>` references and adjusting only the affected local uses. It will not import the remainder of upstream's sixteen-file animation-lifetime refactor or alter SDL, the Noodles renderer, FPGA logic, audio, affinity or launcher behavior.
+
+#### Next Steps:
+
+Apply the patch cleanly to the pinned GemRB source, build the normal bundle and an AddressSanitizer diagnostic, deploy the normal build, and repeat the depleted-ammunition Kobold battle; if normal gameplay completes, run one final sanitizer reproduction to prove the captured use-after-free is absent before resuming performance work.
+
+#### Files Modified:
+
+- patches/0004-gemrb-retain-current-stance-animations.patch
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
