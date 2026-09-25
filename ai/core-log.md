@@ -854,3 +854,37 @@ Stationary scenes are engine-bound and quantized by PRESENT holding the command 
 - [x] Passed
 
 ---
+
+## 28 COMMIT Unreleased ??? 2026-09-25T08:46:09-07:00
+
+#### Coming From:
+
+Unreleased cd506c8
+
+#### Purpose:
+
+Adopt the opt-in MiSTer-Noodles third display buffer so GemRB's next frame renders while the previous flip waits for vertical blank.
+
+#### Outcome:
+
+Entry 27 showed stationary scenes are engine-bound at about 35ms per frame and locked to 20fps because PRESENT holds the Noodles command queue until vertical blank, while combat and panning are limited by main-thread blocking and SDL command construction. The user approved a third display buffer as the first cycle of a sequence that uses the core's spare resources, which the accepted image leaves at about 64% of ALMs, 86% of RAM blocks and 46% of DSP blocks while timing at 100MHz remains the tight constraint. The companion MiSTer-Noodles proposal adds protocol 1.7 with a third fixed buffer, a queued PRESENT whose fence completes on acceptance, and an opt-in SDK 0.12 three-buffer mode. The proposed source pins that SDK, enables three buffers in the SDL renderer when the core advertises them with `SDL_RENDER_NOODLES_BUFFERS=2` forcing the previous double-buffer path for comparison, extends the throughput tool's pacing and behind-PRESENT tests to both modes, corrects the thread-usage parser that read `/proc/thread-self/stat` one field late, and updates the launcher's exact RBF check, the generated MGL and the documentation for the new image.
+
+#### Next Steps:
+
+After the MiSTer-Noodles image passes its simulation and four-corner timing gates, rebuild SDL, the diagnostic package and the bundle, deploy the RBF under its distinct name and run the exact-pixel diagnostic, HDMI audio and throughput tool in both modes. Repeat the paused, panning and combat captures and accept the change only with exact pixels, no ghosting and stationary pacing above the 20fps baseline. The approved sequence then continues with attribution of combat main-thread blocking, an on-chip wall-occlusion stencil with a polygon span rasterizer for panning, per-tile alpha summaries for GPU-written render targets, and paletted textures with hardware palette lookup if combat attribution shows texture conversion and upload cost; an SDRAM texture channel, which the user's 128MB module supports, and concurrent fill and draw engines follow when throughput again limits, while FPGA audio mixing and MVE decoding remain deferred.
+
+#### Files Modified:
+
+- README.md
+- scripts/bundle.sh
+- scripts/env.sh
+- sdl-renderer/noodles/SDL_render_noodles.c
+- tools/noodles-launcher.c
+- tools/noodles-throughput.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
