@@ -2154,3 +2154,32 @@ None.
 - [ ] Passed
 
 ---
+
+## 72 COMMIT Unreleased ??? 2026-09-26T07:24:26-07:00
+
+#### Coming From:
+
+Unreleased dcfd5ec
+
+#### Purpose:
+
+Prewarm dynamically created actors and their recursive combat dependencies before first use.
+
+#### Outcome:
+
+The approved change will replace the loading-screen-only snapshot with a memory-bounded work queue that accepts actors created by cutscene and game scripts. The queue will prepare actor combat and casting animations and follow reachable spell, external effect, summon-table, creature, projectile and visual-effect resources, processing work incrementally during the cutscene and dialog before combat while retaining the existing 80 MiB available-memory reserve and lazy fallback. The implementation will specifically cover the observed `cut204f2.bcs` to `illasera.cre` path and the later `spmon1.eff`, `MONSUM01.2da`, dog, worg and spell-animation chain without hardcoding those resource names.
+
+#### Next Steps:
+
+Implement the correction as the ninth ordered GemRB patch, verify the complete patch stack from pristine GemRB 0.9.5, build one ARM GemRB bundle without running Quartus, deploy it to the rebooted MiSTer and cold-test the same cutscene and battle. Confirm that dynamic dependencies are prepared before combat, memory remains above reserve, swap remains unused during preload and the prior severe stutters are reduced.
+
+#### Files Modified:
+
+- patches/0009-dynamic-actor-animation-prewarm.patch
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
