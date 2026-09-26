@@ -2331,3 +2331,32 @@ After the active GemRB session has ended or the MiSTer has rebooted, deploy the 
 - [ ] Passed
 
 ---
+
+## 78 COMMIT Unreleased 6f62121 2026-09-26T08:17:20-07:00
+
+#### Coming From:
+
+Unreleased 6f62121
+
+#### Purpose:
+
+Deploy the cache-aware combat prewarm build for cold hardware validation.
+
+#### Outcome:
+
+The MiSTer at `10.10.0.21` had no active GemRB process and 465,472 KiB available, so the normal bundle was deployed without replacing game data, saves, cache or the edited BG2 configuration. Device hashes match the staged core library `82eecc14d971cfa6918c95ecfbaad15886a024768eed9480c1675eb29004039f`, SDLVideo plugin `5f49144764a31449747720353f51363a408ec573bf553f83b89c816e4624dbe3` and executable `5b2b535182fb1d2cd8ed814d4ba5a5141184f446fa3531c990315ada6218a46d`. The preserved configuration uses normal SDL audio, `CapFPS=30` and `DrawFPS=0`; the canonical MGL still selects `_Utility/Noodles`, and the timing-qualified `Noodles_20260925.rbf` remains unchanged with SHA256 `29df3cc992220ba04ca171e598918080e498b1e6aff20f28f924630cedaebebe`. The idle target had 463,636 KiB available after deployment.
+
+#### Next Steps:
+
+Cold-launch BG2 through the normal MGL, load the exact save and allow the cutscene and dialog to reach the battle. Compare the visible severe-stutter count with the approximately 11-event baseline, then inspect the game log to verify that `CGConjur` was prepared before combat and that the queue completed with a substantially smaller animation-frame working set.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
