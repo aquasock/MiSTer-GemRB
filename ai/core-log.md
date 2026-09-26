@@ -2125,3 +2125,32 @@ None.
 - [ ] Passed
 
 ---
+
+## 71 COMMIT Unreleased dcfd5ec 2026-09-26T07:23:34-07:00
+
+#### Coming From:
+
+Unreleased dcfd5ec
+
+#### Purpose:
+
+Validate whether loading-screen animation prewarming removes the repeatable cold combat stutters.
+
+#### Outcome:
+
+The user observed a modestly longer load but the same combat stutters. The deployed build logged that its pass prepared 11,084 animation frames for only one actor and six spells while 339,572 KiB remained available, so memory pressure did not stop it. The sequence included a cutscene between loading and combat; after the preload completed, that cutscene loaded `cut204f2.bcs`, created `illasera.cre` and loaded the actor's scripts and dialog. Combat then cold-loaded `CGConjur.bam`, `spmon1.eff`, `MONSUM01.2da`, `dogwisu.cre`, `worgsu.cre`, `SPMONSUM.vvc`, `SPMONSUM.bam` and `SPWI412.spl`. The cache and renderer preparation ran as designed, but the loading-screen discovery point preceded the dynamically created mage and summon dependency graph, so it could not prepare the resources responsible for this battle.
+
+#### Next Steps:
+
+Replace the one-time map snapshot with a bounded queue that accepts actors when they are dynamically added, walks their spell and script resource dependencies including EFF, SPL, CRE and summon-table links, and prepares animation frames incrementally during the intervening cutscene and dialog. Retain the 80 MiB reserve and lazy fallback, build one ARM GemRB bundle without rebuilding Quartus, then cold-test the same sequence and verify that Illasera and the dog and worg resources are prepared before combat.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
