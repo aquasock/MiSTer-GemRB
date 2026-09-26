@@ -2848,3 +2848,33 @@ Stage the tuned trace and harness, cold-launch with the replay devices waiting f
 - [ ] Passed
 
 ---
+
+## 96 COMMIT Unreleased ??? 2026-09-26T14:23:41-07:00
+
+#### Coming From:
+
+Unreleased bca26df
+
+#### Purpose:
+
+Preserve and define the accepted no-panning cold-load replay as the official autonomous regression test.
+
+#### Outcome:
+
+The accelerated menu experiment was not reproducible and is rejected. After another manual reboot, the original captured trace with its original timing and the four directional key codes excluded again loaded the autosave, moved the character without viewport panning and ended paused; the user reported it perfect and designated it the official test run. This change will preserve that exact captured trace in the repository and document the accepted replay parameters, while retaining the unfiltered panning form only as a secondary comparison.
+
+#### Next Steps:
+
+Commit the trace and concise usage record, verify its repository copy against the accepted SHA256 and validate both the 1,707-event panning form and 1,695-event official filtered form. Future diagnostic and source validation runs must use the official definition unchanged unless the user explicitly requests the panning comparison.
+
+#### Files Modified:
+
+- tests/input/README.md
+- tests/input/gemrb-menu-autosave.jsonl
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
