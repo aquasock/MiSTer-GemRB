@@ -2558,3 +2558,32 @@ None.
 - [x] Passed
 
 ---
+
+## 86 COMMIT Unreleased 1f9b746 2026-09-26T13:18:50-07:00
+
+#### Coming From:
+
+Unreleased 1f9b746
+
+#### Purpose:
+
+Correlate the reproducible first post-load movement stalls with exact main-thread execution sites.
+
+#### Outcome:
+
+A clean cold run captured a four-second menu baseline followed by save loading, immediate movement and the user's paused boundary with a monotonic timestamp attached to every main-thread task-clock sample. The user identified one large pause immediately after issuing movement and two later pauses. The matching largest frames were 792.761, 474.351 and 169.963 milliseconds; presentation took only 0.426, 0.128 and 1.421 milliseconds. At the sampler's observed rate of about 607 samples per main-thread runtime second, those frames contained only approximately 275, 59 and 82 milliseconds of sampled user execution, so most wall time was spent in kernel work or waiting to run. The first frame's user work was dominated by 50 samples in `memset` and 30 in `TraversabilityCache::ValidateTraversabilityCacheSize`, which is lazily called by the first requested path and resizes and clears the complete area traversability array despite a source comment that this should happen when the map loads. Its remaining gaps and the two later frames correlate with BIF resource lookup, heap growth, zlib decompression and sprite construction. Across the complete load-and-movement window GemRB grew by 155,736 KiB RSS, incurred 113,166 minor and 95 major faults, and waited runnable for 5.293 seconds with no swap or reclaim. This isolates the first-command pause as lazy traversability-cache initialization and shows that later cold pauses are synchronous resource decompression and memory population rather than game logic, FPGA presentation or slow individual file reads. The exact normal launcher was restored with SHA256 `216fc0445bdf8ef049bfe5f8e5b010b622fab009e8d7df2f03d42d128694b6d3`.
+
+#### Next Steps:
+
+Move traversability-array sizing and clearing from the first path request into map construction so the known cost remains inside the loading screen, then validate the same cold-load movement sequence in isolation before removing the rejected broad combat-preload patches or addressing the separately measured lazy BIF and sprite decompression pauses.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
