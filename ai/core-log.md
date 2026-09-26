@@ -1540,3 +1540,32 @@ None.
 - [ ] Passed
 
 ---
+
+## 51 COMMIT Unreleased 5fe8719 2026-09-25T21:42:59-07:00
+
+#### Coming From:
+
+Unreleased 5fe8719
+
+#### Purpose:
+
+Test whether synchronous combat audio conversion causes the remaining visible stutter and use the rejected hypothesis to narrow the next correction.
+
+#### Outcome:
+
+The original target configuration was saved, `AudioDriver=none` was applied for one relaunch, and paired non-stopping samples were taken from the same scene at `CapFPS=30` with diagnostics disabled. The paused window collected 1,114 main-thread samples over 10.030 seconds with zero loss, about 22.2% of one core, and the combat window collected 5,537 samples over 30.046 seconds with zero loss, about 36.9% of one core. These totals are effectively unchanged from the audio-enabled comparison, and the user reported unchanged visible stutter, so the prior audio-resampling correlation is not causal. Actor, effect and script execution remained individually negligible, while combat increased an optimized libc memory-copy region, paletted `Blit1to4`, `SDL_MapSurface`, palette shading and texture submission; the user further identified spellcasting as the worst trigger. Static tracing shows that SDL2 currently bakes spell tint and alpha changes into each 8-bit animation palette, converts the full frame to the renderer's 32-bit texture format and uploads it again even though the Noodles draw path can apply both modifiers directly. The exact original configuration was restored with matching SHA256 `a2fbd5e810a271682c6f3549e20744369aa50987ca26a5c3af87698427cbc3f0`, including `AudioDriver=sdlaudio`, `CapFPS=30` and `DrawFPS=0`; it takes effect on the next launch and the running process was not interrupted.
+
+#### Next Steps:
+
+Obtain approval for a narrow GemRB SDL2 change that keeps grey and sepia palette effects unchanged but passes ordinary colour and alpha modulation through to the existing renderer draw command, preventing tint-only spell frames from being reshaded, reconverted and uploaded. Build and deploy one normal bundle, then compare the same spell-heavy battle visually before considering the separate temporary custom-palette churn.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
