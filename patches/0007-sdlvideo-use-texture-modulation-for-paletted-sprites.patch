@@ -1,11 +1,68 @@
+diff --git a/gemrb/core/Video/Video.h b/gemrb/core/Video/Video.h
+index f764c476..fa9cb103 100644
+--- a/gemrb/core/Video/Video.h
++++ b/gemrb/core/Video/Video.h
+@@ -162,6 +162,10 @@ public:
+ 	virtual void ConfigurePointer(int pointerSpeed, int pointerAccel, int deadZoneL, int deadZoneR) = 0;
+ 
+ 	virtual Holder<Sprite2D> CreateSprite(const Region&, void* pixels, const PixelFormat&) = 0;
++	/** Prepare a sprite for later drawing without submitting it. */
++	virtual void PrecacheSprite(const Holder<Sprite2D>&) {}
++	/** Prepare a sprite using the palette that will be selected when it is drawn. */
++	virtual void PrecacheSpriteWithPalette(const Holder<Sprite2D>& sprite, const Holder<Palette>&) { PrecacheSprite(sprite); }
+ 
+ 	void BlitSprite(const Holder<Sprite2D>& spr, Point p,
+ 			const Region* clip = nullptr, BlitFlags = BlitFlags::NONE);
+@@ -172,8 +176,8 @@ public:
+ 	virtual void BlitGameSprite(const Holder<Sprite2D>& spr, const Point& p,
+ 				    BlitFlags flags, Color tint = Color()) = 0;
+ 
+-	void BlitGameSpriteWithPalette(const Holder<Sprite2D>& spr, const Holder<Palette>& pal, const Point& p,
+-				       BlitFlags flags, Color tint);
++	virtual void BlitGameSpriteWithPalette(const Holder<Sprite2D>& spr, const Holder<Palette>& pal, const Point& p,
++					       BlitFlags flags, Color tint);
+ 
+ 	virtual void BlitVideoBuffer(const VideoBufferPtr& buf, const Point& p, BlitFlags flags,
+ 				     Color tint = Color()) = 0;
+diff --git a/gemrb/plugins/SDLVideo/SDL12Video.cpp b/gemrb/plugins/SDLVideo/SDL12Video.cpp
+index 824eef6f..fc2a9a39 100644
+--- a/gemrb/plugins/SDLVideo/SDL12Video.cpp
++++ b/gemrb/plugins/SDLVideo/SDL12Video.cpp
+@@ -246,7 +246,7 @@ void SDL12VideoDriver::BlitSpriteRLEClipped(const Holder<Sprite2D>& spr, const R
+ 	delete maskit;
+ }
+ 
+-void SDL12VideoDriver::BlitSpriteNativeClipped(const sprite_t* spr, const Region& srect, const Region& drect, BlitFlags flags, const SDL_Color* tint)
++void SDL12VideoDriver::BlitSpriteNativeClipped(const sprite_t* spr, const Region& srect, const Region& drect, BlitFlags flags, const SDL_Color* tint, const Palette*)
+ {
+ 	Color c;
+ 	if (tint && (flags & (BlitFlags::COLOR_MOD | BlitFlags::ALPHA_MOD))) {
+diff --git a/gemrb/plugins/SDLVideo/SDL12Video.h b/gemrb/plugins/SDLVideo/SDL12Video.h
+index 75051d7b..25add249 100644
+--- a/gemrb/plugins/SDLVideo/SDL12Video.h
++++ b/gemrb/plugins/SDLVideo/SDL12Video.h
+@@ -79,7 +79,7 @@ private:
+ 	void BlitSpriteRLEClipped(const Holder<Sprite2D>& spr, const Region& src, const Region& dst,
+ 				  BlitFlags flags = BlitFlags::NONE, const Color* tint = NULL) override;
+ 	void BlitSpriteNativeClipped(const sprite_t* spr, const Region& src, const Region& dst,
+-				     BlitFlags flags = BlitFlags::NONE, const SDL_Color* tint = NULL) override;
++				     BlitFlags flags = BlitFlags::NONE, const SDL_Color* tint = NULL, const Palette* palette = nullptr) override;
+ 
+ 	void BlitSpriteNativeClipped(const sprite_t* spr, const Region& src, const Region& dst, BlitFlags flags, Color tint);
+ 	void BlitSpriteNativeClipped(SDL_Surface* surf, SDL_Rect* src, SDL_Rect* dst, BlitFlags flags, Color tint);
 diff --git a/gemrb/plugins/SDLVideo/SDL20Video.cpp b/gemrb/plugins/SDLVideo/SDL20Video.cpp
+index 046ac24a..42b3976e 100644
 --- a/gemrb/plugins/SDLVideo/SDL20Video.cpp
 +++ b/gemrb/plugins/SDLVideo/SDL20Video.cpp
-@@ -411,7 +411,14 @@ int SDL20VideoDriver::UpdateRenderTarget(const Color* color, BlitFlags flags)
+@@ -409,13 +409,52 @@ int SDL20VideoDriver::UpdateRenderTarget(const Color* color, BlitFlags flags)
+ 	return 0;
+ }
  
- void SDL20VideoDriver::BlitSpriteNativeClipped(const SDLTextureSprite2D* spr, const Region& src, const Region& dst, BlitFlags flags, const SDL_Color* tint)
+-void SDL20VideoDriver::BlitSpriteNativeClipped(const SDLTextureSprite2D* spr, const Region& src, const Region& dst, BlitFlags flags, const SDL_Color* tint)
++void SDL20VideoDriver::BlitSpriteNativeClipped(const SDLTextureSprite2D* spr, const Region& src, const Region& dst, BlitFlags flags, const SDL_Color* tint, const Palette* palette)
  {
 -	flags &= ~spr->PrepareForRendering(flags, reinterpret_cast<const Color*>(tint));
+-	SDL_Texture* tex = spr->GetTexture(renderer);
 +	BlitFlags paletteFlags = flags;
 +	if (!(flags & (BlitFlags::GREY | BlitFlags::SEPIA))) {
 +		// SDL2 can apply ordinary colour and alpha modulation while drawing.
@@ -14,6 +71,212 @@ diff --git a/gemrb/plugins/SDLVideo/SDL20Video.cpp b/gemrb/plugins/SDLVideo/SDL2
 +		paletteFlags &= ~(BlitFlags::COLOR_MOD | BlitFlags::ALPHA_MOD);
 +	}
 +	flags &= ~spr->PrepareForRendering(paletteFlags, reinterpret_cast<const Color*>(tint));
- 	SDL_Texture* tex = spr->GetTexture(renderer);
++	SDL_Texture* tex = palette ? spr->GetTexture(renderer, *palette) : spr->GetTexture(renderer);
++	if (!tex) return;
  	BlitSpriteNativeClipped(tex, src, dst, flags, tint);
  }
+ 
++void SDL20VideoDriver::PrecacheSprite(const Holder<Sprite2D>& sprite)
++{
++	auto* spr = dynamic_cast<const SDLTextureSprite2D*>(sprite.get());
++	if (!spr) return;
++	spr->PrepareForRendering(BlitFlags::NONE);
++	spr->GetTexture(renderer);
++}
++
++void SDL20VideoDriver::PrecacheSpriteWithPalette(const Holder<Sprite2D>& sprite, const Holder<Palette>& palette)
++{
++	auto* spr = dynamic_cast<const SDLTextureSprite2D*>(sprite.get());
++	if (!spr || !palette) {
++		PrecacheSprite(sprite);
++		return;
++	}
++	spr->PrepareForRendering(BlitFlags::NONE);
++	spr->GetTexture(renderer, *palette);
++}
++
++void SDL20VideoDriver::BlitGameSpriteWithPalette(const Holder<Sprite2D>& spr, const Holder<Palette>& pal,
++						 const Point& p, BlitFlags flags, Color tint)
++{
++	if (!pal || (flags & (BlitFlags::GREY | BlitFlags::SEPIA))) {
++		Video::BlitGameSpriteWithPalette(spr, pal, p, flags, tint);
++		return;
++	}
++	Region src(Point(0, 0), spr->Frame.size);
++	Region dst(p - spr->Frame.origin, spr->Frame.size);
++	BlitSpriteClipped(spr, std::move(src), dst, flags, &tint, pal.get());
++}
++
+ void SDL20VideoDriver::BlitSpriteNativeClipped(SDL_Texture* texSprite, const Region& srgn, const Region& drgn, BlitFlags flags, const SDL_Color* tint)
+ {
+ 	TRACY(ZoneScoped);
+diff --git a/gemrb/plugins/SDLVideo/SDL20Video.h b/gemrb/plugins/SDLVideo/SDL20Video.h
+index 88488844..6ceb417a 100644
+--- a/gemrb/plugins/SDLVideo/SDL20Video.h
++++ b/gemrb/plugins/SDLVideo/SDL20Video.h
+@@ -261,6 +261,10 @@ public:
+ 
+ 	bool TouchInputEnabled() override;
+ 	bool CanDrawRawGeometry() const override;
++	void PrecacheSprite(const Holder<Sprite2D>& sprite) override;
++	void PrecacheSpriteWithPalette(const Holder<Sprite2D>& sprite, const Holder<Palette>& palette) override;
++	void BlitGameSpriteWithPalette(const Holder<Sprite2D>& spr, const Holder<Palette>& pal, const Point& p,
++					       BlitFlags flags, Color tint) override;
+ 
+ 	void BlitVideoBuffer(const VideoBufferPtr& buf, const Point& p, BlitFlags flags,
+ 			     Color tint = Color()) override;
+@@ -301,7 +305,7 @@ private:
+ 	void BlitSpriteRLEClipped(const Holder<Sprite2D>& /*spr*/, const Region& /*src*/, const Region& /*dst*/,
+ 				  BlitFlags /*flags*/ = BlitFlags::NONE, const Color* /*tint*/ = NULL) override { assert(false); } // SDL2 does not support this
+ 	void BlitSpriteNativeClipped(const sprite_t* spr, const Region& src, const Region& dst,
+-				     BlitFlags flags = BlitFlags::NONE, const SDL_Color* tint = NULL) override;
++				     BlitFlags flags = BlitFlags::NONE, const SDL_Color* tint = NULL, const Palette* palette = nullptr) override;
+ 	void BlitSpriteNativeClipped(SDL_Texture* spr, const Region& src, const Region& dst, BlitFlags flags = BlitFlags::NONE, const SDL_Color* tint = NULL);
+ 
+ 	int RenderCopyShaded(SDL_Texture*, const SDL_Rect* srcrect, const SDL_Rect* dstrect, BlitFlags flags, const SDL_Color* = nullptr);
+diff --git a/gemrb/plugins/SDLVideo/SDLSurfaceSprite2D.cpp b/gemrb/plugins/SDLVideo/SDLSurfaceSprite2D.cpp
+index 57e08e14..7db010a3 100644
+--- a/gemrb/plugins/SDLVideo/SDLSurfaceSprite2D.cpp
++++ b/gemrb/plugins/SDLVideo/SDLSurfaceSprite2D.cpp
+@@ -297,6 +297,7 @@ SDLTextureSprite2D::SDLTextureSprite2D(const Region& rgn, const PixelFormat& fmt
+ 
+ SDLTextureSprite2D::~SDLTextureSprite2D() noexcept
+ {
++	ClearPaletteTextures();
+ 	SDL_DestroyTexture(texture);
+ }
+ 
+@@ -314,6 +315,7 @@ SDL_Texture* SDLTextureSprite2D::GetTexture(SDL_Renderer* renderer) const
+ 	if (texture == nullptr) {
+ 		texture = SDL_CreateTextureFromSurface(renderer, GetSurface());
+ 		SDL_QueryTexture(texture, &texFormat, nullptr, nullptr, nullptr);
++		staleTexture = false;
+ 	} else if (staleTexture) {
+ 		SDL_Surface* surface = GetSurface();
+ 		if (texFormat == surface->format->format) {
+@@ -329,9 +331,49 @@ SDL_Texture* SDLTextureSprite2D::GetTexture(SDL_Renderer* renderer) const
+ 	return texture;
+ }
+ 
++SDL_Texture* SDLTextureSprite2D::GetTexture(SDL_Renderer* renderer, const Palette& palette) const
++{
++	SDL_Surface* source = GetSurface();
++	if (!source->format->palette) return GetTexture(renderer);
++
++	const version_t version = palette.GetVersion();
++	for (auto it = paletteTextures.begin(); it != paletteTextures.end(); ++it) {
++		if (it->version != version) continue;
++		PaletteTexture cached = *it;
++		paletteTextures.erase(it);
++		paletteTextures.push_back(cached);
++		return cached.texture;
++	}
++
++	SDL_Surface* paletted = SDL_CreateRGBSurfaceFrom(source->pixels, source->w, source->h,
++						       source->format->BitsPerPixel, source->pitch, 0, 0, 0, 0);
++	if (!paletted) return nullptr;
++	SDLVideoDriver::SetSurfacePalette(paletted, reinterpret_cast<const SDL_Color*>(palette.ColorData()),
++					  0x01 << source->format->BitsPerPixel);
++	SDL_SetColorKey(paletted, SDL_bool(format.HasColorKey), GetColorKey());
++	SDL_Texture* variant = SDL_CreateTextureFromSurface(renderer, paletted);
++	SDL_FreeSurface(paletted);
++	if (!variant) return nullptr;
++
++	constexpr size_t MaxPaletteTextures = 4;
++	if (paletteTextures.size() == MaxPaletteTextures) {
++		SDL_DestroyTexture(paletteTextures.front().texture);
++		paletteTextures.erase(paletteTextures.begin());
++	}
++	paletteTextures.push_back({ version, variant });
++	return variant;
++}
++
++void SDLTextureSprite2D::ClearPaletteTextures() const noexcept
++{
++	for (const PaletteTexture& cached : paletteTextures) SDL_DestroyTexture(cached.texture);
++	paletteTextures.clear();
++}
++
+ void SDLTextureSprite2D::OnSurfaceUpdate() const noexcept
+ {
+ 	staleTexture = true;
++	ClearPaletteTextures();
+ }
+ #endif
+ 
+diff --git a/gemrb/plugins/SDLVideo/SDLSurfaceSprite2D.h b/gemrb/plugins/SDLVideo/SDLSurfaceSprite2D.h
+index 71528823..b3d84088 100644
+--- a/gemrb/plugins/SDLVideo/SDLSurfaceSprite2D.h
++++ b/gemrb/plugins/SDLVideo/SDLSurfaceSprite2D.h
+@@ -25,6 +25,7 @@
+ #include "Sprite2D.h"
+ 
+ #include <SDL.h>
++#include <vector>
+ 
+ namespace GemRB {
+ 
+@@ -82,11 +83,18 @@ public:
+ // it would probably be better to not inherit from SDLSurfaceSprite2D
+ // the hard part is handling the palettes ourselves
+ class SDLTextureSprite2D : public SDLSurfaceSprite2D {
++	struct PaletteTexture {
++		version_t version;
++		SDL_Texture* texture = nullptr;
++	};
++
+ 	mutable Uint32 texFormat = SDL_PIXELFORMAT_UNKNOWN;
+ 	mutable SDL_Texture* texture = nullptr;
+ 	mutable bool staleTexture = false;
++	mutable std::vector<PaletteTexture> paletteTextures;
+ 
+ 	void OnSurfaceUpdate() const noexcept override;
++	void ClearPaletteTextures() const noexcept;
+ 
+ public:
+ 	SDLTextureSprite2D(const SDLTextureSprite2D&) noexcept;
+@@ -97,6 +105,7 @@ public:
+ 	Holder<Sprite2D> copy() const override;
+ 
+ 	SDL_Texture* GetTexture(SDL_Renderer* renderer) const;
++	SDL_Texture* GetTexture(SDL_Renderer* renderer, const Palette& palette) const;
+ };
+ #endif
+ 
+diff --git a/gemrb/plugins/SDLVideo/SDLVideo.cpp b/gemrb/plugins/SDLVideo/SDLVideo.cpp
+index 5bb77651..e3fa7cf2 100644
+--- a/gemrb/plugins/SDLVideo/SDLVideo.cpp
++++ b/gemrb/plugins/SDLVideo/SDLVideo.cpp
+@@ -422,7 +422,7 @@ void SDLVideoDriver::DrawCircleImp(const Point& origin, uint16_t r, const Color&
+ 	DrawPoints(points, color, flags);
+ }
+ 
+-void SDLVideoDriver::BlitSpriteClipped(const Holder<Sprite2D>& spr, Region src, const Region& dst, BlitFlags flags, const Color* tint)
++void SDLVideoDriver::BlitSpriteClipped(const Holder<Sprite2D>& spr, Region src, const Region& dst, BlitFlags flags, const Color* tint, const Palette* palette)
+ {
+ #if SDL_VERSION_ATLEAST(1, 3, 0)
+ 	// in SDL2 SDL_RenderCopyEx will flip the src rect internally if BlitFlags::MIRRORX or BlitFlags::MIRRORY is set
+@@ -493,7 +493,7 @@ void SDLVideoDriver::BlitSpriteClipped(const Holder<Sprite2D>& spr, Region src,
+ 		BlitSpriteRLEClipped(spr, src, dclipped, flags, tint);
+ 	} else {
+ 		const sprite_t* native = static_cast<const sprite_t*>(spr.get());
+-		BlitSpriteNativeClipped(native, src, dclipped, flags, reinterpret_cast<const SDL_Color*>(tint));
++		BlitSpriteNativeClipped(native, src, dclipped, flags, reinterpret_cast<const SDL_Color*>(tint), palette);
+ 	}
+ 
+ 	if (ck != ColorBlack) {
+diff --git a/gemrb/plugins/SDLVideo/SDLVideo.h b/gemrb/plugins/SDLVideo/SDLVideo.h
+index 98888d90..98d61188 100644
+--- a/gemrb/plugins/SDLVideo/SDLVideo.h
++++ b/gemrb/plugins/SDLVideo/SDLVideo.h
+@@ -96,8 +96,8 @@ protected:
+ 	Region CurrentRenderClip() const;
+ 
+ 	virtual void BlitSpriteRLEClipped(const Holder<Sprite2D>& spr, const Region& src, const Region& dst, BlitFlags flags = BlitFlags::NONE, const Color* tint = NULL) = 0;
+-	virtual void BlitSpriteNativeClipped(const sprite_t* spr, const Region& src, const Region& dst, BlitFlags flags = BlitFlags::NONE, const SDL_Color* tint = NULL) = 0;
+-	void BlitSpriteClipped(const Holder<Sprite2D>& spr, Region src, const Region& dst, BlitFlags flags = BlitFlags::NONE, const Color* tint = nullptr);
++	virtual void BlitSpriteNativeClipped(const sprite_t* spr, const Region& src, const Region& dst, BlitFlags flags = BlitFlags::NONE, const SDL_Color* tint = NULL, const Palette* palette = nullptr) = 0;
++	void BlitSpriteClipped(const Holder<Sprite2D>& spr, Region src, const Region& dst, BlitFlags flags = BlitFlags::NONE, const Color* tint = nullptr, const Palette* palette = nullptr);
+ 
+ 	int PollEvents() override;
+ 	/* used to process the SDL events dequeued by PollEvents or an arbitrary event from another source.*/

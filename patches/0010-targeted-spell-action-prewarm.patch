@@ -1,8 +1,8 @@
 diff --git a/gemrb/core/Game.cpp b/gemrb/core/Game.cpp
-index 3470b14..82a0e80 100644
+index 7bd28070..e03c5e3b 100644
 --- a/gemrb/core/Game.cpp
 +++ b/gemrb/core/Game.cpp
-@@ -2788,4 +2788,146 @@ bool Game::IsTargeted(ieDword gid) const
+@@ -2789,4 +2789,147 @@ bool Game::IsTargeted(ieDword gid) const
  	return false;
  }
  
@@ -133,8 +133,9 @@ index 3470b14..82a0e80 100644
 +		Actor* actor = GetActorByGlobalID(pose[0]);
 +		if (actor && actor->GetAnims()) {
 +			orient_t orientation = static_cast<orient_t>(pose[2]);
-+			preload.PrecacheParts(actor->GetAnims()->GetAnimation(pose[1], orientation));
-+			preload.PrecacheParts(actor->GetAnims()->GetShadowAnimation(pose[1], orientation));
++			CharAnimations* animations = actor->GetAnims();
++			preload.PrecacheParts(animations->GetAnimation(pose[1], orientation), animations);
++			preload.PrecacheParts(animations->GetShadowAnimation(pose[1], orientation), animations, true);
 +		}
 +	}
 +
