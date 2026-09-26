@@ -2820,7 +2820,7 @@ None.
 
 ---
 
-## 95 COMMIT Unreleased ??? 2026-09-26T14:15:32-07:00
+## 95 COMMIT Unreleased bca26df 2026-09-26T14:15:32-07:00
 
 #### Coming From:
 
@@ -2832,11 +2832,11 @@ Make menu replay faster and deterministic while preserving the accepted in-game 
 
 #### Outcome:
 
-The user accepted both panning variants and requested a one-second post-menu launch delay plus optimized navigation that waits one second before each menu click. This change will add deterministic menu timing transformation for the first four primary mouse clicks and a file-triggered replay start so uinput devices can exist before GemRB starts while the one-second lead begins only after the menu is confirmed stable.
+The user accepted both panning variants and requested a one-second post-menu launch delay plus optimized navigation that waits one second before each menu click. Source `bca26df` adds a deterministic `tune-menu` transformation and file-triggered replay start, allowing uinput devices to exist before GemRB starts while the lead interval begins only after the menu is confirmed stable. The generated trace preserves all 1,707 event payloads and post-menu timing, compresses each of the first four pointer paths into one tenth of a second, dwells at least 1.022 seconds before each click and shortens total duration from 57.101 to 47.392 seconds. Compilation, trace validation, payload identity, monotonic-time and dwell checks passed; the tuned trace SHA256 is `5e24dc242d92d1b7690820c65bcab3def733f956ccb07cc5c1fee8e6d51b9e44`.
 
 #### Next Steps:
 
-Generate and validate a tuned trace with each pre-click pointer path compressed to one tenth of a second followed by a one-second dwell, preserve all post-menu timing and suppress the twelve directional-key events at replay, then cold-launch and confirm that it loads the same autosave, moves the character and ends paused.
+Stage the tuned trace and harness, cold-launch with the replay devices waiting for a confirmed stable menu, signal a one-second lead and suppress the twelve directional-key events. Confirm that the four menu clicks land correctly, the same autosave loads, the character moves without viewport panning and the final Space event pauses the game.
 
 #### Files Modified:
 
@@ -2844,7 +2844,7 @@ Generate and validate a tuned trace with each pre-click pointer path compressed 
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
