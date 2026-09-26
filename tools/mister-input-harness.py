@@ -32,6 +32,7 @@ EV_MSC = 0x04
 SYN_REPORT = 0
 REL_X = 0
 REL_Y = 1
+KEY_MAX = 0x2FF
 CLOCK_MONOTONIC = 1
 
 IOC_WRITE = 1
@@ -323,6 +324,15 @@ def replay(args: argparse.Namespace) -> int:
     header, all_events, _end = read_trace(args.trace)
     prefix_motion = select_prefix_motion(all_events, args.start_at) if args.restore_prefix_motion else []
     events = select_replay_events(all_events, args.start_at)
+    excluded_keys = set(args.exclude_key)
+    unfiltered_count = len(events)
+    events = [
+        event
+        for event in events
+        if not (event["type"] == EV_KEY and event["code"] in excluded_keys)
+    ]
+    if not events:
+        raise RuntimeError("key exclusions removed every replay event")
     by_device: dict[int, list[dict]] = defaultdict(list)
     for event in events:
         by_device[event["device"]].append(event)
@@ -364,6 +374,9 @@ def replay(args: argparse.Namespace) -> int:
         x = sum(event["value"] for event in prefix_motion if event["type"] == EV_REL and event["code"] == REL_X)
         y = sum(event["value"] for event in prefix_motion if event["type"] == EV_REL and event["code"] == REL_Y)
         print(f"restored prefix motion with {len(prefix_motion)} events: x={x:+d} y={y:+d}")
+    if excluded_keys:
+        codes = ",".join(str(code) for code in sorted(excluded_keys))
+        print(f"excluded {unfiltered_count - len(events)} key events for codes: {codes}")
     print(f"replayed {len(events)} events from {args.start_at:.3f}s in {duration:.3f} seconds")
     return 0
 
@@ -397,6 +410,14 @@ def parser() -> argparse.ArgumentParser:
         action="store_true",
         help="restore prior X/Y relative motion without replaying prior buttons or keys",
     )
+    playback.add_argument(
+        "--exclude-key",
+        action="append",
+        type=int,
+        default=[],
+        metavar="CODE",
+        help="omit this Linux EV_KEY code; may be specified more than once",
+    )
     playback.add_argument("--lead-in", type=float, default=1.0)
     playback.add_argument("--device-delay", type=float, default=1.0)
     playback.add_argument("--settle", type=float, default=0.5)
@@ -411,6 +432,8 @@ def main() -> int:
         raise SystemExit("--speed must be positive")
     if getattr(args, "start_at", 0.0) < 0:
         raise SystemExit("--start-at must not be negative")
+    if any(code < 0 or code > KEY_MAX for code in getattr(args, "exclude_key", [])):
+        raise SystemExit(f"--exclude-key must be between 0 and {KEY_MAX}")
     try:
         return args.function(args)
     except (OSError, RuntimeError) as error:
