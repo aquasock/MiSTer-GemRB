@@ -2646,7 +2646,7 @@ After the user manually reboots the MiSTer, create the replay devices before Gem
 
 ---
 
-## 89 COMMIT Unreleased ??? 2026-09-26T13:46:56-07:00
+## 89 COMMIT Unreleased 1d692a6 2026-09-26T13:46:56-07:00
 
 #### Coming From:
 
@@ -2658,11 +2658,11 @@ Restore the cursor position established before a bounded replay without repeatin
 
 #### Outcome:
 
-The direct MGL launch reached GemRB correctly and the selected input segment reproduced the recorded relative mouse motion, but its cursor position was offset and menu clicks landed on the wrong controls. The replay was stopped and the exact normal launcher was restored before the user rebooted. Trace analysis shows that the discarded prefix accumulated 178 horizontal and negative 117 vertical relative-motion units before the selected segment, so this change will optionally replay only prior relative-motion reports immediately before the selected interval while suppressing every prior button, key and scan event.
+The direct MGL launch reached GemRB correctly and the selected input segment reproduced the recorded relative mouse motion, but its cursor position was offset and menu clicks landed on the wrong controls. The replay was stopped and the exact normal launcher was restored before the user rebooted. Trace analysis shows that the discarded prefix accumulated 178 horizontal and negative 117 vertical relative-motion units before the selected segment. Source `1d692a6` adds optional prefix-motion restoration immediately before the selected interval while suppressing every prior button, key and scan event. Local compilation and selection tests prove that the option emits 677 relative-motion and synchronization events totaling exactly positive 178 horizontal and negative 117 vertical units before the unchanged 822-event bounded replay.
 
 #### Next Steps:
 
-Add and locally validate prefix-motion restoration, stage the corrected harness, temporarily enable the existing frame tracer, directly load the unchanged canonical MGL and repeat the bounded replay. Accept the harness only if the cursor reaches the recorded menu controls, the save loads, movement completes and the final space press pauses the game.
+Stage the corrected harness, temporarily enable the existing frame tracer, directly load the unchanged canonical MGL and repeat the bounded replay. Accept the harness only if the cursor reaches the recorded menu controls, the save loads, movement completes and the final space press pauses the game.
 
 #### Files Modified:
 
@@ -2670,7 +2670,7 @@ Add and locally validate prefix-motion restoration, stage the corrected harness,
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
