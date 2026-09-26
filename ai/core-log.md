@@ -2302,7 +2302,7 @@ None.
 
 ---
 
-## 77 COMMIT Unreleased ??? 2026-09-26T08:12:07-07:00
+## 77 COMMIT Unreleased 6f62121 2026-09-26T08:12:07-07:00
 
 #### Coming From:
 
@@ -2314,11 +2314,11 @@ Keep targeted combat prewarming within the renderer's resident-texture budget.
 
 #### Outcome:
 
-The dynamic queue will prepare each exact spell's generic casting-glow visual and restrict scripted casters to casting and conjuring cycles. Summon-table creature candidates will contribute resource dependencies without having every pose materialized, while an actual actor added to the map will prepare only its current orientation and immediate combat and movement cycles. This should retain the working textures for the imminent battle instead of sweeping 13,842 frames through the renderer's 192 MiB resident cache.
+Source `6f62121` prepares each exact spell's generic casting-glow visual and restricts scripted casters to 32 casting and conjuring orientation tasks. Summon-table creature candidates contribute resource dependencies without materializing poses, while an actual noncaster added to the map prepares only eight immediate combat and movement poses at its current orientation. The complete ten-patch stack applies cleanly, every patch passes the build driver's reverse check, and the resulting source exactly matches the development tree. The ARM build and normal bundle completed successfully; the staged core library SHA256 is `82eecc14d971cfa6918c95ecfbaad15886a024768eed9480c1675eb29004039f`, while SDLVideo remains `5f49144764a31449747720353f51363a408ec573bf553f83b89c816e4624dbe3` and the executable remains `5b2b535182fb1d2cd8ed814d4ba5a5141184f446fa3531c990315ada6218a46d`.
 
 #### Next Steps:
 
-Repartition the cache-aware behavior across the existing dynamic-actor and targeted-spell patches so all ordered patches remain idempotent, verify the complete stack in a clean GemRB tree, build one ARM GemRB bundle without rebuilding Quartus, and cold-test the same battle against the approximately 11-stutter baseline.
+After the active GemRB session has ended or the MiSTer has rebooted, deploy the staged normal bundle without changing the canonical launcher, configuration or FPGA core. Cold-load the same save, confirm that `CGConjur` and exact spell dependencies are prepared before combat with a much smaller frame count, and compare the visible severe-stutter count with the approximately 11-event baseline.
 
 #### Files Modified:
 
@@ -2327,7 +2327,7 @@ Repartition the cache-aware behavior across the existing dynamic-actor and targe
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
