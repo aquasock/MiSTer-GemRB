@@ -2243,3 +2243,32 @@ After the active low-memory GemRB session has ended or the MiSTer has rebooted, 
 - [ ] Passed
 
 ---
+
+## 75 COMMIT Unreleased d6d5103 2026-09-26T07:53:10-07:00
+
+#### Coming From:
+
+Unreleased d6d5103
+
+#### Purpose:
+
+Deploy the targeted numeric-spell prewarm build for cold combat validation.
+
+#### Outcome:
+
+The MiSTer at `10.10.0.21` had no active GemRB process, 466,348 KiB available and no configured swap, so the normal bundle was deployed without replacing game data, saves, cache or the edited BG2 configuration. Device hashes match the staged core library `53db70dda028bea953d7426584dc84852c908fb3939f390b6edb6743581060b3`, SDLVideo plugin `5f49144764a31449747720353f51363a408ec573bf553f83b89c816e4624dbe3` and executable `5b2b535182fb1d2cd8ed814d4ba5a5141184f446fa3531c990315ada6218a46d`. The preserved configuration uses normal SDL audio, `CapFPS=30` and `DrawFPS=0`; the canonical MGL still selects `_Utility/Noodles`, and the timing-qualified RBF remains `Noodles_20260925.rbf` with SHA256 `29df3cc992220ba04ca171e598918080e498b1e6aff20f28f924630cedaebebe`. The idle target had 465,072 KiB available after deployment.
+
+#### Next Steps:
+
+Cold-launch BG2 through the normal MGL, load the exact save and allow the cutscene and dialog to reach the battle. Record whether `SPWI412`, `MONSUM01` and the summoned creature resources are prepared before combat, inspect the memory floor and GemRB swap use, and compare the visible severe-stutter count with the prior approximately 11-event baseline.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
