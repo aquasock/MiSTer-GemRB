@@ -1804,3 +1804,32 @@ Wait until the current game process exits, validate the ARM library with the del
 - [ ] Passed
 
 ---
+
+## 60 COMMIT Unreleased 4ce1773 2026-09-25T22:57:16-07:00
+
+#### Coming From:
+
+Unreleased 4ce1773
+
+#### Purpose:
+
+Use the extended frame tracer to separate the remaining between-present combat stalls into display composition, texture transfer, target switching and earlier engine work.
+
+#### Outcome:
+
+The extended ARM tracer passed its delayed-load target self-test and ran without errors in the standard three-buffer configuration. The controlled combat segment produced 74 frame records, including 73 intervals of at least 45 milliseconds. Those long frames had a 49.533-millisecond median and 680.346-millisecond maximum. After the measured cap delay, work before the display-target boundary had a 32.026-millisecond median, 667.031-millisecond maximum and 6.603-second aggregate, while final display composition had a 0.093-millisecond median and 4.647-millisecond maximum and presentation had a 0.131-millisecond median and 3.336-millisecond maximum. The long frames averaged hundreds of target switches and several texture updates, but all target switches together had a 6.015-millisecond median and 9.536-millisecond maximum, and all texture updates had a 3.819-millisecond median and 15.875-millisecond maximum. In the two worst frames, the pre-display phase consumed 667.031 and 606.464 milliseconds while measured target and texture operations totaled less than eight milliseconds each. Texture locking was unused, and only one 4.150-millisecond main-thread file open exceeded the storage threshold. Display composition, presentation, storage, target switching and texture transfer therefore do not explain the severe stalls. The exact original target launcher was restored again with SHA256 `216fc0445bdf8ef049bfe5f8e5b010b622fab009e8d7df2f03d42d128694b6d3`.
+
+#### Next Steps:
+
+Obtain approval for one final low-overhead marker using the first existing render-target call after each present as the start of window drawing, without adding another hot wrapper. A short repeat will divide the remaining pre-display interval into game and GUI update before drawing versus the complete window-drawing pass, providing the source boundary needed for a correction.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
