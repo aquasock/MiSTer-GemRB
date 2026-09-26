@@ -2907,3 +2907,32 @@ None.
 - [ ] Passed
 
 ---
+
+## 98 COMMIT Unreleased 8fb9689 2026-09-26T14:36:57-07:00
+
+#### Coming From:
+
+Unreleased 8fb9689
+
+#### Purpose:
+
+Record and interpret the completed official no-panning cold-load profile.
+
+#### Outcome:
+
+The official replay excluded exactly twelve directional-key events, emitted all 1,695 remaining events over the unchanged 57.101-second trace and ended normally while the user observed no major stutters. Monotonic alignment places the first in-game click 59.657 seconds after sampling began. A 616.978-millisecond frame containing 40 samples in `TraversabilityCache::ValidateTraversabilityCacheSize` and 44 in `memset` ended 1.081 seconds before that click, so this run paid the previously identified lazy traversability allocation during the load-to-game transition rather than after the user's first movement command. The 24.550-second movement interval contained no frame above 215.242 milliseconds; its two longest frames were 215.242 and 197.869 milliseconds, presentation consumed only 0.127 and 0.152 milliseconds, and their samples identify synchronous BAM frame construction, zlib inflation and SDL sprite work. The earlier bad capture reached 792.761 and 474.351 milliseconds, making this a valid low-stutter sample that demonstrates timing and resource-state variance rather than a failed capture. The exact normal launcher is restored and verified with SHA256 `216fc0445bdf8ef049bfe5f8e5b010b622fab009e8d7df2f03d42d128694b6d3`.
+
+#### Next Steps:
+
+Keep this low-stutter capture paired with the earlier bad capture. The next source cycle should make traversability allocation an explicit map-loading operation so replay timing cannot move that cost across the first-input boundary, then isolate the remaining lazy BAM and zlib sprite construction represented by the post-input 215- and 198-millisecond frames.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
