@@ -2878,3 +2878,32 @@ Future diagnostic and source validation runs must use the committed official def
 - [x] Passed
 
 ---
+
+## 97 COMMIT Unreleased 8fb9689 2026-09-26T14:27:23-07:00
+
+#### Coming From:
+
+Unreleased 8fb9689
+
+#### Purpose:
+
+Profile the official no-panning cold-load replay and correlate its three or four visible stutters with long frames and main-thread execution.
+
+#### Outcome:
+
+The accepted committed trace and replay parameters will remain unchanged. A temporary launcher will add only the existing bounded frame tracer, while the existing monotonic main-thread instruction sampler and process snapshots record the complete launch, autosave load, mouse movement and final paused boundary. The user will watch the same run and compare visible stutters with the captured frame intervals.
+
+#### Next Steps:
+
+Stage the already-built tracer and sampler without launching, ask the user to reboot manually, then run the official 1,695-event no-panning replay once. Restore the exact normal launcher immediately after capture and identify the largest frame intervals, their update, draw and presentation split, coincident main-thread call sites and fault or scheduler evidence.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
