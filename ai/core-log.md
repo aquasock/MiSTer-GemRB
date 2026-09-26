@@ -1715,3 +1715,33 @@ Deploy the tracer only after the current GemRB process has exited, preserve the 
 - [ ] Passed
 
 ---
+
+## 57 COMMIT Unreleased 5aaec84 2026-09-25T22:42:42-07:00
+
+#### Coming From:
+
+Unreleased bdd3431
+
+#### Purpose:
+
+Correct the frame tracer so its SDL wrappers resolve the dynamically loaded video library before forwarding calls.
+
+#### Outcome:
+
+The first target launch produced audio with a blank screen because the preload constructor looked up `SDL_RenderPresent` before GemRB loaded the SDL video plugin, retained a null target and suppressed presentation. The exact original target `run.sh` was restored immediately with SHA256 `216fc0445bdf8ef049bfe5f8e5b010b622fab009e8d7df2f03d42d128694b6d3`. Source `5aaec84` now retries both SDL symbol lookups lazily on their first call and reports a trace error if forwarding is still unavailable. The native self-test now loads its fake SDL library after tracer initialization, reproducing the target load order and proving that the wrappers forward a 56-millisecond frame correctly. The strict ARM build passed with corrected library SHA256 `6cd910f57f4a1693d777c0d6c8412674ea7757b39502618794340e9304c19410`; GemRB, SDL and the FPGA core remain unchanged.
+
+#### Next Steps:
+
+After the blank-screen process has exited, replace only the temporary tracer library, reactivate the already prepared one-launch `run.sh`, verify video output and a live `FRAME` record before starting the controlled spell-heavy battle, then restore the exact original launcher after collection.
+
+#### Files Modified:
+
+- scripts/build-frame-tracer.sh
+- tools/noodles-frame-trace.c
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
