@@ -1391,7 +1391,7 @@ None.
 
 ---
 
-## 46 COMMIT Unreleased ??? 2026-09-25T19:02:04-07:00
+## 46 COMMIT Unreleased de2dfd4 2026-09-25T19:02:04-07:00
 
 #### Coming From:
 
@@ -1403,7 +1403,7 @@ Load the Noodles core from its release name so a new core build is deployed by o
 
 #### Outcome:
 
-Planned. The launcher accepts only the exact path pet/Noodles_triple_seed13.rbf, and the MGL names that file, so every new core build has needed a launcher and bundle change. At the user's direction, the core will follow the MiSTer release convention in one fixed place: _Utility/Noodles_YYYYMMDD.rbf, beside the game MGL. The MGL will name _Utility/Noodles without a date, and the launcher will accept Noodles.rbf or a single Noodles_YYYYMMDD.rbf in /media/fat/_Utility. A new deploy.sh core mode will install a given RBF under the current date, remove older Noodles*.rbf files from _Utility and report its hash. The first core deployed this way is MiSTer-Noodles d5051f4, the unqualified 120MHz seed-3 image with RBF SHA256 fe858c3fce82ac17cb867485bf66c0627e5219c6cdd6f351dc7478364399a0c3. It passed the exact-pixel diagnostic and audio in three-buffer mode, which GemRB uses, but fails a deferred texture update in two-buffer mode that the accepted 100MHz core passes. The user chose to try it in the game before that fault is investigated.
+The launcher accepted only pet/Noodles_triple_seed13.rbf and the MGL named that file, so every new core build needed a launcher and bundle change. At the user's direction, source de2dfd4 installs the core under the MiSTer release convention beside the game MGL: the MGL names _Utility/Noodles without a date, the launcher accepts only Noodles.rbf or Noodles_YYYYMMDD.rbf directly in /media/fat/_Utility, and deploy.sh core installs a given RBF as _Utility/Noodles_<date>.rbf after removing any earlier Noodles core there, printing both hashes. A host test of the path check accepted the dated and undated release names in any letter case and rejected the old pet path, per-build names, malformed dates and subdirectories. The launcher and deploy script built cleanly, and the bundle built with launcher SHA256 7b2cea4abf6cb7f5af6d218d4963ae112513082ffe2b8ba7b917c910a1e14833 and the unchanged renderer SDL d8c07a80. The bundle was deployed, and MiSTer-Noodles d5051f4, the unqualified 120MHz seed-3 core with RBF SHA256 fe858c3fce82ac17cb867485bf66c0627e5219c6cdd6f351dc7478364399a0c3, was installed as _Utility/Noodles_20260925.rbf with a matching device hash. That core passed the exact-pixel diagnostic and audio in three-buffer mode, which GemRB uses, but fails a deferred texture update in two-buffer mode that the accepted 100MHz core passes; the user chose to try it in the game first. The temporary pet/Noodles_c120_seed3.rbf copy was removed. USB swap and DrawFPS=1 remain set.
 
 #### Next Steps:
 
@@ -1418,7 +1418,7 @@ Build and deploy the bundle and the core, then have the user compare the AR0015 
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
