@@ -1685,3 +1685,33 @@ None.
 - [x] Passed
 
 ---
+
+## 56 COMMIT Unreleased ??? 2026-09-25T22:35:21-07:00
+
+#### Coming From:
+
+Unreleased 1d9f008
+
+#### Purpose:
+
+Add a temporary low-overhead frame tracer that distinguishes long GemRB frame work from renderer presentation and slow file access during combat.
+
+#### Outcome:
+
+The approved diagnostic will add a small ARM preload library and deterministic build script. The library will timestamp `SDL_RenderPresent` boundaries, renderer duration, frame-cap delays and slow file operations, emit only slow events to a tmpfs log, guard against recursive tracing and leave gameplay data untouched. It will be compiled and checked independently without rebuilding GemRB, SDL or the FPGA core, then installed through a reversible target-only `run.sh` preload adjustment for one controlled battle.
+
+#### Next Steps:
+
+Implement and validate the tracer, deploy it only after the current GemRB process has exited, confirm that normal three-buffer mode and diagnostics-off settings remain active, capture one spell-heavy battle, and restore the exact original target launcher immediately after the trace.
+
+#### Files Modified:
+
+- scripts/build-frame-tracer.sh
+- tools/noodles-frame-trace.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
