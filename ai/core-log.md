@@ -2645,3 +2645,32 @@ After the user manually reboots the MiSTer, create the replay devices before Gem
 - [ ] Passed
 
 ---
+
+## 89 COMMIT Unreleased ??? 2026-09-26T13:46:56-07:00
+
+#### Coming From:
+
+Unreleased fb02df9
+
+#### Purpose:
+
+Restore the cursor position established before a bounded replay without repeating frontend clicks.
+
+#### Outcome:
+
+The direct MGL launch reached GemRB correctly and the selected input segment reproduced the recorded relative mouse motion, but its cursor position was offset and menu clicks landed on the wrong controls. The replay was stopped and the exact normal launcher was restored before the user rebooted. Trace analysis shows that the discarded prefix accumulated 178 horizontal and negative 117 vertical relative-motion units before the selected segment, so this change will optionally replay only prior relative-motion reports immediately before the selected interval while suppressing every prior button, key and scan event.
+
+#### Next Steps:
+
+Add and locally validate prefix-motion restoration, stage the corrected harness, temporarily enable the existing frame tracer, directly load the unchanged canonical MGL and repeat the bounded replay. Accept the harness only if the cursor reaches the recorded menu controls, the save loads, movement completes and the final space press pauses the game.
+
+#### Files Modified:
+
+- tools/mister-input-harness.py
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
