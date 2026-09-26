@@ -1,27 +1,24 @@
 diff --git a/gemrb/core/Game.h b/gemrb/core/Game.h
-index 0e12332..b7ce206 100644
+index 0e12332..8dbefe4 100644
 --- a/gemrb/core/Game.h
 +++ b/gemrb/core/Game.h
-@@ -38,6 +38,10 @@
+@@ -38,6 +38,9 @@
  
  #include <array>
  #include <atomic>
 +#include <deque>
-+#include <memory>
 +#include <set>
 +#include <string>
  #include <vector>
  
  namespace GemRB {
-@@ -304,6 +308,16 @@ public:
+@@ -304,6 +307,14 @@ public:
  	bool familiarBlock = false;
  	bool PartyAttack = false;
  	bool HOFMode = false;
 +	std::deque<ieDword> preloadActors;
 +	std::deque<ResRef> preloadResources;
 +	std::deque<std::array<ieDword, 3>> preloadPoses;
-+	std::deque<std::shared_ptr<Actor>> preloadCreatures;
-+	size_t preloadCreaturePose = 0;
 +	std::set<ieDword> preloadSeenActors;
 +	std::set<std::string> preloadSeenResources;
 +	size_t preloadFrames = 0;
@@ -30,7 +27,7 @@ index 0e12332..b7ce206 100644
  
  private:
  	/** reads the challenge rating table */
-@@ -495,6 +509,8 @@ public:
+@@ -495,6 +506,8 @@ public:
  	std::string dump() const override;
  	/** Finds an actor by global ID */
  	Actor* GetActorByGlobalID(ieDword objectID) const;

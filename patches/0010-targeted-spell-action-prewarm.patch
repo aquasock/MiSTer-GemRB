@@ -1,8 +1,8 @@
 diff --git a/gemrb/core/Game.cpp b/gemrb/core/Game.cpp
-index 3470b14..f601455 100644
+index 3470b14..82a0e80 100644
 --- a/gemrb/core/Game.cpp
 +++ b/gemrb/core/Game.cpp
-@@ -2788,4 +2788,152 @@ bool Game::IsTargeted(ieDword gid) const
+@@ -2788,4 +2788,146 @@ bool Game::IsTargeted(ieDword gid) const
  	return false;
  }
  
@@ -27,12 +27,13 @@ index 3470b14..f601455 100644
 +		queueResource(effect.Resource4);
 +	};
 +	auto queueActorDependencies = [this, &queueResource](Actor* actor) {
-+		if (!actor) return;
++		if (!actor) return false;
 +		std::vector<ResRef> refs;
 +		for (GameScript* script : actor->Scripts) {
 +			if (script) script->CollectSpellRefs(refs);
 +		}
 +		for (const ResRef& ref : refs) queueResource(ref);
++		return !refs.empty();
 +	};
 +
 +	AreaPreloader preload;
@@ -40,8 +41,6 @@ index 3470b14..f601455 100644
 +		preloadActors.clear();
 +		preloadResources.clear();
 +		preloadPoses.clear();
-+		preloadCreatures.clear();
-+		preloadCreaturePose = 0;
 +		if (preloadActive) {
 +			Log(MESSAGE, "Game", "Dynamic preload stopped at the {} KiB memory reserve.", preload.availableKiB);
 +			preloadActive = false;
@@ -54,13 +53,21 @@ index 3470b14..f601455 100644
 +		preloadActors.pop_front();
 +		Actor* actor = GetActorByGlobalID(actorID);
 +		if (actor) {
-+			queueActorDependencies(actor);
-+			const unsigned char stances[] = {
-+				IE_ANI_CAST, IE_ANI_CONJURE, IE_ANI_ATTACK, IE_ANI_ATTACK_SLASH,
-+				IE_ANI_ATTACK_BACKSLASH, IE_ANI_ATTACK_JAB, IE_ANI_SHOOT
-+			};
-+			for (unsigned char stance : stances) {
-+				for (ieDword orientation = 0; orientation < MAX_ORIENT; ++orientation) {
++			if (queueActorDependencies(actor)) {
++				const unsigned char stances[] = { IE_ANI_CAST, IE_ANI_CONJURE };
++				for (unsigned char stance : stances) {
++					for (ieDword orientation = 0; orientation < MAX_ORIENT; ++orientation) {
++						preloadPoses.push_back({ actorID, stance, orientation });
++					}
++				}
++			} else {
++				const unsigned char stances[] = {
++					IE_ANI_ATTACK, IE_ANI_ATTACK_SLASH, IE_ANI_ATTACK_BACKSLASH,
++					IE_ANI_ATTACK_JAB, IE_ANI_SHOOT, IE_ANI_DAMAGE, IE_ANI_READY,
++					IE_ANI_WALK
++				};
++				ieDword orientation = actor->GetOrientation();
++				for (unsigned char stance : stances) {
 +					preloadPoses.push_back({ actorID, stance, orientation });
 +				}
 +			}
@@ -73,6 +80,9 @@ index 3470b14..f601455 100644
 +		if (gamedata->Exists(resource, IE_SPL_CLASS_ID, true)) {
 +			const Spell* spell = gamedata->GetSpell(resource, true);
 +			if (spell) {
++				if (spell->CastingGraphics < gamedata->castingGlows.size()) {
++					preload.PrecacheVisual(gamedata->castingGlows[spell->CastingGraphics]);
++				}
 +				for (const Effect& effect : spell->casting_features) queueEffectResources(effect);
 +				for (const SPLExtHeader& header : spell->ext_headers) {
 +					preload.PrecacheProjectile(header.ProjectileAnimation);
@@ -107,31 +117,15 @@ index 3470b14..f601455 100644
 +			}
 +		}
 +		if (gamedata->Exists(resource, IE_CRE_CLASS_ID, true)) {
-+			std::shared_ptr<Actor> actor(gamedata->GetCreature(resource));
++			Actor* actor = gamedata->GetCreature(resource);
 +			if (actor) {
-+				queueActorDependencies(actor.get());
-+				preloadCreatures.push_back(std::move(actor));
++				queueActorDependencies(actor);
++				delete actor;
 +			}
 +		}
 +		if (gamedata->Exists(resource, IE_VVC_CLASS_ID, true) ||
 +		    gamedata->Exists(resource, IE_BAM_CLASS_ID, true)) {
 +			preload.PrecacheVisual(resource);
-+		}
-+	} else if (!preloadCreatures.empty()) {
-+		static const unsigned char stances[] = {
-+			IE_ANI_ATTACK, IE_ANI_ATTACK_SLASH, IE_ANI_ATTACK_BACKSLASH,
-+			IE_ANI_ATTACK_JAB, IE_ANI_DAMAGE, IE_ANI_READY, IE_ANI_WALK
-+		};
-+		size_t stanceIndex = preloadCreaturePose / MAX_ORIENT;
-+		orient_t orientation = static_cast<orient_t>(preloadCreaturePose % MAX_ORIENT);
-+		Actor* actor = preloadCreatures.front().get();
-+		if (actor && actor->GetAnims()) {
-+			preload.PrecacheParts(actor->GetAnims()->GetAnimation(stances[stanceIndex], orientation));
-+			preload.PrecacheParts(actor->GetAnims()->GetShadowAnimation(stances[stanceIndex], orientation));
-+		}
-+		if (++preloadCreaturePose == sizeof(stances) / sizeof(stances[0]) * MAX_ORIENT) {
-+			preloadCreatures.pop_front();
-+			preloadCreaturePose = 0;
 +		}
 +	} else if (!preloadPoses.empty()) {
 +		auto pose = preloadPoses.front();
@@ -146,7 +140,7 @@ index 3470b14..f601455 100644
 +
 +	preloadFrames += preload.frames;
 +	if (preloadActive && preloadActors.empty() && preloadResources.empty() &&
-+	    preloadCreatures.empty() && preloadPoses.empty()) {
++	    preloadPoses.empty()) {
 +		Log(MESSAGE, "Game", "Dynamic preload completed {} resources and {} animation frames; {} KiB available.",
 +		    preloadResourceCount, preloadFrames, preload.availableKiB);
 +		preloadActive = false;
