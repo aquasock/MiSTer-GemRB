@@ -1979,3 +1979,32 @@ None.
 - [x] Passed
 
 ---
+
+## 66 COMMIT Unreleased 2cf4651 2026-09-26T06:48:15-07:00
+
+#### Coming From:
+
+Unreleased 2cf4651
+
+#### Purpose:
+
+Correct the prematurely ended single-hit capture and analyze the complete interaction after the actual unpause marker.
+
+#### Outcome:
+
+Entry 65 ended when the user said `capture now`, but that phrase marked the unpause rather than completion, so its no-drop conclusion did not cover the interaction. The tracer remained active and the subsequent segment captured 107 long frames with no trace errors. Exactly 11 frames reached at least 270 milliseconds, matching the user's count of 11 visible stutters; their intervals were 882.472, 658.952, 280.257, 285.940, 336.240, 450.842, 271.132, 500.221, 468.451, 350.516 and 300.459 milliseconds. The worst frame divided 866.165 milliseconds of engine time into 502.656 milliseconds before drawing and 363.508 milliseconds during drawing, while the second-worst placed 618.521 of 636.649 engine milliseconds before drawing. Twelve frames exceeded 100 milliseconds before drawing and eight exceeded 100 milliseconds while drawing. Final display, presentation, target switching, texture updates and file operations remained much smaller, confirming that this single-hit sequence reproduces the same two internal GemRB stall phases as spell-heavy combat.
+
+#### Next Steps:
+
+Obtain approval to reload this exact save in the current traced process and bracket the same interaction with the existing instruction sampler and scheduler snapshots. Start all measurements before telling the user to unpause and stop only after the user explicitly says the interaction is complete, so the exact frame trace can distinguish CPU execution from run-queue or blocked time without another build or restart.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
