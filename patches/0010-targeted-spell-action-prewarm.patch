@@ -1,8 +1,8 @@
 diff --git a/gemrb/core/Game.cpp b/gemrb/core/Game.cpp
-index 7bd28070..e03c5e3b 100644
+index 7bd28070..f985fc4d 100644
 --- a/gemrb/core/Game.cpp
 +++ b/gemrb/core/Game.cpp
-@@ -2789,4 +2789,147 @@ bool Game::IsTargeted(ieDword gid) const
+@@ -2789,4 +2789,165 @@ bool Game::IsTargeted(ieDword gid) const
  	return false;
  }
  
@@ -47,6 +47,23 @@ index 7bd28070..e03c5e3b 100644
 +		}
 +		return;
 +	}
++	auto precacheActorCombat = [&preload](Actor* actor) {
++		if (!actor) return;
++		CharAnimations* animations = actor->GetAnims();
++		if (!animations) return;
++		const unsigned char stances[] = {
++			IE_ANI_ATTACK, IE_ANI_ATTACK_SLASH, IE_ANI_ATTACK_BACKSLASH,
++			IE_ANI_ATTACK_JAB, IE_ANI_SHOOT, IE_ANI_DAMAGE, IE_ANI_READY,
++			IE_ANI_WALK
++		};
++		for (unsigned char stance : stances) {
++			for (ieDword value = 0; value < MAX_ORIENT && !preload.stopped; ++value) {
++				orient_t orientation = static_cast<orient_t>(value);
++				preload.PrecacheParts(animations->GetAnimation(stance, orientation), animations);
++				preload.PrecacheParts(animations->GetShadowAnimation(stance, orientation), animations, true);
++			}
++		}
++	};
 +
 +	if (!preloadActors.empty()) {
 +		ieDword actorID = preloadActors.front();
@@ -120,6 +137,7 @@ index 7bd28070..e03c5e3b 100644
 +			Actor* actor = gamedata->GetCreature(resource);
 +			if (actor) {
 +				queueActorDependencies(actor);
++				precacheActorCombat(actor);
 +				delete actor;
 +			}
 +		}
