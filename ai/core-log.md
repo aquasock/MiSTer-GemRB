@@ -2703,3 +2703,32 @@ None.
 - [ ] Passed
 
 ---
+
+## 91 COMMIT Unreleased 1d692a6 2026-09-26T14:01:22-07:00
+
+#### Coming From:
+
+Unreleased 1d692a6
+
+#### Purpose:
+
+Capture a clean input sequence beginning at the fully initialized BG2 main menu and ending paused in the loaded test autosave.
+
+#### Outcome:
+
+After a manual reboot, the normal canonical MGL launched GemRB with no synthetic input or diagnostic launcher. Once the BG2 menu was stable, the passive recorder captured only the physical Telink mouse and keyboard while the user selected the test autosave, loaded area `AR4000`, moved through the initial interval and paused. The clean trace contains 1,707 events over 57.101 seconds, comprising 1,637 mouse and 70 keyboard events; all buttons and keys have balanced presses and releases, and the final input is a complete Space press and release. The loaded process reached 204,808 KiB RSS with no process swap. The local trace is `work/input-harness/gemrb-menu-autosave.jsonl` with SHA256 `4d42358d3ea17121acd8e33ec7ab36a0cf41d2f41686b90c25258df4aae1e630`; the target launcher remained normal with SHA256 `216fc0445bdf8ef049bfe5f8e5b010b622fab009e8d7df2f03d42d128694b6d3`.
+
+#### Next Steps:
+
+For the next autonomous validation, manually reboot once, directly load the normal MGL, wait until GemRB reaches the same stable main menu and replay this complete trace without trimming, prefix restoration or MiSTer frontend input. Accept it only if it loads `AR4000` and ends paused.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
