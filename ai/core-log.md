@@ -1627,3 +1627,32 @@ None.
 - [ ] Passed
 
 ---
+
+## 54 COMMIT Unreleased 1d9f008 2026-09-25T22:21:13-07:00
+
+#### Coming From:
+
+Unreleased 1d9f008
+
+#### Purpose:
+
+Record the spell-modulation hardware result and isolate the remaining combat stall before selecting another change.
+
+#### Outcome:
+
+The user reported that the combat stutter remains but appears somewhat better. A corrected-build paused capture collected 1,110 main-thread samples over 10.034 seconds with zero loss, about 22.2% of one core, while the active combat capture collected 5,561 samples over 35.055 seconds with zero loss, about 31.8% of one core; the earlier no-audio pre-fix combat capture used about 36.9%. In normalized samples per second, the prior optimized libc memory-copy region rose from 14.86 paused to 39.11 during combat, but it is now 17.94 paused and 16.55 during combat; combat `Blit1to4` fell from 6.72 to 2.23, and `ShadePalette` is absent. These samples are from comparable rather than identical combat action, but they show that the change removed the targeted combat-only palette conversion and upload spike, consistent with the partial visible improvement. No game-logic function is a dominant remaining hotspot, and the main thread still spends most of its wall time waiting or off CPU.
+
+#### Next Steps:
+
+Obtain approval for one reversible no-build comparison using `SDL_RENDER_NOODLES_BUFFERS=2` in the same save, then restore the standard configuration; this directly tests the previously identified triple-buffer FPGA and ARM DDR overlap as the cause of the remaining off-CPU combat stalls before another source or FPGA change.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
