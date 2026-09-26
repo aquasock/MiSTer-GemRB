@@ -2732,3 +2732,32 @@ None.
 - [x] Passed
 
 ---
+
+## 92 COMMIT Unreleased 1d692a6 2026-09-26T14:06:14-07:00
+
+#### Coming From:
+
+Unreleased 1d692a6
+
+#### Purpose:
+
+Validate autonomous replay of the clean GemRB-menu-to-paused-autosave input trace.
+
+#### Outcome:
+
+After a manual reboot, the unmodified normal launcher and canonical MGL started GemRB while the replay devices waited through a 40-second lead interval. The harness then replayed all 1,707 events from the clean trace at normal speed with no trimming or prefix restoration. The user observed the complete sequence and reported it perfect. Device evidence confirms that GemRB loaded `AR4000`, remained active after replay at 200,688 KiB RSS with no process swap and received the final pause input; the replay exited normally after 57.101 seconds. The launcher remained unchanged with SHA256 `216fc0445bdf8ef049bfe5f8e5b010b622fab009e8d7df2f03d42d128694b6d3`.
+
+#### Next Steps:
+
+Use the accepted clean trace as the autonomous cold-load regression harness. The next diagnostic or source validation should arm its measurements before the normal direct MGL launch, wait for the stable menu, replay the trace unchanged and collect through its final paused boundary.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
