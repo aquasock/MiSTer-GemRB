@@ -2431,11 +2431,11 @@ Reuse prepared actor-palette animation textures instead of rebuilding shared spr
 
 #### Outcome:
 
-Source `4102834` makes SDL2 actor drawing select a persistent texture variant keyed by the complete actor-palette hash instead of replacing the shared factory sprite palette before and after every draw. Each sprite retains the four most recently used variants, invalidates them when its source pixels change and leaves grey and sepia effects on the existing fallback path. The combat preloader now prepares each actor part and shadow with the exact palette that runtime drawing will request. The complete ten-patch stack applied to a pristine GemRB 0.9.5 tree, reproduced the development source exactly, passed every full-stack reverse check and built successfully both natively and for ARM. After the active session ended and the MiSTer rebooted, the normal bundle was deployed to `10.10.0.21`; device hashes match `33f5c3acb264b6ee03d9789150159fa410c0611d5b6f22b13423b33e4bb25933` for `libgemrb_core.so.0.9.5`, `7abb4cf705eacd376afe06c3f81f25d4627670cbc3c7579b9b9f01e7bd15df30` for `SDLVideo.so` and the unchanged `5b2b535182fb1d2cd8ed814d4ba5a5141184f446fa3531c990315ada6218a46d` for the executable. Deployment preserved normal SDL audio, `CapFPS=30`, `DrawFPS=0`, disabled renderer statistics, the USB swap setting, the canonical MGL and the timing-qualified Noodles RBF SHA256 `29df3cc992220ba04ca171e598918080e498b1e6aff20f28f924630cedaebebe`. The idle target had 463,688 KiB available after deployment.
+Source `4102834` makes SDL2 actor drawing select a persistent texture variant keyed by the complete actor-palette hash instead of replacing the shared factory sprite palette before and after every draw. Each sprite retains the four most recently used variants, invalidates them when its source pixels change and leaves grey and sepia effects on the existing fallback path. The combat preloader now prepares each actor part and shadow with the exact palette that runtime drawing will request. The complete ten-patch stack applied to a pristine GemRB 0.9.5 tree, reproduced the development source exactly, passed every full-stack reverse check and built successfully both natively and for ARM. After the active session ended and the MiSTer rebooted, the normal bundle was deployed to `10.10.0.21`; device hashes match `33f5c3acb264b6ee03d9789150159fa410c0611d5b6f22b13423b33e4bb25933` for `libgemrb_core.so.0.9.5`, `7abb4cf705eacd376afe06c3f81f25d4627670cbc3c7579b9b9f01e7bd15df30` for `SDLVideo.so` and the unchanged `5b2b535182fb1d2cd8ed814d4ba5a5141184f446fa3531c990315ada6218a46d` for the executable. Deployment preserved normal SDL audio, `CapFPS=30`, `DrawFPS=0`, disabled renderer statistics, the USB swap setting, the canonical MGL and the timing-qualified Noodles RBF SHA256 `29df3cc992220ba04ca171e598918080e498b1e6aff20f28f924630cedaebebe`. The idle target had 463,688 KiB available after deployment. The user then cold-loaded and replayed the battle and reported the same result, so persistent actor-palette textures did not resolve the visible pauses. The live log proves why the broader preload still misses the summoned attackers: it found `worgsu.cre` and `dogwisu.cre` before completing 5,310 frames, but its CRE branch only inspected their scripts and never requested their actor animations; after the worg spawned in combat, GemRB loaded `MWLF_WO.bmp` and completed 74 additional animation frames. The palette cache operated on prepared objects, but the relevant summoned-creature frames had not been prepared.
 
 #### Next Steps:
 
-After the active GemRB process exits or the MiSTer is rebooted, deploy the staged normal bundle without changing its configuration, launcher or FPGA core. Cold-load the same save and replay the spell-heavy fight once, comparing the visible severe-stutter count with the approximately 11-event baseline.
+Prewarm the combat animations of CRE resources discovered through spell and summon tables before those creatures spawn, then cold-test the same battle once without adding diagnostics or changing the FPGA core.
 
 #### Files Modified:
 
@@ -2446,6 +2446,35 @@ After the active GemRB process exits or the MiSTer is rebooted, deploy the stage
 #### Status:
 
 - [x] Built
+- [ ] Passed
+
+---
+
+## 82 COMMIT Unreleased ??? 2026-09-26T12:01:54-07:00
+
+#### Coming From:
+
+Unreleased 4102834
+
+#### Purpose:
+
+Prepare summoned-creature combat animations before the spell creates those actors.
+
+#### Outcome:
+
+The dynamic dependency walker will use each discovered CRE resource to construct its temporary actor and prepare the actor's attack, damage, ready and movement animations in every orientation with its exact part and shadow palettes before deleting it. This closes the observed gap where the dependency graph found the dog and worg creature files before combat but waited until the live summon entered the map to request `MWLF_WO.bmp` and its 74 animation frames.
+
+#### Next Steps:
+
+Extend the existing targeted spell-action prewarm patch, validate the complete ordered patch stack and build one normal ARM GemRB bundle without Quartus. After the current game exits or the MiSTer reboots, deploy it with all existing settings and the FPGA core unchanged, then cold-test the same battle once.
+
+#### Files Modified:
+
+- patches/0010-targeted-spell-action-prewarm.patch
+
+#### Status:
+
+- [ ] Built
 - [ ] Passed
 
 ---
