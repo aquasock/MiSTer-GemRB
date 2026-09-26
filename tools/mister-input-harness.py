@@ -33,6 +33,7 @@ SYN_REPORT = 0
 REL_X = 0
 REL_Y = 1
 KEY_MAX = 0x2FF
+BTN_LEFT = 272
 CLOCK_MONOTONIC = 1
 
 IOC_WRITE = 1
@@ -228,6 +229,110 @@ def validate(args: argparse.Namespace) -> int:
     return 0 if events else 3
 
 
+def tune_menu(args: argparse.Namespace) -> int:
+    header, events, end = read_trace(args.trace)
+    presses = [
+        index
+        for index, event in enumerate(events)
+        if event["type"] == EV_KEY and event["code"] == BTN_LEFT and event["value"] == 1
+    ]
+    if len(presses) < args.clicks:
+        raise RuntimeError(f"trace contains only {len(presses)} primary left-button presses")
+
+    anchors = []
+    previous_end = events[0]["t_ns"]
+    previous_end_new = previous_end
+    move_ns = int(args.move_duration * 1_000_000_000)
+    dwell_ns = int(args.click_wait * 1_000_000_000)
+    search_from = 0
+    for press_index in presses[: args.clicks]:
+        press = events[press_index]
+        release_index = next(
+            (
+                index
+                for index in range(max(press_index + 1, search_from), len(events))
+                if events[index]["device"] == press["device"]
+                and events[index]["type"] == EV_KEY
+                and events[index]["code"] == BTN_LEFT
+                and events[index]["value"] == 0
+            ),
+            None,
+        )
+        if release_index is None:
+            raise RuntimeError("menu click has no matching left-button release")
+        cluster_end_index = release_index
+        while (
+            cluster_end_index + 1 < len(events)
+            and events[cluster_end_index + 1]["t_ns"] - events[cluster_end_index]["t_ns"] <= 20_000_000
+        ):
+            cluster_end_index += 1
+        press_ns = press["t_ns"]
+        cluster_end_ns = events[cluster_end_index]["t_ns"]
+        new_press_ns = previous_end_new + move_ns + dwell_ns
+        new_cluster_end_ns = new_press_ns + cluster_end_ns - press_ns
+        anchors.append(
+            (
+                previous_end,
+                press_ns,
+                cluster_end_ns,
+                previous_end_new,
+                new_press_ns,
+                new_cluster_end_ns,
+            )
+        )
+        previous_end = cluster_end_ns
+        previous_end_new = new_cluster_end_ns
+        search_from = cluster_end_index + 1
+
+    tuned = []
+    anchor_index = 0
+    for event in events:
+        timestamp = event["t_ns"]
+        while anchor_index < len(anchors) and timestamp > anchors[anchor_index][2]:
+            anchor_index += 1
+        if anchor_index < len(anchors):
+            old_start, old_press, old_end, new_start, new_press, _new_end = anchors[anchor_index]
+            if timestamp < old_press:
+                span = old_press - old_start
+                relative = max(0, timestamp - old_start)
+                new_timestamp = new_start if not span else new_start + relative * move_ns // span
+            else:
+                new_timestamp = new_press + timestamp - old_press
+        else:
+            new_timestamp = previous_end_new + timestamp - previous_end
+        tuned.append(event | {"t_ns": new_timestamp})
+
+    tuned_header = header | {
+        "tuning": {
+            "menu_clicks": args.clicks,
+            "move_duration_ns": move_ns,
+            "pre_click_wait_ns": dwell_ns,
+            "source": str(args.trace),
+        }
+    }
+    tuned_end = dict(end or {})
+    tuned_end.update(
+        {
+            "kind": "end",
+            "events": len(tuned),
+            "event_duration_ns": tuned[-1]["t_ns"],
+            "recording_duration_ns": tuned[-1]["t_ns"],
+        }
+    )
+    if Path(args.trace).resolve() == Path(args.output).resolve():
+        raise RuntimeError("tuned output must differ from the source trace")
+    with open(args.output, "w", encoding="utf-8", buffering=1) as output:
+        write_json_line(output, tuned_header)
+        for event in tuned:
+            write_json_line(output, event)
+        write_json_line(output, tuned_end)
+    print(
+        f"tuned {args.clicks} menu clicks to {args.move_duration:.3f}s motion plus "
+        f"{args.click_wait:.3f}s wait; duration_s={tuned[-1]['t_ns'] / 1_000_000_000:.3f}"
+    )
+    return 0
+
+
 def create_uinput_device(device: dict, events: list[dict], uinput_path: str) -> int:
     fd = os.open(uinput_path, os.O_WRONLY | os.O_NONBLOCK)
     codes: dict[int, set[int]] = defaultdict(set)
@@ -343,6 +448,14 @@ def replay(args: argparse.Namespace) -> int:
     }
     try:
         time.sleep(args.device_delay)
+        if args.wait_file:
+            if os.path.exists(args.wait_file):
+                raise RuntimeError(f"wait file already exists: {args.wait_file}")
+            deadline = time.monotonic() + args.wait_timeout
+            while not os.path.exists(args.wait_file):
+                if time.monotonic() >= deadline:
+                    raise RuntimeError(f"timed out waiting for {args.wait_file}")
+                time.sleep(0.05)
         start_ns = time.monotonic_ns() + int(args.lead_in * 1_000_000_000)
         if prefix_motion:
             while True:
@@ -396,6 +509,14 @@ def parser() -> argparse.ArgumentParser:
     validation.add_argument("trace")
     validation.set_defaults(function=validate)
 
+    tuning = subparsers.add_parser("tune-menu", help="compress pointer movement and dwell before initial clicks")
+    tuning.add_argument("trace")
+    tuning.add_argument("output")
+    tuning.add_argument("--clicks", type=int, default=4)
+    tuning.add_argument("--move-duration", type=float, default=0.1)
+    tuning.add_argument("--click-wait", type=float, default=1.0)
+    tuning.set_defaults(function=tune_menu)
+
     playback = subparsers.add_parser("replay", help="replay a trace through uinput")
     playback.add_argument("trace")
     playback.add_argument("--uinput", default="/dev/uinput")
@@ -420,6 +541,8 @@ def parser() -> argparse.ArgumentParser:
     )
     playback.add_argument("--lead-in", type=float, default=1.0)
     playback.add_argument("--device-delay", type=float, default=1.0)
+    playback.add_argument("--wait-file", help="wait for this file after creating the replay devices")
+    playback.add_argument("--wait-timeout", type=float, default=120.0)
     playback.add_argument("--settle", type=float, default=0.5)
     playback.add_argument("--speed", type=float, default=1.0)
     playback.set_defaults(function=replay)
@@ -434,6 +557,14 @@ def main() -> int:
         raise SystemExit("--start-at must not be negative")
     if any(code < 0 or code > KEY_MAX for code in getattr(args, "exclude_key", [])):
         raise SystemExit(f"--exclude-key must be between 0 and {KEY_MAX}")
+    if getattr(args, "clicks", 1) <= 0:
+        raise SystemExit("--clicks must be positive")
+    if getattr(args, "move_duration", 0.1) <= 0:
+        raise SystemExit("--move-duration must be positive")
+    if getattr(args, "click_wait", 1.0) < 0:
+        raise SystemExit("--click-wait must not be negative")
+    if getattr(args, "wait_timeout", 120.0) <= 0:
+        raise SystemExit("--wait-timeout must be positive")
     try:
         return args.function(args)
     except (OSError, RuntimeError) as error:
