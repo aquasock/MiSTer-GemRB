@@ -2616,3 +2616,32 @@ Reboot the MiSTer once, stage the existing frame tracer and timestamped CPU samp
 - [ ] Passed
 
 ---
+
+## 88 COMMIT Unreleased ??? 2026-09-26T13:36:59-07:00
+
+#### Coming From:
+
+Unreleased 9f5eb1a
+
+#### Purpose:
+
+Make the captured cold-load test replay deterministic by loading the normal Noodles MGL directly and replaying only its GemRB input interval.
+
+#### Outcome:
+
+The first full-trace validation did not launch GemRB: stock Main hotplugged the synthetic devices but ignored relative pointer movement in its frontend, then interpreted the first replayed click as selection of the already-highlighted Arcade folder. The replay was stopped, GemRB never started, and the exact normal launcher was restored. The captured trace remains valid for GemRB, whose SDL input path is separate from Main's frontend, so this change will add a bounded trace-start option and use Main's supported command FIFO to load the unchanged canonical MGL after the Noodles watcher starts. No FPGA, GemRB, SDL or launcher binary will change.
+
+#### Next Steps:
+
+Validate trace selection locally, stage the harness and existing diagnostics without launching them, then ask the user to reboot the MiSTer manually. After that reboot, create the replay devices before GemRB starts, directly load the canonical MGL, replay the segment beginning with the GemRB menu interaction at normal speed and confirm that it loads the save, moves through the cold stalls and ends paused.
+
+#### Files Modified:
+
+- tools/mister-input-harness.py
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
