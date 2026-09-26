@@ -2588,7 +2588,7 @@ None.
 
 ---
 
-## 87 COMMIT Unreleased ??? 2026-09-26T13:22:36-07:00
+## 87 COMMIT Unreleased 9f5eb1a 2026-09-26T13:22:36-07:00
 
 #### Coming From:
 
@@ -2600,11 +2600,11 @@ Create a deterministic MiSTer input capture and replay harness for autonomous co
 
 #### Outcome:
 
-Add a standard-library Python tool that records timestamped Linux evdev events from explicitly selected physical keyboard and mouse devices without grabbing them, stores device identity and event capabilities in a portable JSON-lines trace, and replays the sequence through separate Linux uinput devices with the original relative timing. Validate device discovery and recording on the target, capture the user's complete launch, save-load, movement and pause sequence, then verify that the resulting trace is structurally replayable without changing the GemRB binary, configuration, launcher or FPGA core.
+Source `9f5eb1a` adds a standard-library Python tool that records timestamped Linux evdev events from explicitly selected devices without grabbing them, validates the portable JSON-lines trace, and replays each source through a separate Linux uinput device with original relative timing. Target discovery correctly identified the physical Telink mouse as `event0`, the physical keyboard as `event3`, and excluded the MiSTer virtual input. A one-second empty-recording self-test produced a clean trace, and uinput keyboard creation and destruction succeeded without injecting an event. The user's complete launch, save-load, movement and final pause sequence produced 1,550 events over 64.753 seconds, comprising 1,501 mouse and 49 keyboard events; every pressed key and mouse button has a matching release. The preserved local trace SHA256 is `8f874471e9f382d7f34dede9d50bf840b11c240132bca23699c190a1f9ff1b45`. The GemRB binary, configuration, launcher and FPGA core were unchanged.
 
 #### Next Steps:
 
-After the recorded sequence validates, use it to reproduce the cold-load movement test autonomously with the existing frame and timestamped CPU diagnostics, stopping at the final recorded pause and comparing the same first-movement stalls.
+Reboot the MiSTer once, stage the existing frame tracer and timestamped CPU sampler, and replay the preserved 64.753-second sequence at normal speed. Confirm that it launches GemRB, loads the intended save, moves through the cold stalls and ends paused before accepting the harness for autonomous regression tests.
 
 #### Files Modified:
 
@@ -2612,7 +2612,7 @@ After the recorded sequence validates, use it to reproduce the cold-load movemen
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
