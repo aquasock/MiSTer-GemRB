@@ -2095,3 +2095,33 @@ None.
 - [ ] Passed
 
 ---
+
+
+## 70 COMMIT Unreleased dcfd5ec 2026-09-26T07:18:17-07:00
+
+#### Coming From:
+
+Unreleased dcfd5ec
+
+#### Purpose:
+
+Correct the incomplete deployment metadata recorded in Entry 69.
+
+#### Outcome:
+
+Entry 69 lost shell-quoted inline values while it was written; its deployment conclusion remains valid, and this entry supplies the omitted evidence. The normal `dcfd5ec` bundle was deployed to `10.10.0.21` after confirming no GemRB process was active. Device hashes match the staged core library `77b7a19f5d57495316a26bbf03d47b2eb50d66e858a408fbcb7aa2afd2b77f27`, SDLVideo plugin `5f49144764a31449747720353f51363a408ec573bf553f83b89c816e4624dbe3` and unchanged executable `5b2b535182fb1d2cd8ed814d4ba5a5141184f446fa3531c990315ada6218a46d`. The preserved BG2 configuration uses normal SDL audio, `CapFPS=30` and `DrawFPS=0`; the canonical MGL still names `_Utility/Noodles`, and the timing-qualified Noodles RBF remains SHA256 `29df3cc992220ba04ca171e598918080e498b1e6aff20f28f924630cedaebebe`. Immediately after deployment the target had 462,668 KiB available and no configured swap.
+
+#### Next Steps:
+
+Cold-load the exact combat save, allow the longer preload phase to finish, and replay the sequence that previously produced approximately 11 severe stutters. Record whether loading completes, the available-memory floor, any swap use and the visible stutter count before deciding whether the bounded preload is accepted or needs narrower resource discovery.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
