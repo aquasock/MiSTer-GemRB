@@ -1390,3 +1390,35 @@ None.
 - [x] Passed
 
 ---
+
+## 46 COMMIT Unreleased ??? 2026-09-25T19:02:04-07:00
+
+#### Coming From:
+
+Unreleased f4b56eb
+
+#### Purpose:
+
+Load the Noodles core from its release name so a new core build is deployed by overwriting one file without launcher or MGL changes.
+
+#### Outcome:
+
+Planned. The launcher accepts only the exact path pet/Noodles_triple_seed13.rbf, and the MGL names that file, so every new core build has needed a launcher and bundle change. At the user's direction, the core will follow the MiSTer release convention in one fixed place: _Utility/Noodles_YYYYMMDD.rbf, beside the game MGL. The MGL will name _Utility/Noodles without a date, and the launcher will accept Noodles.rbf or a single Noodles_YYYYMMDD.rbf in /media/fat/_Utility. A new deploy.sh core mode will install a given RBF under the current date, remove older Noodles*.rbf files from _Utility and report its hash. The first core deployed this way is MiSTer-Noodles d5051f4, the unqualified 120MHz seed-3 image with RBF SHA256 fe858c3fce82ac17cb867485bf66c0627e5219c6cdd6f351dc7478364399a0c3. It passed the exact-pixel diagnostic and audio in three-buffer mode, which GemRB uses, but fails a deferred texture update in two-buffer mode that the accepted 100MHz core passes. The user chose to try it in the game before that fault is investigated.
+
+#### Next Steps:
+
+Build and deploy the bundle and the core, then have the user compare the AR0015 fog and panning scenes and combat with DrawFPS=1, USB swap and diagnostics off against the 25-30fps seen on the accepted core. Whatever the result, investigate the two-buffer deferred-update fault before accepting any 120MHz core.
+
+#### Files Modified:
+
+- tools/noodles-launcher.c
+- scripts/bundle.sh
+- scripts/deploy.sh
+- README.md
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
