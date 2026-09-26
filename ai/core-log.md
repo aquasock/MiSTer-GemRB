@@ -2066,3 +2066,32 @@ After the active GemRB session exits or the MiSTer is rebooted, deploy the stage
 - [ ] Passed
 
 ---
+
+## 69 COMMIT Unreleased dcfd5ec 2026-09-26T07:17:54-07:00
+
+#### Coming From:
+
+Unreleased dcfd5ec
+
+#### Purpose:
+
+Deploy the memory-aware area animation preload build for cold hardware validation.
+
+#### Outcome:
+
+After the MiSTer rebooted, no GemRB process was active and the normal  bundle was deployed to . Device hashes match the staged core library , SDLVideo plugin  and unchanged executable . The preserved BG2 configuration uses normal SDL audio,  and ; the canonical MGL still names , and the timing-qualified Noodles RBF remains SHA256 . Immediately after deployment the target had 462,668 KiB available and no configured swap.
+
+#### Next Steps:
+
+Cold-load the exact combat save, allow the longer preload phase to finish, and replay the sequence that previously produced approximately 11 severe stutters. Record whether loading completes, the available-memory floor, any swap use and the visible stutter count before deciding whether the bounded preload is accepted or needs narrower resource discovery.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
