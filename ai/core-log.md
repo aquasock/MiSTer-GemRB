@@ -2183,3 +2183,32 @@ Cold-load the exact save and let the cutscene and dialog run normally, then repl
 - [ ] Passed
 
 ---
+
+## 73 COMMIT Unreleased 47ce25f 2026-09-26T07:39:02-07:00
+
+#### Coming From:
+
+Unreleased 47ce25f
+
+#### Purpose:
+
+Validate whether dynamic actor and dependency prewarming removes the cold combat stutters without violating its memory reserve.
+
+#### Outcome:
+
+The user reported that the combat stutter remained. Before combat, the dynamic pass reported 101 resources and 14,471 animation frames prepared with 115,048 KiB available, but the exact battle resources `CGConjur.bam`, `spmon1.eff`, `MONSUM01.2da`, `worgsu.cre`, `SPMONSUM.bam` and `SPWI412.spl` were still first discovered during combat. Preparing the resulting creature graph then reduced available memory to 39,964 KiB before the next reserve check, while the GemRB process reached 448,940 KiB RSS and the system had only 18,960 KiB available. GemRB itself had not entered swap, but the pass both missed the runtime-selected spell dependency before use and allowed one coarse preload task to overshoot the intended 80 MiB reserve. This hardware result rejects the dynamic broad-preload design.
+
+#### Next Steps:
+
+Do not continue testing this build. Trace the runtime action handoff that exposes numeric and resource-named spells, then seek approval for a narrow replacement that queues only exact spell and creature dependencies when their actions are enqueued, divides animation work into memory-checked units, and removes broad actor-script and all-stance prewarming before rebuilding GemRB.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
