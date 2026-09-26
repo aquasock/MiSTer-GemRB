@@ -1,12 +1,8 @@
 diff --git a/gemrb/core/Game.cpp b/gemrb/core/Game.cpp
 --- a/gemrb/core/Game.cpp
 +++ b/gemrb/core/Game.cpp
-@@ -254,6 +254,150 @@
- 	    preload.stopped ? " (memory reserve reached)" : "");
- }
- 
-+}
-+
+@@ -2842 +2842,146 @@
+-}
 +void Game::QueueActorPreload(Actor* actor)
 +{
 +	if (!actor || !preloadSeenActors.insert(actor->GetGlobalID()).second) return;
@@ -149,9 +145,10 @@ diff --git a/gemrb/core/Game.cpp b/gemrb/core/Game.cpp
 +		    preloadResourceCount, preloadFrames, preload.availableKiB);
 +		preloadActive = false;
 +	}
- }
- 
- struct HealingResource {
++}
++
++
++}
 diff --git a/gemrb/core/Game.h b/gemrb/core/Game.h
 --- a/gemrb/core/Game.h
 +++ b/gemrb/core/Game.h
