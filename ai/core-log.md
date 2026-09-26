@@ -2484,11 +2484,11 @@ Isolate normal GemRB logging from the unchanged cold combat stutters without reb
 
 #### Outcome:
 
-At the user's direction, the target BG2 configuration was copied to `GemRB-bg2.cfg.logging1-backup` with SHA256 `a2fbd5e810a271682c6f3549e20744369aa50987ca26a5c3af87698427cbc3f0`, then only `Logging` was changed from `1` to `0`; the resulting configuration SHA256 is `fa87b79d13f66540e6db2b5aebb33b185702d80642dae09f89e608eb0e48973e`. Normal SDL audio, `CapFPS=30`, `DrawFPS=0`, renderer statistics, the launcher, binaries and FPGA core are unchanged. GemRB PID 1921 was already active, so this setting applies on the next launch and the current session was not interrupted.
+At the user's direction, the target BG2 configuration was copied to `GemRB-bg2.cfg.logging1-backup` with SHA256 `a2fbd5e810a271682c6f3549e20744369aa50987ca26a5c3af87698427cbc3f0`, then only `Logging` was changed from `1` to `0`; the resulting configuration SHA256 is `fa87b79d13f66540e6db2b5aebb33b185702d80642dae09f89e608eb0e48973e`. Normal SDL audio, `CapFPS=30`, `DrawFPS=0`, renderer statistics, the launcher, binaries and FPGA core were unchanged. The user cold-launched and replayed the battle and reported that disabling logging made no difference, rejecting logger formatting, allocation and output contention as the cause. The exact logging-enabled backup was then restored with matching SHA256 `a2fbd5e810a271682c6f3549e20744369aa50987ca26a5c3af87698427cbc3f0`; the active PID 1299 retains its launch-time logging state until it exits.
 
 #### Next Steps:
 
-Exit the current game or reboot the MiSTer, cold-load the same save and replay the battle once. If the stutters remain, restore the exact logging-enabled configuration and reject logging contention; if they improve, retain logging disabled and remove the failed preload patches before the next production build.
+Remove the failed memory-aware, dynamic-actor and targeted-spell preload patches before the next production build. Further work should target the measured blocked or descheduled main-thread intervals directly rather than renderer throughput, audio, logging or asset preparation, all of which have now been rejected by controlled comparisons.
 
 #### Files Modified:
 
@@ -2497,6 +2497,6 @@ None.
 #### Status:
 
 - [x] Built
-- [ ] Passed
+- [x] Passed
 
 ---
