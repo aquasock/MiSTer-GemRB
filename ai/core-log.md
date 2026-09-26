@@ -2418,3 +2418,34 @@ None.
 - [x] Passed
 
 ---
+
+## 81 COMMIT Unreleased ??? 2026-09-26T08:59:38-07:00
+
+#### Coming From:
+
+Unreleased 6f62121
+
+#### Purpose:
+
+Reuse prepared actor-palette animation textures instead of rebuilding shared sprite surfaces during every draw.
+
+#### Outcome:
+
+The SDL2 video path will cache prepared texture variants by the complete palette hash while leaving the shared factory sprite and its base palette unchanged. Actor drawing will select that persistent variant directly, and the existing combat preloader will prepare the exact actor-part palette variants rather than only the generic BAM palette. Variant caches will be bounded per sprite and invalidated when source pixels change, preserving animated palette correctness while allowing the exact surfaces prepared before combat to survive into runtime use.
+
+#### Next Steps:
+
+Repartition the change across the existing SDL palette-modulation and GemRB prewarm patches so every ordered patch remains idempotent, add a focused native copy-on-write and palette-variant check if the current test infrastructure supports it, verify the complete stack in a clean GemRB tree, build one ARM GemRB bundle without Quartus, and cold-test the same battle once.
+
+#### Files Modified:
+
+- patches/0007-sdlvideo-use-texture-modulation-for-paletted-sprites.patch
+- patches/0008-memory-aware-area-animation-preload.patch
+- patches/0010-targeted-spell-action-prewarm.patch
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
