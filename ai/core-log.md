@@ -2762,7 +2762,7 @@ None.
 
 ---
 
-## 93 COMMIT Unreleased ??? 2026-09-26T14:08:39-07:00
+## 93 COMMIT Unreleased 8c29693 2026-09-26T14:08:39-07:00
 
 #### Coming From:
 
@@ -2774,11 +2774,11 @@ Allow selected key codes to be suppressed during replay so the cold-load test ca
 
 #### Outcome:
 
-The accepted trace intentionally contains left, right and down arrow inputs that the user used to test viewport panning after the autosave loaded. This change will add a repeatable replay-only key exclusion option, preserving the original trace and all mouse and final Space events while omitting the requested directional keys.
+The accepted trace intentionally contains left, right and down arrow inputs that the user used to test viewport panning after the autosave loaded. Source `8c29693` adds a repeatable `--exclude-key` replay option with Linux key-code range validation, preserving the original trace on disk. Local compilation and trace-selection tests prove that excluding directional codes 103, 105, 106 and 108 removes all and only the twelve recorded arrow press, repeat and release events, leaves 1,695 events at their original times and retains the final Space release.
 
 #### Next Steps:
 
-Validate that the filter removes all and only the twelve recorded directional key events, stage the harness, directly load the normal MGL on the rebooted MiSTer and replay with the startup interval reduced so input begins approximately ten seconds after the stable GemRB menu.
+Stage the harness, directly load the normal MGL on the rebooted MiSTer and replay with the startup interval reduced so input begins approximately ten seconds after the stable GemRB menu. Confirm that the same autosave loads and ends paused without viewport panning.
 
 #### Files Modified:
 
@@ -2786,7 +2786,7 @@ Validate that the filter removes all and only the twelve recorded directional ke
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
