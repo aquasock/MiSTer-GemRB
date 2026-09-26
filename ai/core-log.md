@@ -2360,3 +2360,32 @@ None.
 - [ ] Passed
 
 ---
+
+## 79 COMMIT Unreleased 6f62121 2026-09-26T08:27:09-07:00
+
+#### Coming From:
+
+Unreleased 6f62121
+
+#### Purpose:
+
+Validate whether the cache-aware combat prewarm working set removes the cold battle stutters.
+
+#### Outcome:
+
+The user reported the same combat stutter. Before combat the corrected queue completed the same 39-resource dependency graph with 5,310 prepared frames and 243,596 KiB available, down from the preceding build's 11,602 frames at the same point. Creating the actual selected Ogrillon added only 85 frames and completed at 5,395 with 145,952 KiB available. The paused GemRB process used 349,596 KiB RSS, retained no swapped pages and left 130,184 KiB system memory available. Exact spell discovery, `CGConjur` preparation, candidate-pose removal and the 61 percent frame-count reduction therefore did not improve the symptom, rejecting the current preload strategy. Whether 5,395 multipart frames still exceed the Noodles renderer's 192 MiB resident-texture budget remains unmeasured because normal renderer statistics were disabled.
+
+#### Next Steps:
+
+Do not rebuild. Enable the existing disabled-by-default Noodles renderer statistics for one cold replay with the same binary and core, then use its upload, eviction and resident-byte counters to decide whether to remove hardware texture prewarming in favor of CPU-only factory preparation or abandon asset residency as the cause. Restore the normal statistics-disabled environment immediately after launch so later sessions remain normal.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
