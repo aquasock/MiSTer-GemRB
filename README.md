@@ -121,7 +121,7 @@ Notes on the GOG installers, after unpacking them with innoextract:
 
    For Noodles acceleration, run `noodles-launcher.sh` from the OSD Scripts menu. It returns immediately and waits silently
    for 30 seconds. During that interval return to the core browser and select **Utility > Baldurs Gate II (GemRB)**. The
-   MGL loads the timing-qualified protocol 1.7 core; the watcher validates the selected RBF and `CHITIN.KEY`,
+   MGL loads the Noodles core, installed as `_Utility/Noodles_YYYYMMDD.rbf`; the watcher validates that core and `CHITIN.KEY`,
    releases stock Main's exclusive input grabs while preserving the core display, and starts GemRB. The same process
    supervises the game and restores Main's grabs on exit. The renderer can attach to protocol 1.4, protocol 1.5 adds the
    multi-table sprite-batch path, protocol 1.6 also batches opaque fills and protocol 1.7 adds the third display buffer.
@@ -152,7 +152,7 @@ and checksums.
 The SD card is mounted synchronously, so copying the game data takes a long time: about half an hour for 2.6 GB.
 
 To remove it, delete `/media/fat/gemrb`, `/media/fat/Scripts/gemrb-*.sh`, `/media/fat/Scripts/noodles-launcher.sh` and
-`/media/fat/_Utility/Baldurs Gate II (GemRB).mgl`.
+`/media/fat/_Utility/Baldurs Gate II (GemRB).mgl` and `/media/fat/_Utility/Noodles_*.rbf`.
 
 ## Configuration
 

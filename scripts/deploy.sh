@@ -3,6 +3,7 @@
 # Usage: MISTER_HOST=<ip> scripts/deploy.sh code
 #        MISTER_HOST=<ip> scripts/deploy.sh data <game>       game: bg2, bg1, pst, iwd, iwd2
 #        MISTER_HOST=<ip> scripts/deploy.sh debug              unstripped files for MISTER_DEBUG=1 (run debug-symbols.sh first)
+#        MISTER_HOST=<ip> scripts/deploy.sh core <rbf>         install a Noodles core build as _Utility/Noodles_<today>.rbf
 #   GAME_DATA: the extracted game (default work/<game>-extract/app)
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/env.sh"
@@ -59,9 +60,20 @@ debug() {
 	tar -C "$WORK/debugfiles" -cf - .build-id | "${SSH[@]}" "tar --no-same-owner -C $DEVICE_DIR/debug -xf -"
 }
 
+core() {
+	# One core under its release name: replaces any earlier Noodles core in _Utility, which the MGL and launcher
+	# find by name, so a new build needs no launcher or MGL change.
+	local rbf="${1:?usage: deploy.sh core <path to Noodles.rbf>}"
+	[ -f "$rbf" ] || { echo "no such RBF: $rbf" >&2; exit 1; }
+	local name; name="Noodles_$(date +%Y%m%d).rbf"
+	echo "local:  $(sha256sum "$rbf" | cut -d' ' -f1)  $rbf"
+	"${SSH[@]}" "mkdir -p /media/fat/_Utility && cd /media/fat/_Utility && rm -f Noodles.rbf Noodles_[0-9]*.rbf && cat > $name && sync && echo \"device: \$(sha256sum $name)\"" < "$rbf"
+}
+
 case "${1:-code}" in
 	code) code ;;
 	data) data "${2:-}" ;;
 	debug) debug ;;
-	*) echo "usage: deploy.sh code | data <game> | debug" >&2; exit 1 ;;
+	core) core "${2:-}" ;;
+	*) echo "usage: deploy.sh code | data <game> | debug | core <rbf>" >&2; exit 1 ;;
 esac

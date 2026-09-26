@@ -40,7 +40,9 @@
 #define GAME_LOG_PATH "/media/fat/gemrb/noodles-game.log"
 #define LOCK_PATH "/tmp/noodles-launcher.lock"
 #define CONTROL_NAME "Noodles launcher control"
-#define EXPECTED_RBF "/media/fat/pet/Noodles_triple_seed13.rbf"
+// The Noodles core is installed under its release name beside the game MGLs:
+// _Utility/Noodles_YYYYMMDD.rbf, or an undated Noodles.rbf.
+#define CORE_DIR "/media/fat/_Utility/"
 #define MAX_MGL_BYTES (64 * 1024)
 
 struct manifest {
@@ -601,6 +603,19 @@ static void restore_main_input(pid_t pid)
     if (!set_main_input_grabs(pid, 1)) log_line("input: Main %ld physical grabs restored", (long)pid);
 }
 
+// Accept only the release-named core in CORE_DIR.
+static int release_core(const char *path)
+{
+    size_t dir_len = strlen(CORE_DIR);
+    if (strncmp(path, CORE_DIR, dir_len)) return 0;
+    const char *base = path + dir_len;
+    if (!strcasecmp(base, "Noodles.rbf")) return 1;
+    if (strncasecmp(base, "Noodles_", 8)) return 0;
+    for (int i = 8; i < 16; i++)
+        if (!isdigit((unsigned char)base[i])) return 0;
+    return !strcasecmp(base + 16, ".rbf");
+}
+
 static int run_adapter(const struct manifest *m)
 {
     adapter_pid = fork();
@@ -671,7 +686,7 @@ static int coordinator(unsigned wait_seconds)
 
     struct manifest m;
     char error[PATH_MAX + NAME_MAX + 256];
-    if (strcmp(mi.rbf, EXPECTED_RBF)) {
+    if (!release_core(mi.rbf)) {
         snprintf(error, sizeof(error), "unsupported Noodles RBF: %s", mi.rbf);
         log_line("reject: %s", error);
         show_launch_error(mi.pid, error);

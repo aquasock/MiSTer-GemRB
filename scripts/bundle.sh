@@ -377,7 +377,7 @@ mkdir -p "$MGL_DIR"
 cat > "$MGL_DIR/Baldurs Gate II (GemRB).mgl" <<'MGL'
 <?xml version="1.0"?>
 <mistergamedescription>
-  <rbf>pet/Noodles_triple_seed13</rbf>
+  <rbf>_Utility/Noodles</rbf>
   <noodles>
     <engine>gemrb</engine>
     <game>bg2</game>
