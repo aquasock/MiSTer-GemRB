@@ -2212,3 +2212,32 @@ None.
 - [ ] Passed
 
 ---
+
+## 74 COMMIT Unreleased ??? 2026-09-26T07:42:20-07:00
+
+#### Coming From:
+
+Unreleased 47ce25f
+
+#### Purpose:
+
+Replace broad animation prewarming with exact numeric-spell discovery and bounded incremental preparation.
+
+#### Outcome:
+
+The approved correction will recognize both resource-named and numeric spell actions in compiled actor scripts, including Illasera's action 191 with spell number 2412 that resolves to `SPWI412`. It will queue only exact spell, external effect, summon table, creature, projectile and visual dependencies; disable the broad loading-screen actor pass and generic script-resource scan; limit live actors to combat-relevant casting and attack poses; and divide temporary creature animation preparation into stance-orientation tasks with a memory check before each frame. This removes the unrelated 101-resource and all-stance expansion that exhausted memory while preserving lazy fallback below the 80 MiB reserve.
+
+#### Next Steps:
+
+Implement the correction as the tenth ordered GemRB patch, verify a clean nine-patch baseline and complete ten-patch stack, build one ARM GemRB bundle without rebuilding Quartus, and inspect its staged hashes and normal runtime configuration before deployment after the MiSTer has rebooted.
+
+#### Files Modified:
+
+- patches/0010-targeted-spell-action-prewarm.patch
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
