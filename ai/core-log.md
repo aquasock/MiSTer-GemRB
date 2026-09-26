@@ -2500,3 +2500,32 @@ None.
 - [x] Passed
 
 ---
+
+## 84 COMMIT Unreleased 1f9b746 2026-09-26T12:52:40-07:00
+
+#### Coming From:
+
+Unreleased 1f9b746
+
+#### Purpose:
+
+Capture the first general post-load movement stutters without assuming they are combat-specific.
+
+#### Outcome:
+
+After the MiSTer rebooted with no GemRB process active and 465,872 KiB available, the normal `run.sh` was preserved as `run.sh.pre-general-stutter` with SHA256 `216fc0445bdf8ef049bfe5f8e5b010b622fab009e8d7df2f03d42d128694b6d3`. A temporary launcher differing only by the existing frame-tracer preload was installed with SHA256 `583eb0ea8a3177701bc55bf3bfa1e4b337f327264334fbe939bec35ea90cec70`; the tracer SHA256 is `ad890b0197799914a44bc99346a8bfda76e16df17b1a4ec058db6c8ae021453d` and the non-stopping sampler SHA256 is `3ede29c397776eb865071a75cceb92859f349d4b1980fbf986a692b1596caaba`. Normal audio, logging, the 30 FPS cap, disabled renderer statistics, binaries and FPGA core remain unchanged. The tracer records frame phase, SDL texture calls and bounded file operations while the sampler and kernel snapshots will measure main-thread execution, faults, I/O and run-queue delay over the same paused and movement windows.
+
+#### Next Steps:
+
+Cold-load a save and pause before moving. Capture the paused baseline, then synchronously sample approximately ten seconds of ordinary movement through the first two or three visible stutters and a final paused boundary. Restore the exact normal launcher immediately after collecting the files and analyze the common wall-time phase without using combat-specific assumptions.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
