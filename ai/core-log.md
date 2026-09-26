@@ -1656,3 +1656,32 @@ None.
 - [ ] Passed
 
 ---
+
+## 55 COMMIT Unreleased 1d9f008 2026-09-25T22:34:20-07:00
+
+#### Coming From:
+
+Unreleased 1d9f008
+
+#### Purpose:
+
+Test whether reducing Noodles from three display buffers to two removes the remaining combat stutter by preventing FPGA and ARM DDR overlap.
+
+#### Outcome:
+
+The target was rebooted with no GemRB process active, `SDL_RENDER_NOODLES_BUFFERS=2` was added without changing any binary or FPGA image, and the renderer log confirmed protocol 1.7 with two display buffers. The user repeated the same fight and reported the same problem, rejecting display-buffer overlap as the visible cause. A paused sample collected 1,104 samples over 10.020 seconds with zero loss, about 22.1% of one core. The following 35.032-second capture collected 5,683 samples with zero loss, about 32.5% of one core, effectively matching the corrected three-buffer combat capture at 31.8%; its final portion includes the `deathand.mve` transition and therefore is not a pure combat function comparison. The exact original target environment was restored with SHA256 `8420bf2c1ced1b7a2370eaeb8ba1e0817fe4551ba510d0f510816fb9617e7a2f`; the running process retains two buffers until it exits, while the next launch will use the standard three-buffer mode.
+
+#### Next Steps:
+
+Obtain approval for a short reversible frame-boundary trace that records only long frame intervals, `SDL_RenderPresent` duration and slow file operations into tmpfs during the same battle, then restores the launcher exactly; this requires no GemRB or Quartus build and will distinguish synchronous asset access from renderer waits and time spent elsewhere on the main thread.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
