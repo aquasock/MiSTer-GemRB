@@ -1453,3 +1453,32 @@ After the active GemRB session exits, deploy the staged normal bundle without ch
 - [ ] Passed
 
 ---
+
+## 48 COMMIT Unreleased 5fe8719 2026-09-25T21:18:13-07:00
+
+#### Coming From:
+
+Unreleased 5fe8719
+
+#### Purpose:
+
+Deploy the game-tick cadence correction for the controlled 20fps combat comparison without changing the loaded FPGA core or diagnostic settings.
+
+#### Outcome:
+
+After the user rebooted the MiSTer, no GemRB process was active and the normal `5fe8719` bundle was deployed. Device hashes match the staged core library `7b77e70c255df20495cea46a83a5b8e670ac3392cade1697a0543ec88098d582`, executable `5b2b535182fb1d2cd8ed814d4ba5a5141184f446fa3531c990315ada6218a46d` and unchanged SDLVideo plugin `5d76ce7c30287bd55734cd63aa126406cc6bbd2d77bfc8c376f8dfa6547e00ba`. The preserved target configuration has `CapFPS=20`, `DrawFPS=0`, renderer statistics disabled and USB swap enabled. The canonical MGL still names `_Utility/Noodles`, and the deploy did not touch the existing Noodles RBF with SHA256 `29df3cc992220ba04ca171e598918080e498b1e6aff20f28f924630cedaebebe`.
+
+#### Next Steps:
+
+Repeat the same combat sequence and assess attack and hit animation cadence at the 20fps cap. If cadence is smoother, restore the normal 30fps cap for a final combat comparison; if it is unchanged, use the existing capture to separate the remaining render-queue spike from simulation scheduling without repeating the earlier broad profiling cycles.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
