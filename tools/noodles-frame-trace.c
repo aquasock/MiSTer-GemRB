@@ -48,6 +48,21 @@ static __thread uint64_t previous_present_end;
 static __thread uint64_t delay_requested;
 static __thread uint64_t delay_elapsed;
 
+static bool resolve_sdl_symbols(void)
+{
+	if (real_sdl_render_present && real_sdl_delay) return true;
+	int saved_guard = trace_guard;
+	trace_guard = 1;
+	if (!real_sdl_render_present) {
+		real_sdl_render_present = (sdl_render_present_fn) dlsym(RTLD_NEXT, "SDL_RenderPresent");
+	}
+	if (!real_sdl_delay) {
+		real_sdl_delay = (sdl_delay_fn) dlsym(RTLD_NEXT, "SDL_Delay");
+	}
+	trace_guard = saved_guard;
+	return real_sdl_render_present && real_sdl_delay;
+}
+
 static pid_t current_tid(void)
 {
 	return (pid_t) syscall(SYS_gettid);
@@ -143,7 +158,8 @@ __attribute__((destructor)) static void finish_trace(void)
 
 void SDL_RenderPresent(void* renderer)
 {
-	if (!real_sdl_render_present) {
+	if (!real_sdl_render_present && !resolve_sdl_symbols()) {
+		trace_line("TRACE error missing=SDL_RenderPresent\n");
 		errno = ENOSYS;
 		return;
 	}
@@ -175,7 +191,10 @@ void SDL_RenderPresent(void* renderer)
 
 void SDL_Delay(uint32_t duration_ms)
 {
-	if (!real_sdl_delay) return;
+	if (!real_sdl_delay && !resolve_sdl_symbols()) {
+		trace_line("TRACE error missing=SDL_Delay\n");
+		return;
+	}
 	if (trace_guard || !is_main_thread()) {
 		real_sdl_delay(duration_ms);
 		return;
