@@ -1598,3 +1598,32 @@ Deploy the staged bundle after confirming that no GemRB process is active, verif
 - [ ] Passed
 
 ---
+
+## 53 COMMIT Unreleased 1d9f008 2026-09-25T22:13:17-07:00
+
+#### Coming From:
+
+Unreleased 1d9f008
+
+#### Purpose:
+
+Deploy the SDL2 paletted-sprite modulation correction for the controlled spell-heavy combat test.
+
+#### Outcome:
+
+After the user rebooted the MiSTer, no GemRB process was active and the normal `1d9f008` bundle was deployed. Device hashes match the staged executable `5b2b535182fb1d2cd8ed814d4ba5a5141184f446fa3531c990315ada6218a46d`, core library `7b77e70c255df20495cea46a83a5b8e670ac3392cade1697a0543ec88098d582` and corrected SDLVideo plugin `4b75fe5fdc97bc5b141039be92b8b60f80d8218c75a031ef7a3a56b2989adc78`. The target retains `AudioDriver=sdlaudio`, `CapFPS=30`, `DrawFPS=0` and disabled renderer statistics. The launcher, SDL library and canonical MGL are unchanged, and the MGL still selects `_Utility/Noodles`; the installed RBF remains SHA256 `29df3cc992220ba04ca171e598918080e498b1e6aff20f28f924630cedaebebe`.
+
+#### Next Steps:
+
+Launch the game normally and repeat the same spell-heavy battle, comparing the severity and duration of spellcasting stutters. If ordinary tinted effects improve but other spells still stall, isolate the remaining custom-palette texture conversions before changing SDL or the FPGA core.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
