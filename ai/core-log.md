@@ -1570,7 +1570,7 @@ None.
 
 ---
 
-## 52 COMMIT Unreleased ??? 2026-09-25T21:50:35-07:00
+## 52 COMMIT Unreleased 1d9f008 2026-09-25T21:50:35-07:00
 
 #### Coming From:
 
@@ -1582,11 +1582,11 @@ Stop SDL2 from rebuilding paletted sprite textures when only ordinary colour or 
 
 #### Outcome:
 
-The approved change will keep the existing palette-baked path for grey and sepia effects, whose ordering can differ from texture modulation, while leaving ordinary `COLOR_MOD` and `ALPHA_MOD` flags for `SDL20VideoDriver::RenderCopyShaded` and the Noodles draw command to apply. This targets the measured spell path without changing game logic, animation cadence, custom palettes, SDL, the launcher or the FPGA core.
+Source `1d9f008` adds the seventh ordered GemRB patch. The SDL2 sprite call site keeps the existing palette-baked path whenever grey or sepia is active, whose ordering can differ from texture modulation, while leaving ordinary `COLOR_MOD` and `ALPHA_MOD` flags for `SDL20VideoDriver::RenderCopyShaded` and the Noodles draw command to apply. The complete v0.9.5 seven-patch stack applied cleanly in a fresh tree, and the normal ARM GemRB and bundle builds passed with only the pre-existing cast-alignment warning. The staged SDLVideo plugin SHA256 is `4b75fe5fdc97bc5b141039be92b8b60f80d8218c75a031ef7a3a56b2989adc78`; the executable remains `5b2b535182fb1d2cd8ed814d4ba5a5141184f446fa3531c990315ada6218a46d`, the core library remains `7b77e70c255df20495cea46a83a5b8e670ac3392cade1697a0543ec88098d582`, and SDL, the launcher and the FPGA core are unchanged.
 
 #### Next Steps:
 
-Add the change as the seventh ordered GemRB patch, verify that the complete v0.9.5 patch stack applies cleanly, build one normal ARM GemRB bundle, deploy it after the active target session has ended, and compare the same spell-heavy battle with normal audio, `CapFPS=30` and diagnostics disabled.
+Deploy the staged bundle after confirming that no GemRB process is active, verify the three changed bundle hashes on the target, and compare the same spell-heavy battle with normal audio, `CapFPS=30` and diagnostics disabled. If spell stutter remains, measure the separate temporary custom-palette texture churn rather than changing the FPGA core.
 
 #### Files Modified:
 
@@ -1594,7 +1594,7 @@ Add the change as the seventh ordered GemRB patch, verify that the complete v0.9
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
