@@ -2849,7 +2849,7 @@ Stage the tuned trace and harness, cold-launch with the replay devices waiting f
 
 ---
 
-## 96 COMMIT Unreleased ??? 2026-09-26T14:23:41-07:00
+## 96 COMMIT Unreleased 8fb9689 2026-09-26T14:23:41-07:00
 
 #### Coming From:
 
@@ -2861,11 +2861,11 @@ Preserve and define the accepted no-panning cold-load replay as the official aut
 
 #### Outcome:
 
-The accelerated menu experiment was not reproducible and is rejected. After another manual reboot, the original captured trace with its original timing and the four directional key codes excluded again loaded the autosave, moved the character without viewport panning and ended paused; the user reported it perfect and designated it the official test run. This change will preserve that exact captured trace in the repository and document the accepted replay parameters, while retaining the unfiltered panning form only as a secondary comparison.
+The accelerated menu experiment was not reproducible and is rejected. After another manual reboot, the original captured trace with its original timing and the four directional key codes excluded again loaded the autosave, moved the character without viewport panning and ended paused; the user reported it perfect and designated it the official test run. Source `8fb9689` preserves the exact accepted capture under `tests/input` with SHA256 `4d42358d3ea17121acd8e33ec7ab36a0cf41d2f41686b90c25258df4aae1e630` and documents the accepted launch order and parameters. Repository validation confirms 1,707 source events, exactly 1,695 events after excluding directional codes 103, 105, 106 and 108, unchanged 57.101-second timing and retention of the final Space release. The unfiltered form remains the secondary panning comparison.
 
 #### Next Steps:
 
-Commit the trace and concise usage record, verify its repository copy against the accepted SHA256 and validate both the 1,707-event panning form and 1,695-event official filtered form. Future diagnostic and source validation runs must use the official definition unchanged unless the user explicitly requests the panning comparison.
+Future diagnostic and source validation runs must use the committed official definition unchanged unless the user explicitly requests the panning comparison. Do not use the rejected accelerated menu trace or alter its timing, startup order or exclusions without a new user-approved qualification cycle.
 
 #### Files Modified:
 
@@ -2874,7 +2874,7 @@ Commit the trace and concise usage record, verify its repository copy against th
 
 #### Status:
 
-- [ ] Built
-- [ ] Passed
+- [x] Built
+- [x] Passed
 
 ---
