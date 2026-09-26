@@ -2389,3 +2389,32 @@ None.
 - [ ] Passed
 
 ---
+
+## 80 COMMIT Unreleased 6f62121 2026-09-26T08:37:51-07:00
+
+#### Coming From:
+
+Unreleased 6f62121
+
+#### Purpose:
+
+Measure whether renderer texture eviction or upload work causes the unchanged cold combat stutters.
+
+#### Outcome:
+
+The user completed the same cold battle with the existing Noodles statistics enabled for one launch. Texture eviction remained zero throughout loading, prewarming and combat, resident texture memory peaked at only 35.2 MiB against the 192 MiB budget, readbacks remained zero, renderer queue maxima stayed below 26.3 milliseconds, and texture creation and update callbacks consumed only a few milliseconds per interval. The 5,310-frame preload therefore did not churn the hardware cache, definitively rejecting renderer residency, texture upload and FPGA throughput as causes of the severe stalls. The statistics environment disabled itself for subsequent launches. The remaining cold combat log consists of main-thread resource discovery and actor setup, while the normal configuration also formats every message and debug record into an asynchronous logger that writes through the launcher's append-only SD-card log; with the deliberately single glibc allocation arena, that cold resource burst can contend with the main thread even though individual file operations and renderer calls remain short.
+
+#### Next Steps:
+
+Seek approval for one no-build cold comparison with GemRB `Logging=0`, preserving normal audio, 30 FPS, the launcher and the FPGA core. If disabling the full debug stream removes the stutters, make release logging disabled by default and remove the failed animation-prewarm patches; if it does not, abandon logging as well and scope background CPU-side resource construction rather than any further renderer or FPGA work.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
