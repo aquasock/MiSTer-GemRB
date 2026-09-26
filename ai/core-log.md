@@ -1511,3 +1511,32 @@ None.
 - [ ] Passed
 
 ---
+
+## 50 COMMIT Unreleased 5fe8719 2026-09-25T21:30:50-07:00
+
+#### Coming From:
+
+Unreleased 5fe8719
+
+#### Purpose:
+
+Compare the same scene paused and in combat at the restored 30fps cap to identify the remaining main-thread operation without repeating broad profiling.
+
+#### Outcome:
+
+A non-stopping paired sample used the same deployed `5fe8719` process, scene, core and diagnostics-off configuration. The 12.026-second paused baseline collected 1,255 main-thread samples with zero loss, about 20.9% of one core at the 499Hz sampling rate. The user then unpaused into the laggy fight, and the 30.045-second combat window collected 5,518 samples with zero loss, about 36.8% of one core. Actor updates, effects, scripts and attack reevaluation were individually negligible, again excluding combat logic and HPS compute saturation. The largest resolved combat-only increase was `SDL_ResampleCVT_c2`, absent from the paused capture and accounting for 451 combat samples or 8.17% of sampled work; format conversion and ACM decoding added further audio work. Static tracing places this resampler in the main-thread `SDLAudioBackend::LoadSound` cache-miss path, while review also found that `SDLSoundBufferHandle::Disposable` returns true for a buffer that is still playing even though the shared LRU predicate treats true as safe to evict. No configuration, source, renderer or FPGA state changed during either capture.
+
+#### Next Steps:
+
+Obtain approval for one reversible no-build comparison of the same save with `AudioDriver=none`, followed immediately by restoration, to determine whether synchronous sound decode and resampling cause the visible hit-triggered stalls before proposing a narrow audio-cache or conversion correction. Keep the MVE movie path separate because it has its own decode, paletted upload and deadline-accounting costs.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
