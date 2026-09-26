@@ -48,12 +48,13 @@ int main(int argc, char** argv)
 	if (!present || !delay || !target || !update || !lock || !unlock) return 2;
 	present(0);
 	delay(55);
-	target(0, 0);
+	target(0, (void*) 1);
 	update(0, 0, 0, 0);
 	void* pixels = 0;
 	int pitch = 0;
 	lock(0, 0, &pixels, &pitch);
 	unlock(0);
+	target(0, 0);
 	present(0);
 	return 0;
 }
@@ -66,6 +67,8 @@ GEMRB_FRAME_TRACE_LOG="$OUT/selftest.log" LD_PRELOAD="$OUT/libgemrb-frame-trace-
 grep -q '^TRACE start ' "$OUT/selftest.log"
 grep -q '^FRAME ' "$OUT/selftest.log"
 grep -q ' engine_ms=' "$OUT/selftest.log"
+grep -q ' update_phase_ms=' "$OUT/selftest.log"
+grep -q ' draw_phase_ms=' "$OUT/selftest.log"
 grep -q ' update_ms=' "$OUT/selftest.log"
 grep -q '^SDL .* op=update ' "$OUT/selftest.log"
 grep -q '^TRACE stop ' "$OUT/selftest.log"

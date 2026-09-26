@@ -55,6 +55,7 @@ static __thread uint64_t previous_present_begin;
 static __thread uint64_t previous_present_end;
 static __thread uint64_t delay_requested;
 static __thread uint64_t delay_elapsed;
+static __thread uint64_t draw_boundary;
 static __thread uint64_t display_boundary;
 static __thread uint64_t target_elapsed;
 static __thread uint64_t update_elapsed;
@@ -213,6 +214,7 @@ void SDL_RenderPresent(void* renderer)
 	uint64_t between = previous_present_end ? begin - previous_present_end : 0;
 	uint64_t requested = delay_requested;
 	uint64_t delayed = delay_elapsed;
+	uint64_t drawing = draw_boundary;
 	uint64_t boundary = display_boundary;
 	uint64_t target_time = target_elapsed;
 	uint64_t update_time = update_elapsed;
@@ -224,6 +226,7 @@ void SDL_RenderPresent(void* renderer)
 	unsigned unlocks = unlock_calls;
 	delay_requested = 0;
 	delay_elapsed = 0;
+	draw_boundary = 0;
 	display_boundary = 0;
 	target_elapsed = 0;
 	update_elapsed = 0;
@@ -239,12 +242,16 @@ void SDL_RenderPresent(void* renderer)
 	uint64_t present = end - begin;
 	uint64_t before_display = boundary && previous_present_end ? boundary - previous_present_end : between;
 	uint64_t engine = before_display > delayed ? before_display - delayed : 0;
+	uint64_t before_drawing = drawing && previous_present_end ? drawing - previous_present_end : before_display;
+	uint64_t update_phase = before_drawing > delayed ? before_drawing - delayed : 0;
+	uint64_t draw_phase = boundary && drawing && boundary >= drawing ? boundary - drawing : 0;
 	uint64_t display = boundary ? begin - boundary : 0;
 
 	if ((interval && interval >= FRAME_LIMIT_NS) || present >= PRESENT_LIMIT_NS) {
-		trace_line("FRAME tid=%ld at_ms=%.3f interval_ms=%.3f between_ms=%.3f delay_req_ms=%.3f delay_actual_ms=%.3f engine_ms=%.3f display_ms=%.3f present_ms=%.3f target_ms=%.3f/%u update_ms=%.3f/%u lock_ms=%.3f/%u unlock_ms=%.3f/%u\n",
+		trace_line("FRAME tid=%ld at_ms=%.3f interval_ms=%.3f between_ms=%.3f delay_req_ms=%.3f delay_actual_ms=%.3f engine_ms=%.3f update_phase_ms=%.3f draw_phase_ms=%.3f display_ms=%.3f present_ms=%.3f target_ms=%.3f/%u update_ms=%.3f/%u lock_ms=%.3f/%u unlock_ms=%.3f/%u\n",
 			(long) current_tid(), milliseconds(begin), milliseconds(interval), milliseconds(between), milliseconds(requested),
-			milliseconds(delayed), milliseconds(engine), milliseconds(display), milliseconds(present),
+			milliseconds(delayed), milliseconds(engine), milliseconds(update_phase), milliseconds(draw_phase),
+			milliseconds(display), milliseconds(present),
 			milliseconds(target_time), targets, milliseconds(update_time), updates, milliseconds(lock_time), locks,
 			milliseconds(unlock_time), unlocks);
 	}
@@ -266,6 +273,7 @@ int SDL_SetRenderTarget(void* renderer, void* texture)
 	uint64_t elapsed = monotonic_ns() - begin;
 	target_elapsed += elapsed;
 	target_calls++;
+	if (!draw_boundary) draw_boundary = begin;
 	if (!texture && !display_boundary) display_boundary = begin;
 	report_sdl("set-target", begin, elapsed);
 	return result;
