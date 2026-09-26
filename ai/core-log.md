@@ -1775,7 +1775,7 @@ None.
 
 ---
 
-## 59 COMMIT Unreleased ??? 2026-09-25T22:51:21-07:00
+## 59 COMMIT Unreleased 4ce1773 2026-09-25T22:51:21-07:00
 
 #### Coming From:
 
@@ -1787,11 +1787,11 @@ Extend the lightweight frame tracer to divide between-present combat stalls into
 
 #### Outcome:
 
-The approved diagnostic extension will timestamp the first display-target switch before each present and accumulate the time spent in SDL texture update, lock, unlock and render-target-switch calls. Long-frame records will report those phase totals beside the existing frame-cap and presentation measurements, while individual SDL operations will be emitted only when they exceed four milliseconds. The delayed-load self-test will exercise every new wrapper, and no GemRB, SDL or FPGA build will be performed.
+Source `4ce1773` timestamps the first display-target switch before each present and accumulates the time spent in SDL texture update, lock, unlock and render-target-switch calls. Long-frame records report those phase totals beside the existing frame-cap and presentation measurements, while individual SDL operations are emitted only when they exceed four milliseconds. The delayed-load native self-test exercises every new wrapper and verifies a synthetic 64.449-millisecond frame split into a negligible engine phase, an 8.309-millisecond display phase and the expected target, update, lock, unlock and present calls. The strict ARM build passed with library SHA256 `0154958352d3990aa7374f0ee776862fa943e502c733f51d14607eca038f868b`; GemRB, SDL and the FPGA core were not rebuilt.
 
 #### Next Steps:
 
-Implement and validate the extended tracer, wait until the current game process exits, deploy it for one normal three-buffer launch, record a paused boundary and one short spell-heavy combat segment, then restore the exact launcher and use the phase split to select the source correction.
+Wait until the current game process exits, validate the ARM library with the delayed-load target self-test, deploy it for one normal three-buffer launch, record a paused boundary and one short spell-heavy combat segment, then restore the exact launcher and use the phase split to select the source correction.
 
 #### Files Modified:
 
@@ -1800,7 +1800,7 @@ Implement and validate the extended tracer, wait until the current game process 
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
