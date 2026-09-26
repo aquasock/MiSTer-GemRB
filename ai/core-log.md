@@ -2272,3 +2272,32 @@ None.
 - [ ] Passed
 
 ---
+
+## 76 COMMIT Unreleased d6d5103 2026-09-26T08:09:26-07:00
+
+#### Coming From:
+
+Unreleased d6d5103
+
+#### Purpose:
+
+Validate whether exact numeric-spell discovery and bounded dependency preparation remove the cold combat stutters.
+
+#### Outcome:
+
+The user reported unchanged combat stutter. The corrected queue did resolve Illasera's numeric spell and prepared `spmon1.eff`, `MONSUM01.2da`, `SPMONSUM.bam`, `koboldsu.cre`, `ogrelesu.cre`, `worgsu.cre` and `dogwisu.cre` before combat, completing 39 resources and 11,602 animation frames with 140,236 KiB available. The first cast then opened the dynamically selected `CGConjur.bam`, instantiated the selected kobold and expanded the queue to 13,842 prepared frames with 111,080 KiB available. The paused process used 369,812 KiB RSS, retained no swapped pages and left 110,036 KiB system memory available, so neither the reserve nor paging caused the unchanged symptom. This rejects missing spell-dependency discovery as the principal cause. The Noodles renderer has a 192 MiB default resident-texture budget, so sweeping every orientation and every summon-table candidate can evict early prepared textures before combat; that cache-pollution explanation is an inference from the verified queue size and renderer policy rather than a measured eviction count because renderer statistics were disabled for the normal run.
+
+#### Next Steps:
+
+Stop broad pose preparation and seek approval for a cache-aware correction that prepares each spell's casting-glow resource, retains only casting orientations for scripted casters, and limits summon candidates to their stored orientation and immediate attack poses. Keep the resulting working set below the renderer's 192 MiB residency budget, preserve the per-frame memory guard, rebuild GemRB without Quartus and cold-test the same battle.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
