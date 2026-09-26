@@ -1950,3 +1950,32 @@ None.
 - [x] Passed
 
 ---
+
+## 65 COMMIT Unreleased 2cf4651 2026-09-26T06:46:55-07:00
+
+#### Coming From:
+
+Unreleased 2cf4651
+
+#### Purpose:
+
+Capture a user-marked single-hit interaction from an older save with exact frame-phase timing.
+
+#### Outcome:
+
+The final frame tracer was confirmed in the relaunched GemRB process and captured from a 366-line paused boundary through the user's single hit and ending dialog. This interval did not reproduce a severe frame drop: only three frames exceeded the tracer's 45-millisecond threshold, at 47.340, 46.627 and 45.229 milliseconds. Their pre-draw update phases were 0.148, 0.156 and 0.792 milliseconds, drawing phases were 23.339, 22.413 and 22.103 milliseconds, and final display and presentation remained negligible. The only slow resource event was a 4.608-millisecond open of `cgconjur.bam`. The exact normal launcher was restored on disk immediately after the traced process started, so subsequent launches remain diagnostic-free.
+
+#### Next Steps:
+
+Do not attribute the earlier combat stalls to this single-hit interaction because the measured replay stayed at normal capped cadence. Keep the current traced process available and repeat only a scenario in which the user visibly observes the severe drop, marking capture immediately afterward; otherwise use the exact result to narrow the problem to the spell-heavy battle rather than general hostility or hit processing.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
