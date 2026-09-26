@@ -1,4 +1,5 @@
 diff --git a/gemrb/core/Factory.cpp b/gemrb/core/Factory.cpp
+index 5b0b4ba..0eab67f 100644
 --- a/gemrb/core/Factory.cpp
 +++ b/gemrb/core/Factory.cpp
 @@ -20,11 +20,13 @@
@@ -16,7 +17,7 @@ diff --git a/gemrb/core/Factory.cpp b/gemrb/core/Factory.cpp
  }
  
  int Factory::IsLoaded(const ResRef& resref, SClass_ID type) const
-@@ -34,8 +36,9 @@
+@@ -34,8 +36,9 @@ int Factory::IsLoaded(const ResRef& resref, SClass_ID type) const
  	}
  
  	for (unsigned int i = 0; i < fobjects.size(); i++) {
@@ -28,7 +29,7 @@ diff --git a/gemrb/core/Factory.cpp b/gemrb/core/Factory.cpp
  				return i;
  			}
  		}
-@@ -45,7 +48,27 @@
+@@ -45,7 +48,27 @@ int Factory::IsLoaded(const ResRef& resref, SClass_ID type) const
  
  Factory::object_t Factory::GetFactoryObject(int pos) const
  {
@@ -58,6 +59,7 @@ diff --git a/gemrb/core/Factory.cpp b/gemrb/core/Factory.cpp
  
  }
 diff --git a/gemrb/core/Factory.h b/gemrb/core/Factory.h
+index 3976374..9e06c48 100644
 --- a/gemrb/core/Factory.h
 +++ b/gemrb/core/Factory.h
 @@ -25,7 +25,9 @@
@@ -70,7 +72,7 @@ diff --git a/gemrb/core/Factory.h b/gemrb/core/Factory.h
  
  namespace GemRB {
  
-@@ -40,9 +42,16 @@
+@@ -40,9 +42,16 @@ public:
  	void AddFactoryObject(object_t fobject);
  	int IsLoaded(const ResRef& resRef, SClass_ID type) const;
  	object_t GetFactoryObject(int pos) const;
@@ -89,6 +91,7 @@ diff --git a/gemrb/core/Factory.h b/gemrb/core/Factory.h
  
  }
 diff --git a/gemrb/core/Game.cpp b/gemrb/core/Game.cpp
+index b3ad9ae..3470b14 100644
 --- a/gemrb/core/Game.cpp
 +++ b/gemrb/core/Game.cpp
 @@ -27,6 +27,8 @@
@@ -100,7 +103,7 @@ diff --git a/gemrb/core/Game.cpp b/gemrb/core/Game.cpp
  #include "GameData.h"
  #include "IniSpawn.h"
  #include "Interface.h"
-@@ -35,22 +37,224 @@
+@@ -35,23 +37,178 @@
  #include "MusicMgr.h"
  #include "Particles.h"
  #include "PluginMgr.h"
@@ -130,11 +133,10 @@ diff --git a/gemrb/core/Game.cpp b/gemrb/core/Game.cpp
  #include <vector>
  
  namespace GemRB {
-+
+ 
 +namespace {
 +
 +constexpr size_t PreloadReserveKiB = 80 * 1024;
-+constexpr size_t AggressivePreloadKiB = 112 * 1024;
 +
 +size_t AvailableMemoryKiB()
 +{
@@ -153,12 +155,10 @@ diff --git a/gemrb/core/Game.cpp b/gemrb/core/Game.cpp
 +	std::set<size_t> projectiles;
 +	std::vector<Factory::object_t> pinnedFactories;
 +	size_t frames = 0;
-+	size_t actors = 0;
-+	size_t spells = 0;
 +	size_t availableKiB = AvailableMemoryKiB();
 +	bool stopped = false;
 +
-+	bool HasMemory(bool optional = false)
++	bool HasMemory()
 +	{
 +		availableKiB = AvailableMemoryKiB();
 +		if (availableKiB == std::numeric_limits<size_t>::max()) return true;
@@ -170,13 +170,14 @@ diff --git a/gemrb/core/Game.cpp b/gemrb/core/Game.cpp
 +				return false;
 +			}
 +		}
-+		return !optional || availableKiB >= AggressivePreloadKiB;
++		return true;
 +	}
 +
 +	void PrecacheAnimation(const Animation* animation)
 +	{
 +		if (!animation) return;
 +		for (Animation::index_t i = 0; i < animation->GetFrameCount(); ++i) {
++			if (!HasMemory()) return;
 +			auto frame = animation->GetFrame(i);
 +			if (!frame) continue;
 +			VideoDriver->PrecacheSprite(frame);
@@ -187,7 +188,10 @@ diff --git a/gemrb/core/Game.cpp b/gemrb/core/Game.cpp
 +	void PrecacheParts(const CharAnimations::PartAnim* parts)
 +	{
 +		if (!parts) return;
-+		for (const auto& animation : *parts) PrecacheAnimation(animation.get());
++		for (const auto& animation : *parts) {
++			if (stopped) return;
++			PrecacheAnimation(animation.get());
++		}
 +	}
 +
 +	void PrecacheBAM(const ResRef& resource)
@@ -199,6 +203,7 @@ diff --git a/gemrb/core/Game.cpp b/gemrb/core/Game.cpp
 +		if (!factory) return;
 +		pinnedFactories.push_back(factory);
 +		for (AnimationFactory::index_t i = 0; i < factory->GetFrameCount(); ++i) {
++			if (!HasMemory()) return;
 +			auto frame = factory->GetFrameWithoutCycle(i);
 +			if (!frame) continue;
 +			VideoDriver->PrecacheSprite(frame);
@@ -217,8 +222,11 @@ diff --git a/gemrb/core/Game.cpp b/gemrb/core/Game.cpp
 +		if (!resources.insert(key).second) return;
 +		ScriptedAnimation* visual = gamedata->GetScriptedAnimation(resource, false);
 +		if (!visual) return;
-+		for (Animation* animation : visual->anims) PrecacheAnimation(animation);
-+		if (visual->light) VideoDriver->PrecacheSprite(visual->light);
++		for (Animation* animation : visual->anims) {
++			if (stopped) break;
++			PrecacheAnimation(animation);
++		}
++		if (!stopped && visual->light && HasMemory()) VideoDriver->PrecacheSprite(visual->light);
 +		delete visual;
 +	}
 +
@@ -259,7 +267,6 @@ diff --git a/gemrb/core/Game.cpp b/gemrb/core/Game.cpp
 +		if (resource.IsEmpty() || !HasMemory() || !resources.insert(key).second) return;
 +		const Spell* spell = gamedata->GetSpell(resource, true);
 +		if (!spell) return;
-+		++spells;
 +		for (const Effect& effect : spell->casting_features) PrecacheEffectResources(effect);
 +		for (const SPLExtHeader& header : spell->ext_headers) {
 +			PrecacheProjectile(header.ProjectileAnimation);
@@ -268,78 +275,18 @@ diff --git a/gemrb/core/Game.cpp b/gemrb/core/Game.cpp
 +		gamedata->FreeSpell(spell, resource, false);
 +	}
 +
-+	void PrecacheActorStances(Actor* actor, const std::vector<unsigned char>& stances, bool optional)
-+	{
-+		if (!actor || !HasMemory(optional)) return;
-+		CharAnimations* animations = actor->GetAnims();
-+		if (!animations) return;
-+		for (unsigned char stance : stances) {
-+			for (unsigned int orientation = 0; orientation < MAX_ORIENT; ++orientation) {
-+				if (!HasMemory(optional)) return;
-+				orient_t facing = static_cast<orient_t>(orientation);
-+				PrecacheParts(animations->GetAnimation(stance, facing));
-+				PrecacheParts(animations->GetShadowAnimation(stance, facing));
-+			}
-+		}
-+	}
-+
-+	void PrecacheActorSpells(Actor* actor)
-+	{
-+		if (!actor) return;
-+		for (int type = 0; type < actor->spellbook.GetTypes(); ++type) {
-+			for (unsigned int level = 0; level < actor->spellbook.GetSpellLevelCount(type); ++level) {
-+				unsigned int count = actor->spellbook.GetMemorizedSpellsCount(type, level, false);
-+				for (unsigned int index = 0; index < count; ++index) {
-+					if (!HasMemory()) return;
-+					const CREMemorizedSpell* memorized = actor->spellbook.GetMemorizedSpell(type, level, index);
-+					if (memorized) PrecacheSpell(memorized->SpellResRef);
-+				}
-+			}
-+		}
-+	}
 +};
 +
-+void PrecacheAreaAnimations(Map* map)
-+{
-+	AreaPreloader preload;
-+	const std::vector<unsigned char> essential = {
-+		IE_ANI_ATTACK, IE_ANI_CAST, IE_ANI_CONJURE, IE_ANI_SHOOT,
-+		IE_ANI_DAMAGE, IE_ANI_READY
-+	};
-+	const std::vector<unsigned char> optional = {
-+		IE_ANI_ATTACK_SLASH, IE_ANI_ATTACK_BACKSLASH, IE_ANI_ATTACK_JAB,
-+		IE_ANI_AWAKE, IE_ANI_WALK
-+	};
-+	for (Actor* actor : map->GetAllActors()) {
-+		preload.PrecacheActorStances(actor, essential, false);
-+		++preload.actors;
-+	}
-+	for (Actor* actor : map->GetAllActors()) preload.PrecacheActorSpells(actor);
-+	for (Actor* actor : map->GetAllActors()) preload.PrecacheActorStances(actor, optional, true);
-+	Log(MESSAGE, "Game", "Area preload prepared {} actors, {} spells and {} animation frames; {} KiB available{}.",
-+	    preload.actors, preload.spells, preload.frames, preload.availableKiB,
-+	    preload.stopped ? " (memory reserve reached)" : "");
 +}
 +
-+}
- 
  struct HealingResource {
  	ResRef resRef;
-@@ -908,6 +1112,10 @@
- 
- 	core->GetAudioDrv()->SetReverbProperties(newMap->GetReverbProperties());
- 
-+	if (loadscreen) {
-+		core->LoadProgress(90);
-+		PrecacheAreaAnimations(newMap);
-+	}
- 	core->LoadProgress(100);
- 	return ret;
- }
+ 	Actor* caster = nullptr;
 diff --git a/gemrb/core/GameData.cpp b/gemrb/core/GameData.cpp
+index d343510..f765b9d 100644
 --- a/gemrb/core/GameData.cpp
 +++ b/gemrb/core/GameData.cpp
-@@ -372,6 +372,11 @@
+@@ -372,6 +372,11 @@ Factory::object_t GameData::GetFactoryResource(const ResRef& resName, SClass_ID
  	}
  }
  
@@ -352,9 +299,10 @@ diff --git a/gemrb/core/GameData.cpp b/gemrb/core/GameData.cpp
  {
  	StoreMap::iterator it = stores.find(resRef);
 diff --git a/gemrb/core/GameData.h b/gemrb/core/GameData.h
+index 1f512e7..0c2a4cb 100644
 --- a/gemrb/core/GameData.h
 +++ b/gemrb/core/GameData.h
-@@ -132,6 +132,8 @@
+@@ -132,6 +132,8 @@ public:
  
  	/** returns factory resource, currently works only with animations */
  	Factory::object_t GetFactoryResource(const ResRef& resName, SClass_ID type, bool silent = false);
@@ -364,9 +312,10 @@ diff --git a/gemrb/core/GameData.h b/gemrb/core/GameData.h
  	template<typename T>
  	std::shared_ptr<T> GetFactoryResourceAs(const ResRef& resName, SClass_ID type, bool silent = false)
 diff --git a/gemrb/core/Video/Video.h b/gemrb/core/Video/Video.h
+index f764c47..d1d4d71 100644
 --- a/gemrb/core/Video/Video.h
 +++ b/gemrb/core/Video/Video.h
-@@ -162,6 +162,8 @@
+@@ -162,6 +162,8 @@ public:
  	virtual void ConfigurePointer(int pointerSpeed, int pointerAccel, int deadZoneL, int deadZoneR) = 0;
  
  	virtual Holder<Sprite2D> CreateSprite(const Region&, void* pixels, const PixelFormat&) = 0;
@@ -376,27 +325,29 @@ diff --git a/gemrb/core/Video/Video.h b/gemrb/core/Video/Video.h
  	void BlitSprite(const Holder<Sprite2D>& spr, Point p,
  			const Region* clip = nullptr, BlitFlags = BlitFlags::NONE);
 diff --git a/gemrb/plugins/SDLVideo/SDL20Video.cpp b/gemrb/plugins/SDLVideo/SDL20Video.cpp
+index d911b04..bcf7669 100644
 --- a/gemrb/plugins/SDLVideo/SDL20Video.cpp
 +++ b/gemrb/plugins/SDLVideo/SDL20Video.cpp
-@@ -421,6 +421,14 @@
- 	flags &= ~spr->PrepareForRendering(paletteFlags, reinterpret_cast<const Color*>(tint));
- 	SDL_Texture* tex = spr->GetTexture(renderer);
+@@ -423,6 +423,14 @@ void SDL20VideoDriver::BlitSpriteNativeClipped(const SDLTextureSprite2D* spr, co
  	BlitSpriteNativeClipped(tex, src, dst, flags, tint);
-+}
-+
+ }
+ 
 +void SDL20VideoDriver::PrecacheSprite(const Holder<Sprite2D>& sprite)
 +{
 +	auto* spr = dynamic_cast<const SDLTextureSprite2D*>(sprite.get());
 +	if (!spr) return;
 +	spr->PrepareForRendering(BlitFlags::NONE);
 +	spr->GetTexture(renderer);
- }
- 
++}
++
  void SDL20VideoDriver::BlitSpriteNativeClipped(SDL_Texture* texSprite, const Region& srgn, const Region& drgn, BlitFlags flags, const SDL_Color* tint)
+ {
+ 	TRACY(ZoneScoped);
 diff --git a/gemrb/plugins/SDLVideo/SDL20Video.h b/gemrb/plugins/SDLVideo/SDL20Video.h
+index 8848884..04e8d72 100644
 --- a/gemrb/plugins/SDLVideo/SDL20Video.h
 +++ b/gemrb/plugins/SDLVideo/SDL20Video.h
-@@ -261,6 +261,7 @@
+@@ -261,6 +261,7 @@ public:
  
  	bool TouchInputEnabled() override;
  	bool CanDrawRawGeometry() const override;

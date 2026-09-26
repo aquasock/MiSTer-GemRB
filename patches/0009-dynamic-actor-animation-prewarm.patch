@@ -1,174 +1,27 @@
-diff --git a/gemrb/core/Game.cpp b/gemrb/core/Game.cpp
---- a/gemrb/core/Game.cpp
-+++ b/gemrb/core/Game.cpp
-@@ -2842 +2842,146 @@
--}
-+void Game::QueueActorPreload(Actor* actor)
-+{
-+	if (!actor || !preloadSeenActors.insert(actor->GetGlobalID()).second) return;
-+	preloadActors.push_back(actor->GetGlobalID());
-+	preloadActive = true;
-+}
-+
-+void Game::ProcessPreloadQueue()
-+{
-+	auto queueResource = [this](const ResRef& resource) {
-+		if (resource.IsEmpty()) return;
-+		std::string key(resource.c_str());
-+		if (preloadSeenResources.insert(key).second) preloadResources.push_back(resource);
-+	};
-+	auto queueEffectResources = [&queueResource](const Effect& effect) {
-+		queueResource(effect.Resource);
-+		queueResource(effect.Resource2);
-+		queueResource(effect.Resource3);
-+		queueResource(effect.Resource4);
-+	};
-+	auto queueActorDependencies = [this, &queueResource](Actor* actor) {
-+		if (!actor) return;
-+		for (int type = 0; type < actor->spellbook.GetTypes(); ++type) {
-+			for (unsigned int level = 0; level < actor->spellbook.GetSpellLevelCount(type); ++level) {
-+				unsigned int count = actor->spellbook.GetMemorizedSpellsCount(type, level, false);
-+				for (unsigned int index = 0; index < count; ++index) {
-+					const CREMemorizedSpell* spell = actor->spellbook.GetMemorizedSpell(type, level, index);
-+					if (spell) queueResource(spell->SpellResRef);
-+				}
-+			}
-+		}
-+		std::vector<ResRef> refs;
-+		for (GameScript* script : actor->Scripts) {
-+			if (script) script->CollectResourceRefs(refs);
-+		}
-+		for (const ResRef& ref : refs) queueResource(ref);
-+	};
-+
-+	AreaPreloader preload;
-+	if (!preload.HasMemory()) {
-+		preloadActors.clear();
-+		preloadResources.clear();
-+		preloadPoses.clear();
-+		if (preloadActive) {
-+			Log(MESSAGE, "Game", "Dynamic preload stopped at the {} KiB memory reserve.", preload.availableKiB);
-+			preloadActive = false;
-+		}
-+		return;
-+	}
-+
-+	if (!preloadActors.empty()) {
-+		ieDword actorID = preloadActors.front();
-+		preloadActors.pop_front();
-+		Actor* actor = GetActorByGlobalID(actorID);
-+		if (actor) {
-+			queueActorDependencies(actor);
-+			const unsigned char stances[] = {
-+				IE_ANI_ATTACK, IE_ANI_CAST, IE_ANI_CONJURE, IE_ANI_SHOOT,
-+				IE_ANI_DAMAGE, IE_ANI_READY, IE_ANI_ATTACK_SLASH,
-+				IE_ANI_ATTACK_BACKSLASH, IE_ANI_ATTACK_JAB, IE_ANI_AWAKE, IE_ANI_WALK
-+			};
-+			for (unsigned char stance : stances) {
-+				for (ieDword orientation = 0; orientation < MAX_ORIENT; ++orientation) {
-+					preloadPoses.push_back({ actorID, stance, orientation });
-+				}
-+			}
-+		}
-+	} else if (!preloadResources.empty()) {
-+		ResRef resource = preloadResources.front();
-+		preloadResources.pop_front();
-+		++preloadResourceCount;
-+
-+		if (gamedata->Exists(resource, IE_SPL_CLASS_ID, true)) {
-+			const Spell* spell = gamedata->GetSpell(resource, true);
-+			if (spell) {
-+				for (const Effect& effect : spell->casting_features) queueEffectResources(effect);
-+				for (const SPLExtHeader& header : spell->ext_headers) {
-+					preload.PrecacheProjectile(header.ProjectileAnimation);
-+					for (const Effect& effect : header.features) queueEffectResources(effect);
-+				}
-+				gamedata->FreeSpell(spell, resource, false);
-+			}
-+		}
-+		if (gamedata->Exists(resource, IE_EFF_CLASS_ID, true)) {
-+			Effect* effect = gamedata->GetEffect(resource);
-+			if (effect) {
-+				queueEffectResources(*effect);
-+				if (effect->Projectile) preload.PrecacheProjectile(effect->Projectile);
-+				if (effect->Opcode == 0x7f) {
-+					static const ResRef summonTables[] = {
-+						"MONSUM01", "MONSUM02", "MONSUM03", "ANISUM01", "ANISUM02", "ANISUM03"
-+					};
-+					unsigned int index = effect->Parameter2 < 5 ? effect->Parameter2 : effect->Parameter2 - 5;
-+					queueResource(summonTables[std::min(index, 5U)]);
-+				}
-+				delete effect;
-+			}
-+		}
-+		if (gamedata->Exists(resource, IE_2DA_CLASS_ID, true)) {
-+			AutoTable table = gamedata->LoadTable(resource, true);
-+			if (table) {
-+				for (TableMgr::index_t row = 0; row < table->GetRowCount(); ++row) {
-+					for (TableMgr::index_t column = 0; column < table->GetColumnCount(row); ++column) {
-+						queueResource(ResRef(table->QueryField(row, column)));
-+					}
-+				}
-+			}
-+		}
-+		if (gamedata->Exists(resource, IE_CRE_CLASS_ID, true)) {
-+			Actor* actor = gamedata->GetCreature(resource);
-+			if (actor) {
-+				queueActorDependencies(actor);
-+				const std::vector<unsigned char> stances = {
-+					IE_ANI_ATTACK, IE_ANI_CAST, IE_ANI_CONJURE, IE_ANI_SHOOT,
-+					IE_ANI_DAMAGE, IE_ANI_READY, IE_ANI_ATTACK_SLASH,
-+					IE_ANI_ATTACK_BACKSLASH, IE_ANI_ATTACK_JAB
-+				};
-+				preload.PrecacheActorStances(actor, stances, false);
-+				delete actor;
-+			}
-+		}
-+		if (gamedata->Exists(resource, IE_VVC_CLASS_ID, true) ||
-+		    gamedata->Exists(resource, IE_BAM_CLASS_ID, true)) {
-+			preload.PrecacheVisual(resource);
-+		}
-+	} else if (!preloadPoses.empty()) {
-+		auto pose = preloadPoses.front();
-+		preloadPoses.pop_front();
-+		Actor* actor = GetActorByGlobalID(pose[0]);
-+		if (actor && actor->GetAnims()) {
-+			orient_t orientation = static_cast<orient_t>(pose[2]);
-+			preload.PrecacheParts(actor->GetAnims()->GetAnimation(pose[1], orientation));
-+			preload.PrecacheParts(actor->GetAnims()->GetShadowAnimation(pose[1], orientation));
-+		}
-+	}
-+
-+	preloadFrames += preload.frames;
-+	if (preloadActive && preloadActors.empty() && preloadResources.empty() && preloadPoses.empty()) {
-+		Log(MESSAGE, "Game", "Dynamic preload completed {} resources and {} animation frames; {} KiB available.",
-+		    preloadResourceCount, preloadFrames, preload.availableKiB);
-+		preloadActive = false;
-+	}
-+}
-+
-+
-+}
 diff --git a/gemrb/core/Game.h b/gemrb/core/Game.h
+index 0e12332..b7ce206 100644
 --- a/gemrb/core/Game.h
 +++ b/gemrb/core/Game.h
-@@ -38,6 +38,9 @@
+@@ -38,6 +38,10 @@
  
  #include <array>
  #include <atomic>
 +#include <deque>
++#include <memory>
 +#include <set>
 +#include <string>
  #include <vector>
  
  namespace GemRB {
-@@ -304,6 +307,14 @@
+@@ -304,6 +308,16 @@ public:
  	bool familiarBlock = false;
  	bool PartyAttack = false;
  	bool HOFMode = false;
 +	std::deque<ieDword> preloadActors;
 +	std::deque<ResRef> preloadResources;
 +	std::deque<std::array<ieDword, 3>> preloadPoses;
++	std::deque<std::shared_ptr<Actor>> preloadCreatures;
++	size_t preloadCreaturePose = 0;
 +	std::set<ieDword> preloadSeenActors;
 +	std::set<std::string> preloadSeenResources;
 +	size_t preloadFrames = 0;
@@ -177,7 +30,7 @@ diff --git a/gemrb/core/Game.h b/gemrb/core/Game.h
  
  private:
  	/** reads the challenge rating table */
-@@ -495,6 +506,8 @@
+@@ -495,6 +509,8 @@ public:
  	std::string dump() const override;
  	/** Finds an actor by global ID */
  	Actor* GetActorByGlobalID(ieDword objectID) const;
@@ -187,27 +40,32 @@ diff --git a/gemrb/core/Game.h b/gemrb/core/Game.h
  	ieByte* AllocateMazeData();
  	/** Checks if any timestop effects are active */
 diff --git a/gemrb/core/GameScript/GameScript.cpp b/gemrb/core/GameScript/GameScript.cpp
+index 999e46e..9ad23e6 100644
 --- a/gemrb/core/GameScript/GameScript.cpp
 +++ b/gemrb/core/GameScript/GameScript.cpp
-@@ -1828,6 +1828,26 @@
+@@ -1828,6 +1828,30 @@ GameScript::~GameScript(void)
  	BcsCache.DecRef(Name, true);
  }
  
-+void GameScript::CollectResourceRefs(std::vector<ResRef>& refs) const
++void GameScript::CollectSpellRefs(std::vector<ResRef>& refs) const
 +{
 +	if (!script) return;
 +	for (const ResponseBlock* block : script->responseBlocks) {
-+		if (block->condition) {
-+			for (const Trigger* trigger : block->condition->triggers) {
-+				if (!trigger->resref0Parameter.IsEmpty()) refs.push_back(trigger->resref0Parameter);
-+				if (!trigger->resref1Parameter.IsEmpty()) refs.push_back(trigger->resref1Parameter);
-+			}
-+		}
 +		if (!block->responseSet) continue;
 +		for (const Response* response : block->responseSet->responses) {
 +			for (const Action* action : response->actions) {
-+				if (!action->resref0Parameter.IsEmpty()) refs.push_back(action->resref0Parameter);
-+				if (!action->resref1Parameter.IsEmpty()) refs.push_back(action->resref1Parameter);
++				if (action->actionID >= MAX_ACTIONS) continue;
++				ActionFunction function = actions[action->actionID];
++				bool spellAction = function == GameScript::Spell || function == GameScript::SpellNoDec ||
++					function == GameScript::SpellPoint || function == GameScript::SpellPointNoDec ||
++					function == GameScript::ForceSpell || function == GameScript::ForceSpellRange ||
++					function == GameScript::ForceSpellPoint || function == GameScript::ForceSpellPointRange ||
++					function == GameScript::ReallyForceSpell || function == GameScript::ReallyForceSpellPoint ||
++					function == GameScript::ReallyForceSpellDead || function == GameScript::ApplySpell ||
++					function == GameScript::ApplySpellPoint;
++				if (!spellAction) continue;
++				ResRef spell;
++				if (ResolveSpellName(spell, action)) refs.push_back(spell);
 +			}
 +		}
 +	}
@@ -217,20 +75,22 @@ diff --git a/gemrb/core/GameScript/GameScript.cpp b/gemrb/core/GameScript/GameSc
  {
  	SClass_ID type = AIScript ? IE_BS_CLASS_ID : IE_BCS_CLASS_ID;
 diff --git a/gemrb/core/GameScript/GameScript.h b/gemrb/core/GameScript/GameScript.h
+index 3b6453c..792a437 100644
 --- a/gemrb/core/GameScript/GameScript.h
 +++ b/gemrb/core/GameScript/GameScript.h
-@@ -499,6 +499,7 @@
+@@ -499,6 +499,7 @@ public:
  	bool running = false; // Script is currently running so defer any deletion to caller
  
  	ResRef GetName() const { return Name; }
-+	void CollectResourceRefs(std::vector<ResRef>& refs) const;
++	void CollectSpellRefs(std::vector<ResRef>& refs) const;
  	static void ExecuteString(Scriptable* Sender, std::string string);
  	static int EvaluateString(Scriptable* Sender, const char* String);
  	static void ExecuteAction(Scriptable* Sender, Action* aC);
 diff --git a/gemrb/core/Interface.cpp b/gemrb/core/Interface.cpp
+index cfba7b0..cbab372 100644
 --- a/gemrb/core/Interface.cpp
 +++ b/gemrb/core/Interface.cpp
-@@ -1919,6 +1919,7 @@
+@@ -1919,6 +1919,7 @@ void Interface::GameLoop(void)
  			// the game object will run the area scripts as well
  			game->UpdateScripts();
  		}
@@ -239,9 +99,10 @@ diff --git a/gemrb/core/Interface.cpp b/gemrb/core/Interface.cpp
  }
  
 diff --git a/gemrb/core/Map.cpp b/gemrb/core/Map.cpp
+index 500ac2e..c43c555 100644
 --- a/gemrb/core/Map.cpp
 +++ b/gemrb/core/Map.cpp
-@@ -1996,6 +1996,8 @@
+@@ -1996,6 +1996,8 @@ void Map::AddActor(Actor* actor, bool init)
  	if (init) {
  		actor->SetMap(this);
  		MarkVisited(actor);
