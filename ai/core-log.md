@@ -2301,3 +2301,33 @@ None.
 - [ ] Passed
 
 ---
+
+## 77 COMMIT Unreleased ??? 2026-09-26T08:12:07-07:00
+
+#### Coming From:
+
+Unreleased d6d5103
+
+#### Purpose:
+
+Keep targeted combat prewarming within the renderer's resident-texture budget.
+
+#### Outcome:
+
+The dynamic queue will prepare each exact spell's generic casting-glow visual and restrict scripted casters to casting and conjuring cycles. Summon-table creature candidates will contribute resource dependencies without having every pose materialized, while an actual actor added to the map will prepare only its current orientation and immediate combat and movement cycles. This should retain the working textures for the imminent battle instead of sweeping 13,842 frames through the renderer's 192 MiB resident cache.
+
+#### Next Steps:
+
+Repartition the cache-aware behavior across the existing dynamic-actor and targeted-spell patches so all ordered patches remain idempotent, verify the complete stack in a clean GemRB tree, build one ARM GemRB bundle without rebuilding Quartus, and cold-test the same battle against the approximately 11-stutter baseline.
+
+#### Files Modified:
+
+- patches/0009-dynamic-actor-animation-prewarm.patch
+- patches/0010-targeted-spell-action-prewarm.patch
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
