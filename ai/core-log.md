@@ -1892,3 +1892,32 @@ None.
 - [x] Passed
 
 ---
+
+## 63 COMMIT Unreleased 2cf4651 2026-09-25T23:11:40-07:00
+
+#### Coming From:
+
+Unreleased 2cf4651
+
+#### Purpose:
+
+Compare the same combat sequence after reloading its save in the existing process to test whether process-lifetime asset caches reduce the stalls.
+
+#### Outcome:
+
+The warm replay recorded 22 long frames over approximately 29.95 seconds, versus 66 over approximately 41.46 seconds in the cold capture, reducing the observed long-frame rate from 1.59 to 0.73 per second. Measured engine work within those frames fell from 198 to 93 milliseconds per elapsed second, the maximum interval fell from 870.406 to 577.424 milliseconds and the maximum drawing phase fell from 373.303 to 169.438 milliseconds. Process-lifetime caching therefore removes a material part of the stutter. It is not the complete cause: six warm frames still exceeded 100 milliseconds before drawing, that phase still reached 508.787 milliseconds, and the warm segment opened the previously unseen `spflmarr.bam` plus `CREAnim1.bif`. Combat continues to introduce uncached resources whose main-thread preparation is consistent with the remaining stalls, while display, presentation and measured SDL operations again remained small.
+
+#### Next Steps:
+
+Obtain approval to run the existing non-stopping instruction sampler during one more replay in the same process, with no build, restart or deployed-file change. Correlate its main-thread symbols with the frame trace to identify whether the remaining pre-draw stalls are BAM decoding, effect and script update, or another resource path before proposing the source correction.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
