@@ -1833,3 +1833,33 @@ None.
 - [x] Passed
 
 ---
+
+## 61 COMMIT Unreleased ??? 2026-09-25T22:59:16-07:00
+
+#### Coming From:
+
+Unreleased 4ce1773
+
+#### Purpose:
+
+Add the final frame-phase marker that separates game and GUI update time from the complete window-drawing pass.
+
+#### Outcome:
+
+The approved tracer correction will record the first existing render-target call after each present as the drawing boundary. Each long-frame record will retain the prior display, presentation, target and texture totals while dividing the current engine phase into pre-draw update time and drawing time. The delayed-load self-test will verify both new fields, and no new hot wrapper or GemRB, SDL or FPGA build will be added.
+
+#### Next Steps:
+
+Implement and validate the marker, run the ARM delayed-load self-test on the rebooted target, deploy it for one normal three-buffer launch, capture a paused boundary and a short spell-heavy combat segment, then restore the exact launcher and use the measured phase to select the correction.
+
+#### Files Modified:
+
+- scripts/build-frame-tracer.sh
+- tools/noodles-frame-trace.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
