@@ -2037,3 +2037,32 @@ None.
 - [x] Passed
 
 ---
+
+## 68 COMMIT Unreleased ??? 2026-09-26T07:03:11-07:00
+
+#### Coming From:
+
+Unreleased 2cf4651
+
+#### Purpose:
+
+Move first-use animation preparation into area loading with memory-aware preloading and pressure-based retention.
+
+#### Outcome:
+
+The approved change will add a bounded current-area preload pass that discovers actor animation cycles and reachable spell, projectile and visual-effect animations, decodes their factories and prepares their frames for the active renderer while the loading screen is present. Preloading will use available-memory watermarks so it is aggressive while the MiSTer has headroom, narrows as memory approaches its reserve and stops before swap pressure. The append-only animation cache will gain safe least-recently-used trimming for factory objects that have no active external owner, allowing later areas to reclaim cold assets instead of retaining every resource for the entire process. The implementation will preserve lazy loading as a fallback for dynamically named script resources and for platforms where memory availability cannot be measured.
+
+#### Next Steps:
+
+Implement the change as a new GemRB patch, cross-build GemRB and the bundle, then deploy it with the accepted SDL and FPGA core. Validate a cold boot of the exact save against the retained baseline of approximately 11 severe stutters and confirm that loading completes, memory stays above the reserve, no swap is used and the same-process result remains correct.
+
+#### Files Modified:
+
+- patches/0008-memory-aware-area-animation-preload.patch
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
