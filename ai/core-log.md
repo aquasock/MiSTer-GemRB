@@ -2213,7 +2213,7 @@ None.
 
 ---
 
-## 74 COMMIT Unreleased ??? 2026-09-26T07:42:20-07:00
+## 74 COMMIT Unreleased d6d5103 2026-09-26T07:42:20-07:00
 
 #### Coming From:
 
@@ -2225,11 +2225,11 @@ Replace broad animation prewarming with exact numeric-spell discovery and bounde
 
 #### Outcome:
 
-The approved correction will recognize both resource-named and numeric spell actions in compiled actor scripts, including Illasera's action 191 with spell number 2412 that resolves to `SPWI412`. It will queue only exact spell, external effect, summon table, creature, projectile and visual dependencies; disable the broad loading-screen actor pass and generic script-resource scan; limit live actors to combat-relevant casting and attack poses; and divide temporary creature animation preparation into stance-orientation tasks with a memory check before each frame. This removes the unrelated 101-resource and all-stance expansion that exhausted memory while preserving lazy fallback below the 80 MiB reserve.
+Source `d6d5103` recognizes both resource-named and numeric spell actions in compiled actor scripts, including Illasera's action 191 with spell number 2412 that resolves to `SPWI412`. It queues only exact spell, external effect, summon table, creature, projectile and visual dependencies; disables the broad loading-screen actor pass and generic script-resource scan; limits live actors to combat-relevant casting and attack poses; divides temporary creature preparation into stance-orientation tasks; and checks the 80 MiB reserve before every animation frame. The correction is partitioned across patches 8 through 10 so every patch passes the build driver's reverse check after the complete stack is applied. A clean GemRB 0.9.5 tree accepted all ten patches, its final source matched the development tree, the ARM build and normal bundle completed, and the staged core library SHA256 is `53db70dda028bea953d7426584dc84852c908fb3939f390b6edb6743581060b3`; SDLVideo remains `5f49144764a31449747720353f51363a408ec573bf553f83b89c816e4624dbe3` and the executable remains `5b2b535182fb1d2cd8ed814d4ba5a5141184f446fa3531c990315ada6218a46d`.
 
 #### Next Steps:
 
-Implement the correction as the tenth ordered GemRB patch, verify a clean nine-patch baseline and complete ten-patch stack, build one ARM GemRB bundle without rebuilding Quartus, and inspect its staged hashes and normal runtime configuration before deployment after the MiSTer has rebooted.
+After the active low-memory GemRB session has ended or the MiSTer has rebooted, deploy the staged normal bundle without changing the launcher, configuration or FPGA core. Cold-load the exact save, confirm `SPWI412`, its summon table and creature resources are discovered before combat, verify available memory remains above 80 MiB with no GemRB swap use, and compare the visible stutter count with the approximately 11-event baseline.
 
 #### Files Modified:
 
@@ -2239,7 +2239,7 @@ Implement the correction as the tenth ordered GemRB patch, verify a clean nine-p
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
