@@ -2008,3 +2008,32 @@ None.
 - [x] Passed
 
 ---
+
+## 67 COMMIT Unreleased 2cf4651 2026-09-26T06:58:42-07:00
+
+#### Coming From:
+
+Unreleased 2cf4651
+
+#### Purpose:
+
+Combine exact cold frame timing, instruction sampling and scheduler counters to identify the cause of the repeatable animation-heavy stutters.
+
+#### Outcome:
+
+The user reported no visible drops after reloading the same save in the existing process, then rebooted and observed approximately 11 stutters again during the same interaction. The synchronized cold capture recorded 93 long frames and ten intervals of at least 270 milliseconds, closely matching that count; the worst interval was 956.896 milliseconds and divided 938.510 milliseconds of engine time into 481.335 milliseconds before drawing and 457.176 milliseconds during drawing. Fifteen frames exceeded 100 milliseconds before drawing and six exceeded 100 milliseconds while drawing, while display, presentation, measured target switching, texture-update calls and individual file operations remained small. Over the 67.94-second interval the main thread accumulated 28.93 seconds running and 5.28 seconds waiting on its run queue, the process RSS grew by 94,832 KiB, minor faults increased by 122,272, major faults increased by 35 and block reads increased by 7,787,520 bytes. The instruction sample had zero loss and again showed diffuse animation, surface conversion, fog and renderer-front-end work instead of a combat-logic hotspot. The disappearance after a same-process reload and return after reboot, together with the cold memory growth and split update and drawing stalls, identifies first-use animation and effect preparation on GemRB's main thread as the cause rather than FPGA throughput or sustained game logic.
+
+#### Next Steps:
+
+Stop diagnostic replays and review the animation-factory and SDL surface-render preparation paths for a bounded correction that moves cold frame preparation into save or area loading, or incrementally prewarms it before gameplay. Present that source plan for approval before changing GemRB, and retain the exact cold capture as the validation baseline.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
