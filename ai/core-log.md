@@ -1686,7 +1686,7 @@ None.
 
 ---
 
-## 56 COMMIT Unreleased ??? 2026-09-25T22:35:21-07:00
+## 56 COMMIT Unreleased bdd3431 2026-09-25T22:35:21-07:00
 
 #### Coming From:
 
@@ -1698,11 +1698,11 @@ Add a temporary low-overhead frame tracer that distinguishes long GemRB frame wo
 
 #### Outcome:
 
-The approved diagnostic will add a small ARM preload library and deterministic build script. The library will timestamp `SDL_RenderPresent` boundaries, renderer duration, frame-cap delays and slow file operations, emit only slow events to a tmpfs log, guard against recursive tracing and leave gameplay data untouched. It will be compiled and checked independently without rebuilding GemRB, SDL or the FPGA core, then installed through a reversible target-only `run.sh` preload adjustment for one controlled battle.
+Source `bdd3431` adds a small ARM preload library and deterministic build script. The library timestamps `SDL_RenderPresent` boundaries, renderer duration, frame-cap delays and file operations longer than four milliseconds, emits only slow events to a tmpfs log, guards against recursive tracing and leaves gameplay data untouched. The first compiler pass exposed the 32-bit glibc aliases that emit `pread` and `fopen` as their 64-bit symbols; conditional wrappers corrected the duplicate definitions. The final strict cross-build produced an ARM ELF32 library with SHA256 `29709c21d42480b79a5c99cc534f461b5578bc251d26817e634efe9b4b5cf2fa`, and the native preload self-test verified constructor, frame interception and destructor output. GemRB, SDL and the FPGA core were not rebuilt.
 
 #### Next Steps:
 
-Implement and validate the tracer, deploy it only after the current GemRB process has exited, confirm that normal three-buffer mode and diagnostics-off settings remain active, capture one spell-heavy battle, and restore the exact original target launcher immediately after the trace.
+Deploy the tracer only after the current GemRB process has exited, preserve the exact target `run.sh`, add the tracer beside the existing affinity preload for one launch, confirm normal three-buffer mode and diagnostics-off settings, capture one spell-heavy battle, and restore the exact original target launcher immediately after the trace.
 
 #### Files Modified:
 
@@ -1711,7 +1711,7 @@ Implement and validate the tracer, deploy it only after the current GemRB proces
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
