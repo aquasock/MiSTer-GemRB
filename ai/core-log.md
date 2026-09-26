@@ -2450,7 +2450,7 @@ Prewarm the combat animations of CRE resources discovered through spell and summ
 
 ---
 
-## 82 COMMIT Unreleased ??? 2026-09-26T12:01:54-07:00
+## 82 COMMIT Unreleased 1f9b746 2026-09-26T12:01:54-07:00
 
 #### Coming From:
 
@@ -2462,11 +2462,11 @@ Prepare summoned-creature combat animations before the spell creates those actor
 
 #### Outcome:
 
-The dynamic dependency walker will use each discovered CRE resource to construct its temporary actor and prepare the actor's attack, damage, ready and movement animations in every orientation with its exact part and shadow palettes before deleting it. This closes the observed gap where the dependency graph found the dog and worg creature files before combat but waited until the live summon entered the map to request `MWLF_WO.bmp` and its 74 animation frames.
+Source `1f9b746` makes the dynamic dependency walker use each discovered CRE resource's temporary actor to prepare physical attack variants, shooting, damage, ready, walk and shadow animations in every orientation with exact part palettes before deleting it. This closes the observed gap where the dependency graph found the dog and worg creature files before combat but waited until the live summon entered the map to request `MWLF_WO.bmp` and its 74 animation frames. The complete ten-patch stack applied to pristine GemRB 0.9.5, reproduced the development source exactly, passed every full-stack reverse check and built successfully both natively and for ARM. The staged bundle SHA256 values are `41bff74fbd092da652242652e392b3945524ab77d52d77459389bde56b47aded` for `libgemrb_core.so.0.9.5`, the unchanged `7abb4cf705eacd376afe06c3f81f25d4627670cbc3c7579b9b9f01e7bd15df30` for `SDLVideo.so` and the unchanged `5b2b535182fb1d2cd8ed814d4ba5a5141184f446fa3531c990315ada6218a46d` for the executable. Deployment remains pending because GemRB PID 5396 is active on the target with 75,796 KiB available; the session was left untouched.
 
 #### Next Steps:
 
-Extend the existing targeted spell-action prewarm patch, validate the complete ordered patch stack and build one normal ARM GemRB bundle without Quartus. After the current game exits or the MiSTer reboots, deploy it with all existing settings and the FPGA core unchanged, then cold-test the same battle once.
+After the current game exits or the MiSTer reboots, deploy the staged normal bundle with all existing settings and the FPGA core unchanged, then cold-test the same battle once.
 
 #### Files Modified:
 
@@ -2474,7 +2474,7 @@ Extend the existing targeted spell-action prewarm patch, validate the complete o
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
