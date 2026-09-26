@@ -33,13 +33,6 @@ Run `/media/fat/gemrb-noodles-test/run.sh` while the timing-qualified Noodles pr
 
 ---
 
-
-
-
-
-
-
-
 ## 3 COMMIT Unreleased e2fb908 2026-09-24T00:52:47-07:00
 
 #### Coming From:
@@ -2471,6 +2464,35 @@ Do not add more preload coverage. Remove the failed memory-aware, dynamic-actor 
 #### Files Modified:
 
 - patches/0010-targeted-spell-action-prewarm.patch
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
+
+## 83 COMMIT Unreleased 1f9b746 2026-09-26T12:42:20-07:00
+
+#### Coming From:
+
+Unreleased 1f9b746
+
+#### Purpose:
+
+Isolate normal GemRB logging from the unchanged cold combat stutters without rebuilding.
+
+#### Outcome:
+
+At the user's direction, the target BG2 configuration was copied to `GemRB-bg2.cfg.logging1-backup` with SHA256 `a2fbd5e810a271682c6f3549e20744369aa50987ca26a5c3af87698427cbc3f0`, then only `Logging` was changed from `1` to `0`; the resulting configuration SHA256 is `fa87b79d13f66540e6db2b5aebb33b185702d80642dae09f89e608eb0e48973e`. Normal SDL audio, `CapFPS=30`, `DrawFPS=0`, renderer statistics, the launcher, binaries and FPGA core are unchanged. GemRB PID 1921 was already active, so this setting applies on the next launch and the current session was not interrupted.
+
+#### Next Steps:
+
+Exit the current game or reboot the MiSTer, cold-load the same save and replay the battle once. If the stutters remain, restore the exact logging-enabled configuration and reject logging contention; if they improve, retain logging disabled and remove the failed preload patches before the next production build.
+
+#### Files Modified:
+
+None.
 
 #### Status:
 
