@@ -30,6 +30,8 @@ EV_REL = 0x02
 EV_ABS = 0x03
 EV_MSC = 0x04
 SYN_REPORT = 0
+REL_X = 0
+REL_Y = 1
 CLOCK_MONOTONIC = 1
 
 IOC_WRITE = 1
@@ -293,9 +295,34 @@ def select_replay_events(events: list[dict], start_at: float) -> list[dict]:
     return selected
 
 
+def select_prefix_motion(events: list[dict], start_at: float) -> list[dict]:
+    cutoff_ns = int(start_at * 1_000_000_000)
+    selected = []
+    report_has_motion = False
+    report = []
+    for event in events:
+        if event["t_ns"] >= cutoff_ns:
+            break
+        if event["type"] == EV_REL and event["code"] in (REL_X, REL_Y):
+            report.append(event)
+            report_has_motion = True
+        elif event["type"] == EV_SYN and event["code"] == SYN_REPORT:
+            if report_has_motion:
+                report.append(event)
+                selected.extend(report)
+            report = []
+            report_has_motion = False
+    return selected
+
+
+def write_event(fd: int, event: dict) -> None:
+    os.write(fd, INPUT_EVENT.pack(0, 0, event["type"], event["code"], event["value"]))
+
+
 def replay(args: argparse.Namespace) -> int:
-    header, events, _end = read_trace(args.trace)
-    events = select_replay_events(events, args.start_at)
+    header, all_events, _end = read_trace(args.trace)
+    prefix_motion = select_prefix_motion(all_events, args.start_at) if args.restore_prefix_motion else []
+    events = select_replay_events(all_events, args.start_at)
     by_device: dict[int, list[dict]] = defaultdict(list)
     for event in events:
         by_device[event["device"]].append(event)
@@ -307,6 +334,14 @@ def replay(args: argparse.Namespace) -> int:
     try:
         time.sleep(args.device_delay)
         start_ns = time.monotonic_ns() + int(args.lead_in * 1_000_000_000)
+        if prefix_motion:
+            while True:
+                remaining_ns = start_ns - time.monotonic_ns()
+                if remaining_ns <= 0:
+                    break
+                time.sleep(min(remaining_ns / 1_000_000_000, 0.05))
+            for event in prefix_motion:
+                write_event(outputs[event["device"]], event)
         for event in events:
             target_ns = start_ns + int(event["t_ns"] / args.speed)
             while True:
@@ -314,8 +349,7 @@ def replay(args: argparse.Namespace) -> int:
                 if remaining_ns <= 0:
                     break
                 time.sleep(min(remaining_ns / 1_000_000_000, 0.05))
-            raw = INPUT_EVENT.pack(0, 0, event["type"], event["code"], event["value"])
-            os.write(outputs[event["device"]], raw)
+            write_event(outputs[event["device"]], event)
         for fd in outputs.values():
             os.write(fd, INPUT_EVENT.pack(0, 0, EV_SYN, SYN_REPORT, 0))
         time.sleep(args.settle)
@@ -326,6 +360,10 @@ def replay(args: argparse.Namespace) -> int:
             finally:
                 os.close(fd)
     duration = (events[-1]["t_ns"] / args.speed / 1_000_000_000) if events else 0.0
+    if prefix_motion:
+        x = sum(event["value"] for event in prefix_motion if event["type"] == EV_REL and event["code"] == REL_X)
+        y = sum(event["value"] for event in prefix_motion if event["type"] == EV_REL and event["code"] == REL_Y)
+        print(f"restored prefix motion with {len(prefix_motion)} events: x={x:+d} y={y:+d}")
     print(f"replayed {len(events)} events from {args.start_at:.3f}s in {duration:.3f} seconds")
     return 0
 
@@ -353,6 +391,11 @@ def parser() -> argparse.ArgumentParser:
         type=float,
         default=0.0,
         help="skip this many seconds from the trace and rebase the remaining event timing",
+    )
+    playback.add_argument(
+        "--restore-prefix-motion",
+        action="store_true",
+        help="restore prior X/Y relative motion without replaying prior buttons or keys",
     )
     playback.add_argument("--lead-in", type=float, default=1.0)
     playback.add_argument("--device-delay", type=float, default=1.0)
