@@ -1863,3 +1863,32 @@ Run the ARM delayed-load self-test on the rebooted target, deploy the marker for
 - [ ] Passed
 
 ---
+
+## 62 COMMIT Unreleased 2cf4651 2026-09-25T23:06:48-07:00
+
+#### Coming From:
+
+Unreleased 2cf4651
+
+#### Purpose:
+
+Use the final frame-phase marker to locate the remaining spell-heavy combat stalls within GemRB's main-thread frame.
+
+#### Outcome:
+
+The delayed-load target self-test passed and the standard three-buffer combat capture completed without trace errors. All 66 recorded frame intervals exceeded 45 milliseconds, with a 53.023-millisecond median, 323.093-millisecond 90th percentile and 870.406-millisecond maximum. The measured engine phase accounted for 8.214 seconds of the 9.075-second interval aggregate. Pre-draw game and GUI update dominated 25 frames and reached 733.453 milliseconds, while drawing independently reached 373.303 milliseconds. The worst frame split 849.706 milliseconds of engine work into 476.404 milliseconds before drawing and 373.303 milliseconds during drawing. Final display composition, presentation, target switching, texture updates and slow storage operations remained too small to explain the stalls. Static inspection shows that first-time BAM access eagerly decodes every frame into the process-lifetime animation-factory cache, after which drawing can lazily prepare the decoded sprites for the renderer. This matches the two observed main-thread phases and makes cold spell-asset creation the leading cause. The exact normal launcher was restored on disk; the current game process retains the tracer only until it exits.
+
+#### Next Steps:
+
+Reload the same save without exiting or rebooting and repeat the same battle once in the current traced process. Compare that warm-cache segment with this capture before changing source; a large improvement will justify prewarming or moving first-use spell asset preparation, while unchanged stalls will require finer instrumentation of game and GUI update logic.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
