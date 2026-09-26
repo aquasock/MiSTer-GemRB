@@ -271,8 +271,31 @@ def create_uinput_device(device: dict, events: list[dict], uinput_path: str) -> 
     return fd
 
 
+def select_replay_events(events: list[dict], start_at: float) -> list[dict]:
+    cutoff_ns = int(start_at * 1_000_000_000)
+    held: dict[tuple[int, int], int] = {}
+    for event in events:
+        if event["t_ns"] >= cutoff_ns:
+            break
+        if event["type"] == EV_KEY:
+            key = (event["device"], event["code"])
+            if event["value"]:
+                held[key] = event["value"]
+            else:
+                held.pop(key, None)
+    if held:
+        detail = ", ".join(f"device {device} code {code}" for device, code in sorted(held))
+        raise RuntimeError(f"--start-at cuts through pressed input: {detail}")
+
+    selected = [event | {"t_ns": event["t_ns"] - cutoff_ns} for event in events if event["t_ns"] >= cutoff_ns]
+    if not selected:
+        raise RuntimeError("--start-at is at or beyond the end of the trace")
+    return selected
+
+
 def replay(args: argparse.Namespace) -> int:
     header, events, _end = read_trace(args.trace)
+    events = select_replay_events(events, args.start_at)
     by_device: dict[int, list[dict]] = defaultdict(list)
     for event in events:
         by_device[event["device"]].append(event)
@@ -303,7 +326,7 @@ def replay(args: argparse.Namespace) -> int:
             finally:
                 os.close(fd)
     duration = (events[-1]["t_ns"] / args.speed / 1_000_000_000) if events else 0.0
-    print(f"replayed {len(events)} events in {duration:.3f} seconds")
+    print(f"replayed {len(events)} events from {args.start_at:.3f}s in {duration:.3f} seconds")
     return 0
 
 
@@ -325,6 +348,12 @@ def parser() -> argparse.ArgumentParser:
     playback = subparsers.add_parser("replay", help="replay a trace through uinput")
     playback.add_argument("trace")
     playback.add_argument("--uinput", default="/dev/uinput")
+    playback.add_argument(
+        "--start-at",
+        type=float,
+        default=0.0,
+        help="skip this many seconds from the trace and rebase the remaining event timing",
+    )
     playback.add_argument("--lead-in", type=float, default=1.0)
     playback.add_argument("--device-delay", type=float, default=1.0)
     playback.add_argument("--settle", type=float, default=0.5)
@@ -337,6 +366,8 @@ def main() -> int:
     args = parser().parse_args()
     if getattr(args, "speed", 1.0) <= 0:
         raise SystemExit("--speed must be positive")
+    if getattr(args, "start_at", 0.0) < 0:
+        raise SystemExit("--start-at must not be negative")
     try:
         return args.function(args)
     except (OSError, RuntimeError) as error:
