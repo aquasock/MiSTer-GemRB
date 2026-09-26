@@ -1,0 +1,406 @@
+diff --git a/gemrb/core/Factory.cpp b/gemrb/core/Factory.cpp
+--- a/gemrb/core/Factory.cpp
++++ b/gemrb/core/Factory.cpp
+@@ -20,11 +20,13 @@
+ 
+ #include "Factory.h"
+ 
++#include <limits>
++
+ namespace GemRB {
+ 
+ void Factory::AddFactoryObject(object_t fobject)
+ {
+-	fobjects.push_back(std::move(fobject));
++	fobjects.push_back({ std::move(fobject), ++useClock });
+ }
+ 
+ int Factory::IsLoaded(const ResRef& resref, SClass_ID type) const
+@@ -34,8 +36,9 @@
+ 	}
+ 
+ 	for (unsigned int i = 0; i < fobjects.size(); i++) {
+-		if (fobjects[i]->SuperClassID == type) {
+-			if (fobjects[i]->resRef == resref) {
++		if (fobjects[i].object->SuperClassID == type) {
++			if (fobjects[i].object->resRef == resref) {
++				fobjects[i].lastUse = ++useClock;
+ 				return i;
+ 			}
+ 		}
+@@ -45,7 +48,27 @@
+ 
+ Factory::object_t Factory::GetFactoryObject(int pos) const
+ {
+-	return fobjects[pos];
++	fobjects[pos].lastUse = ++useClock;
++	return fobjects[pos].object;
++}
++
++size_t Factory::TrimUnused(size_t maxObjects)
++{
++	size_t removed = 0;
++	while (removed < maxObjects) {
++		auto oldest = fobjects.end();
++		uint64_t oldestUse = std::numeric_limits<uint64_t>::max();
++		for (auto it = fobjects.begin(); it != fobjects.end(); ++it) {
++			if (it->object.use_count() == 1 && it->lastUse < oldestUse) {
++				oldest = it;
++				oldestUse = it->lastUse;
++			}
++		}
++		if (oldest == fobjects.end()) break;
++		fobjects.erase(oldest);
++		++removed;
++	}
++	return removed;
+ }
+ 
+ }
+diff --git a/gemrb/core/Factory.h b/gemrb/core/Factory.h
+--- a/gemrb/core/Factory.h
++++ b/gemrb/core/Factory.h
+@@ -25,7 +25,9 @@
+ 
+ #include "FactoryObject.h"
+ 
++#include <cstdint>
+ #include <memory>
++#include <vector>
+ 
+ namespace GemRB {
+ 
+@@ -40,9 +42,16 @@
+ 	void AddFactoryObject(object_t fobject);
+ 	int IsLoaded(const ResRef& resRef, SClass_ID type) const;
+ 	object_t GetFactoryObject(int pos) const;
++	size_t TrimUnused(size_t maxObjects);
+ 
+ private:
+-	std::vector<object_t> fobjects;
++	struct Entry {
++		object_t object;
++		mutable uint64_t lastUse;
++	};
++
++	mutable uint64_t useClock = 0;
++	mutable std::vector<Entry> fobjects;
+ };
+ 
+ }
+diff --git a/gemrb/core/Game.cpp b/gemrb/core/Game.cpp
+--- a/gemrb/core/Game.cpp
++++ b/gemrb/core/Game.cpp
+@@ -27,6 +27,8 @@
+ #include "strrefs.h"
+ 
+ #include "DisplayMessage.h"
++#include "AnimationFactory.h"
++#include "CharAnimations.h"
+ #include "GameData.h"
+ #include "IniSpawn.h"
+ #include "Interface.h"
+@@ -35,22 +37,224 @@
+ #include "MusicMgr.h"
+ #include "Particles.h"
+ #include "PluginMgr.h"
++#include "Projectile.h"
++#include "ProjectileServer.h"
+ #include "ScriptEngine.h"
++#include "ScriptedAnimation.h"
+ #include "Spell.h"
+ #include "TableMgr.h"
+ 
+ #include "GUI/GameControl.h"
+ #include "GameScript/GSUtils.h"
+ #include "GameScript/GameScript.h"
++#include "Logging/Logging.h"
++#include "Scriptable/Actor.h"
+ #include "Streams/DataStream.h"
+ #include "Video/Pixels.h"
++#include "Video/Video.h"
+ 
+ #include <algorithm>
++#include <fstream>
+ #include <iterator>
++#include <limits>
++#include <set>
++#include <string>
+ #include <utility>
+ #include <vector>
+ 
+ namespace GemRB {
++
++namespace {
++
++constexpr size_t PreloadReserveKiB = 80 * 1024;
++constexpr size_t AggressivePreloadKiB = 112 * 1024;
++
++size_t AvailableMemoryKiB()
++{
++	std::ifstream meminfo("/proc/meminfo");
++	std::string field;
++	size_t value = 0;
++	std::string unit;
++	while (meminfo >> field >> value >> unit) {
++		if (field == "MemAvailable:") return value;
++	}
++	return std::numeric_limits<size_t>::max();
++}
++
++struct AreaPreloader {
++	std::set<std::string> resources;
++	std::set<size_t> projectiles;
++	std::vector<Factory::object_t> pinnedFactories;
++	size_t frames = 0;
++	size_t actors = 0;
++	size_t spells = 0;
++	size_t availableKiB = AvailableMemoryKiB();
++	bool stopped = false;
++
++	bool HasMemory(bool optional = false)
++	{
++		availableKiB = AvailableMemoryKiB();
++		if (availableKiB == std::numeric_limits<size_t>::max()) return true;
++		if (availableKiB < PreloadReserveKiB) {
++			gamedata->TrimFactoryCache(32);
++			availableKiB = AvailableMemoryKiB();
++			if (availableKiB < PreloadReserveKiB) {
++				stopped = true;
++				return false;
++			}
++		}
++		return !optional || availableKiB >= AggressivePreloadKiB;
++	}
++
++	void PrecacheAnimation(const Animation* animation)
++	{
++		if (!animation) return;
++		for (Animation::index_t i = 0; i < animation->GetFrameCount(); ++i) {
++			auto frame = animation->GetFrame(i);
++			if (!frame) continue;
++			VideoDriver->PrecacheSprite(frame);
++			++frames;
++		}
++	}
++
++	void PrecacheParts(const CharAnimations::PartAnim* parts)
++	{
++		if (!parts) return;
++		for (const auto& animation : *parts) PrecacheAnimation(animation.get());
++	}
++
++	void PrecacheBAM(const ResRef& resource)
++	{
++		if (resource.IsEmpty() || !HasMemory()) return;
++		std::string key = "bam:" + std::string(resource.c_str());
++		if (!resources.insert(key).second) return;
++		auto factory = gamedata->GetFactoryResourceAs<AnimationFactory>(resource, IE_BAM_CLASS_ID, true);
++		if (!factory) return;
++		pinnedFactories.push_back(factory);
++		for (AnimationFactory::index_t i = 0; i < factory->GetFrameCount(); ++i) {
++			auto frame = factory->GetFrameWithoutCycle(i);
++			if (!frame) continue;
++			VideoDriver->PrecacheSprite(frame);
++			++frames;
++		}
++	}
++
++	void PrecacheVisual(const ResRef& resource)
++	{
++		if (resource.IsEmpty() || !HasMemory()) return;
++		if (!gamedata->Exists(resource, IE_VVC_CLASS_ID, true)) {
++			PrecacheBAM(resource);
++			return;
++		}
++		std::string key = "vvc:" + std::string(resource.c_str());
++		if (!resources.insert(key).second) return;
++		ScriptedAnimation* visual = gamedata->GetScriptedAnimation(resource, false);
++		if (!visual) return;
++		for (Animation* animation : visual->anims) PrecacheAnimation(animation);
++		if (visual->light) VideoDriver->PrecacheSprite(visual->light);
++		delete visual;
++	}
++
++	void PrecacheEffectResources(const Effect& effect)
++	{
++		const ResRef* refs[] = { &effect.Resource, &effect.Resource2, &effect.Resource3, &effect.Resource4 };
++		for (const ResRef* resource : refs) {
++			if (resource->IsEmpty()) continue;
++			if (gamedata->Exists(*resource, IE_VVC_CLASS_ID, true) ||
++			    gamedata->Exists(*resource, IE_BAM_CLASS_ID, true)) {
++				PrecacheVisual(*resource);
++			}
++		}
++	}
++
++	void PrecacheProjectile(size_t index, unsigned int depth = 0)
++	{
++		if (depth > 2 || !HasMemory() || !projectiles.insert(index).second) return;
++		Projectile* projectile = core->GetProjectileServer()->GetProjectileByIndex(index);
++		if (!projectile) return;
++		PrecacheVisual(projectile->BAMRes1);
++		PrecacheVisual(projectile->BAMRes2);
++		PrecacheVisual(projectile->TravelVVC);
++		for (const ResRef& trail : projectile->TrailBAM) PrecacheVisual(trail);
++		if (projectile->Extension) {
++			PrecacheVisual(projectile->Extension->VVCRes);
++			PrecacheVisual(projectile->Extension->Spread);
++			PrecacheVisual(projectile->Extension->Secondary);
++			PrecacheProjectile(projectile->Extension->ExplProjIdx, depth + 1);
++			PrecacheProjectile(projectile->Extension->FragProjIdx, depth + 1);
++		}
++		delete projectile;
++	}
++
++	void PrecacheSpell(const ResRef& resource)
++	{
++		std::string key = "spl:" + std::string(resource.c_str());
++		if (resource.IsEmpty() || !HasMemory() || !resources.insert(key).second) return;
++		const Spell* spell = gamedata->GetSpell(resource, true);
++		if (!spell) return;
++		++spells;
++		for (const Effect& effect : spell->casting_features) PrecacheEffectResources(effect);
++		for (const SPLExtHeader& header : spell->ext_headers) {
++			PrecacheProjectile(header.ProjectileAnimation);
++			for (const Effect& effect : header.features) PrecacheEffectResources(effect);
++		}
++		gamedata->FreeSpell(spell, resource, false);
++	}
++
++	void PrecacheActorStances(Actor* actor, const std::vector<unsigned char>& stances, bool optional)
++	{
++		if (!actor || !HasMemory(optional)) return;
++		CharAnimations* animations = actor->GetAnims();
++		if (!animations) return;
++		for (unsigned char stance : stances) {
++			for (unsigned int orientation = 0; orientation < MAX_ORIENT; ++orientation) {
++				if (!HasMemory(optional)) return;
++				orient_t facing = static_cast<orient_t>(orientation);
++				PrecacheParts(animations->GetAnimation(stance, facing));
++				PrecacheParts(animations->GetShadowAnimation(stance, facing));
++			}
++		}
++	}
++
++	void PrecacheActorSpells(Actor* actor)
++	{
++		if (!actor) return;
++		for (int type = 0; type < actor->spellbook.GetTypes(); ++type) {
++			for (unsigned int level = 0; level < actor->spellbook.GetSpellLevelCount(type); ++level) {
++				unsigned int count = actor->spellbook.GetMemorizedSpellsCount(type, level, false);
++				for (unsigned int index = 0; index < count; ++index) {
++					if (!HasMemory()) return;
++					const CREMemorizedSpell* memorized = actor->spellbook.GetMemorizedSpell(type, level, index);
++					if (memorized) PrecacheSpell(memorized->SpellResRef);
++				}
++			}
++		}
++	}
++};
++
++void PrecacheAreaAnimations(Map* map)
++{
++	AreaPreloader preload;
++	const std::vector<unsigned char> essential = {
++		IE_ANI_ATTACK, IE_ANI_CAST, IE_ANI_CONJURE, IE_ANI_SHOOT,
++		IE_ANI_DAMAGE, IE_ANI_READY
++	};
++	const std::vector<unsigned char> optional = {
++		IE_ANI_ATTACK_SLASH, IE_ANI_ATTACK_BACKSLASH, IE_ANI_ATTACK_JAB,
++		IE_ANI_AWAKE, IE_ANI_WALK
++	};
++	for (Actor* actor : map->GetAllActors()) {
++		preload.PrecacheActorStances(actor, essential, false);
++		++preload.actors;
++	}
++	for (Actor* actor : map->GetAllActors()) preload.PrecacheActorSpells(actor);
++	for (Actor* actor : map->GetAllActors()) preload.PrecacheActorStances(actor, optional, true);
++	Log(MESSAGE, "Game", "Area preload prepared {} actors, {} spells and {} animation frames; {} KiB available{}.",
++	    preload.actors, preload.spells, preload.frames, preload.availableKiB,
++	    preload.stopped ? " (memory reserve reached)" : "");
++}
++
++}
+ 
+ struct HealingResource {
+ 	ResRef resRef;
+@@ -908,6 +1112,10 @@
+ 
+ 	core->GetAudioDrv()->SetReverbProperties(newMap->GetReverbProperties());
+ 
++	if (loadscreen) {
++		core->LoadProgress(90);
++		PrecacheAreaAnimations(newMap);
++	}
+ 	core->LoadProgress(100);
+ 	return ret;
+ }
+diff --git a/gemrb/core/GameData.cpp b/gemrb/core/GameData.cpp
+--- a/gemrb/core/GameData.cpp
++++ b/gemrb/core/GameData.cpp
+@@ -372,6 +372,11 @@
+ 	}
+ }
+ 
++size_t GameData::TrimFactoryCache(size_t maxObjects)
++{
++	return factory.TrimUnused(maxObjects);
++}
++
+ Store* GameData::GetStore(const ResRef& resRef)
+ {
+ 	StoreMap::iterator it = stores.find(resRef);
+diff --git a/gemrb/core/GameData.h b/gemrb/core/GameData.h
+--- a/gemrb/core/GameData.h
++++ b/gemrb/core/GameData.h
+@@ -132,6 +132,8 @@
+ 
+ 	/** returns factory resource, currently works only with animations */
+ 	Factory::object_t GetFactoryResource(const ResRef& resName, SClass_ID type, bool silent = false);
++	/** Drops least-recently-used factory objects that have no external owner. */
++	size_t TrimFactoryCache(size_t maxObjects);
+ 
+ 	template<typename T>
+ 	std::shared_ptr<T> GetFactoryResourceAs(const ResRef& resName, SClass_ID type, bool silent = false)
+diff --git a/gemrb/core/Video/Video.h b/gemrb/core/Video/Video.h
+--- a/gemrb/core/Video/Video.h
++++ b/gemrb/core/Video/Video.h
+@@ -162,6 +162,8 @@
+ 	virtual void ConfigurePointer(int pointerSpeed, int pointerAccel, int deadZoneL, int deadZoneR) = 0;
+ 
+ 	virtual Holder<Sprite2D> CreateSprite(const Region&, void* pixels, const PixelFormat&) = 0;
++	/** Prepare a sprite for later drawing without submitting it. */
++	virtual void PrecacheSprite(const Holder<Sprite2D>&) {}
+ 
+ 	void BlitSprite(const Holder<Sprite2D>& spr, Point p,
+ 			const Region* clip = nullptr, BlitFlags = BlitFlags::NONE);
+diff --git a/gemrb/plugins/SDLVideo/SDL20Video.cpp b/gemrb/plugins/SDLVideo/SDL20Video.cpp
+--- a/gemrb/plugins/SDLVideo/SDL20Video.cpp
++++ b/gemrb/plugins/SDLVideo/SDL20Video.cpp
+@@ -421,6 +421,14 @@
+ 	flags &= ~spr->PrepareForRendering(paletteFlags, reinterpret_cast<const Color*>(tint));
+ 	SDL_Texture* tex = spr->GetTexture(renderer);
+ 	BlitSpriteNativeClipped(tex, src, dst, flags, tint);
++}
++
++void SDL20VideoDriver::PrecacheSprite(const Holder<Sprite2D>& sprite)
++{
++	auto* spr = dynamic_cast<const SDLTextureSprite2D*>(sprite.get());
++	if (!spr) return;
++	spr->PrepareForRendering(BlitFlags::NONE);
++	spr->GetTexture(renderer);
+ }
+ 
+ void SDL20VideoDriver::BlitSpriteNativeClipped(SDL_Texture* texSprite, const Region& srgn, const Region& drgn, BlitFlags flags, const SDL_Color* tint)
+diff --git a/gemrb/plugins/SDLVideo/SDL20Video.h b/gemrb/plugins/SDLVideo/SDL20Video.h
+--- a/gemrb/plugins/SDLVideo/SDL20Video.h
++++ b/gemrb/plugins/SDLVideo/SDL20Video.h
+@@ -261,6 +261,7 @@
+ 
+ 	bool TouchInputEnabled() override;
+ 	bool CanDrawRawGeometry() const override;
++	void PrecacheSprite(const Holder<Sprite2D>& sprite) override;
+ 
+ 	void BlitVideoBuffer(const VideoBufferPtr& buf, const Point& p, BlitFlags flags,
+ 			     Color tint = Color()) override;
