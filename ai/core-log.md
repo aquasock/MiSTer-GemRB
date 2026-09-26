@@ -1745,3 +1745,32 @@ After the blank-screen process has exited, replace only the temporary tracer lib
 - [ ] Passed
 
 ---
+
+## 58 COMMIT Unreleased 5aaec84 2026-09-25T22:50:03-07:00
+
+#### Coming From:
+
+Unreleased 5aaec84
+
+#### Purpose:
+
+Use the corrected frame tracer to separate the remaining spell-heavy combat stalls from presentation, frame-cap delay and slow storage access.
+
+#### Outcome:
+
+The corrected tracer launched with visible video, no forwarding errors and the standard protocol 1.7 three-buffer renderer. The paused boundary was saved before the user ran a spell-heavy combat segment that did not enter the death movie. The segment produced 59 frame records, including 54 intervals of at least 45 milliseconds; those long intervals had a 54.642-millisecond median and 794.398-millisecond maximum. After subtracting the measured frame-cap delay, work between presents had a 35.343-millisecond median, 771.179-millisecond maximum and 5.459-second aggregate across the recorded long frames. The actual presentation calls had a 0.130-millisecond median and 5.016-millisecond maximum, so they did not cause any recorded long interval. Only two file operations exceeded four milliseconds: a 6.676-millisecond music read on a secondary thread and a 4.068-millisecond `SHAREA.bam` open on the main thread, neither sufficient to explain the repeated 50-to-800-millisecond stalls. The exact original target `run.sh` was restored with SHA256 `216fc0445bdf8ef049bfe5f8e5b010b622fab009e8d7df2f03d42d128694b6d3`; the running process retains the tracer until exit, while the next launch is normal.
+
+#### Next Steps:
+
+Obtain approval to extend the same lightweight tracer with the `SDL_SetRenderTarget(NULL)` frame-phase boundary and slow `SDL_UpdateTexture`, texture-lock and render-target-switch measurements, then repeat one short combat segment. This will divide the proven between-present stall into GemRB update and drawing work, Noodles target flush and texture upload without rebuilding GemRB, SDL or the FPGA core.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
