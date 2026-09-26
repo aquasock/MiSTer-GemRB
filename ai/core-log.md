@@ -1425,7 +1425,7 @@ Build and deploy the bundle and the core, then have the user compare the AR0015 
 
 ---
 
-## 47 COMMIT Unreleased ??? 2026-09-25T21:09:38-07:00
+## 47 COMMIT Unreleased 5fe8719 2026-09-25T21:09:38-07:00
 
 #### Coming From:
 
@@ -1437,11 +1437,11 @@ Preserve GemRB's intended game-state update cadence when rendered frames do not 
 
 #### Outcome:
 
-Planned. Change only the main-loop tick deadline so each completed game-state update advances it by one fixed simulation interval instead of resetting it to the current wall-clock time, retaining sub-tick elapsed time without running an unbounded update loop. This addresses the captured behavior in which the 20fps diagnostic cap schedules the nominal 15Hz simulation at only 10Hz and late combat frames permanently discard elapsed simulation time; renderer, audio, affinity, game rules and FPGA behavior remain unchanged.
+Source `5fe8719` adds one GemRB v0.9.5 patch that advances the main-loop game-state deadline by its fixed 66ms interval after each update instead of resetting it to the current wall-clock time, preserves the fractional remainder and bounds accumulated backlog to one tick after a long stall. A deterministic 60-second model reproduced 600 updates at a 20fps render cadence with the old scheduler and produced 909 with the correction, equal to the corrected 30fps case; the long-stall case retained no more than one 66ms tick. All six project patches applied cleanly to an untouched v0.9.5 tree, and the normal ARM build and bundle completed successfully. The staged core library SHA256 is `7b77e70c255df20495cea46a83a5b8e670ac3392cade1697a0543ec88098d582`. The bundle was not deployed because GemRB PID 1304 remains active on the target with `CapFPS=20`; renderer, audio, affinity, game rules and FPGA behavior are unchanged.
 
 #### Next Steps:
 
-Add the correction as a separate GemRB patch, validate its cadence with a deterministic host model covering 20fps, 30fps, late frames and a long stall, apply every project patch from a clean GemRB v0.9.5 tree, build the normal bundle, and test the same combat sequence at the 20fps cap before deciding whether any remaining frame-rate drop requires a separate renderer change.
+After the active GemRB session exits, deploy the staged normal bundle without changing the current 20fps configuration or the loaded FPGA core, then repeat the same combat sequence and compare visible animation cadence. If combat still stutters, restore the normal 30fps cap before attributing the remainder to rendering, because 20fps presentation cannot display every 15Hz simulation interval evenly.
 
 #### Files Modified:
 
@@ -1449,7 +1449,7 @@ Add the correction as a separate GemRB patch, validate its cadence with a determ
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
