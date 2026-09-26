@@ -1482,3 +1482,32 @@ None.
 - [ ] Passed
 
 ---
+
+## 49 COMMIT Unreleased 5fe8719 2026-09-25T21:24:36-07:00
+
+#### Coming From:
+
+Unreleased 5fe8719
+
+#### Purpose:
+
+Record the 20fps cadence-fix result and distinguish the observed MVE video stutter from the remaining combat presentation stutter.
+
+#### Outcome:
+
+The user reported that combat looked unchanged with the `5fe8719` cadence correction at `CapFPS=20`, so the correction does not resolve the visible symptom under that presentation cadence. A non-stopping 12.012-second sample taken while an MVE video played collected 2,443 main-thread samples with zero loss and was concentrated in video frame decoding, paletted `CopyPixels`, palette lookup and SDL audio resampling, confirming that FPGA drawing speed is not the principal movie cost. A following 8.021-second combat-only sample collected 358 samples with zero loss, equivalent to about 0.72 seconds of main-thread CPU time, and was diffuse across fog rendering, animation, sprite work and Noodles submission with no dominant combat-logic operation. The video and combat therefore show similar visible stutter from different paths, and the combat evidence again excludes HPS compute saturation. Because the corrected 15Hz simulation cannot divide evenly across a 20fps presentation and produces uneven visible spacing, the preserved target configuration was restored to `CapFPS=30`; `DrawFPS=0` and renderer statistics remain disabled, and the running process was not interrupted.
+
+#### Next Steps:
+
+Exit and relaunch GemRB so the restored 30fps cap takes effect, then repeat the same combat sequence once. Use that result to decide whether the correction improves late-frame recovery at the normal cadence; investigate MVE conversion and movie deadline accounting separately from combat, without using FPGA frequency as the movie remedy.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
