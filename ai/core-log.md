@@ -1921,3 +1921,32 @@ None.
 - [x] Passed
 
 ---
+
+## 64 COMMIT Unreleased 2cf4651 2026-09-26T06:38:02-07:00
+
+#### Coming From:
+
+Unreleased 2cf4651
+
+#### Purpose:
+
+Profile the live GemRB main thread during a warm combat replay to identify the code consuming the remaining pre-draw stalls.
+
+#### Outcome:
+
+The existing non-stopping sampler captured 5,442 main-thread task-clock samples over 45.05 seconds with zero loss and complete symbol resolution. That represents approximately 10.9 CPU-seconds, or 24.2 percent of one core during the wall interval. GemRB core code accounted for 33.48 percent of samples, SDL for 37.39 percent, SDLVideo for 6.60 percent and libc for 18.50 percent. The largest named GemRB functions were `FogRenderer::IsUncovered` at 4.70 percent, `Animation::NextFrame` at 2.06 percent and map exploration functions at 2.13 percent combined. `BAMImporter` and `BIFImporter` together accounted for only 0.16 percent, so eager BAM decoding is not consuming the repeated warm combat stalls even though process caching materially improved the preceding replay. The restarted normal game process did not have the frame tracer loaded, so the instruction samples cannot be assigned to individual long frames. The profile has no CPU hotspot compatible with repeated 500-millisecond execution bursts, making main-thread descheduling or another blocked interval the leading explanation for the remaining wall-time spikes.
+
+#### Next Steps:
+
+Obtain approval for one no-build replay bracketed by `/proc` scheduler, fault, context-switch and per-thread CPU snapshots. Use their deltas to determine whether the main thread accumulates run-queue wait during the visible stalls or consumes CPU in an unresolved path; only then choose between isolating its scheduler contention and adding CPU-time fields to the existing frame tracer.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
