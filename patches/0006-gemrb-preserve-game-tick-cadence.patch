@@ -1,0 +1,36 @@
+diff --git a/gemrb/core/Interface.cpp b/gemrb/core/Interface.cpp
+index d4021400..cfba7b07 100644
+--- a/gemrb/core/Interface.cpp
++++ b/gemrb/core/Interface.cpp
+@@ -1038,7 +1038,8 @@ void Interface::Main()
+ 	tick_t frame = 0;
+ 	tick_t time = GetMilliseconds();
+ 	tick_t timebase = time;
+-	tick_t lastGameUpdate = 0;
++	static const tick_t oneTick = 1000 / Time.ticksPerSec;
++	tick_t lastGameUpdate = time >= oneTick ? time - oneTick : 0;
+ 
+ 	double frames = 0.0;
+ 
+@@ -1067,14 +1068,19 @@ void Interface::Main()
+ 
+ 		time = GetMilliseconds();
+ 
+-		static const tick_t oneTick = 1000 / Time.ticksPerSec;
+ 		bool doGameStateUpdate = time - lastGameUpdate >= oneTick;
+ 		if (doGameStateUpdate) {
+ 			GameLoop();
+ 			// TODO: find other animations that need to be synchronized
+ 			// we can create a manager for them and everything can be updated at once
+ 			GlobalColorCycle.AdvanceTime(time);
+-			lastGameUpdate = time;
++			// Retain the partial tick instead of slowing simulation to the
++			// rendering cadence. Bound the backlog after a long stall so the
++			// main loop never enters an unbounded catch-up cycle.
++			lastGameUpdate += oneTick;
++			if (time - lastGameUpdate > oneTick) {
++				lastGameUpdate = time - oneTick;
++			}
+ 		}
+ 
+ 		winmgr->DrawWindows();
