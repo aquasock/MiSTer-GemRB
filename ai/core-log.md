@@ -2617,7 +2617,7 @@ Reboot the MiSTer once, stage the existing frame tracer and timestamped CPU samp
 
 ---
 
-## 88 COMMIT Unreleased ??? 2026-09-26T13:36:59-07:00
+## 88 COMMIT Unreleased fb02df9 2026-09-26T13:36:59-07:00
 
 #### Coming From:
 
@@ -2629,11 +2629,11 @@ Make the captured cold-load test replay deterministic by loading the normal Nood
 
 #### Outcome:
 
-The first full-trace validation did not launch GemRB: stock Main hotplugged the synthetic devices but ignored relative pointer movement in its frontend, then interpreted the first replayed click as selection of the already-highlighted Arcade folder. The replay was stopped, GemRB never started, and the exact normal launcher was restored. The captured trace remains valid for GemRB, whose SDL input path is separate from Main's frontend, so this change will add a bounded trace-start option and use Main's supported command FIFO to load the unchanged canonical MGL after the Noodles watcher starts. No FPGA, GemRB, SDL or launcher binary will change.
+The first full-trace validation did not launch GemRB: stock Main hotplugged the synthetic devices but ignored relative pointer movement in its frontend, then interpreted the first replayed click as selection of the already-highlighted Arcade folder. The replay was stopped, GemRB never started, and the exact normal launcher was restored. Source `fb02df9` adds `--start-at`, rebases selected event timing, rejects boundaries at which a key or button is held and leaves full-trace replay unchanged. The neutral 46-second boundary selects 822 GemRB events over 18.753 seconds. Python compilation, full-trace validation, complete and unsafe-boundary selection tests passed locally, and the MiSTer's Python 3.9.6 validated the staged trace and selected the identical segment. The staged tool SHA256 is `15f6c3373a19c5bbb1c93b2655debf40fa19cf057a3c8f5e818bd19d3d5231f8`; the target's canonical MGL and watcher match the bundle, and its normal launcher retains SHA256 `216fc0445bdf8ef049bfe5f8e5b010b622fab009e8d7df2f03d42d128694b6d3`. No FPGA, GemRB, SDL or launcher binary changed.
 
 #### Next Steps:
 
-Validate trace selection locally, stage the harness and existing diagnostics without launching them, then ask the user to reboot the MiSTer manually. After that reboot, create the replay devices before GemRB starts, directly load the canonical MGL, replay the segment beginning with the GemRB menu interaction at normal speed and confirm that it loads the save, moves through the cold stalls and ends paused.
+After the user manually reboots the MiSTer, create the replay devices before GemRB starts, directly load the canonical MGL through Main's command FIFO, replay the segment beginning with the GemRB menu interaction at normal speed and confirm that it loads the save, moves through the cold stalls and ends paused. Do not launch or inject input before the user confirms that reboot.
 
 #### Files Modified:
 
@@ -2641,7 +2641,7 @@ Validate trace selection locally, stage the harness and existing diagnostics wit
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
