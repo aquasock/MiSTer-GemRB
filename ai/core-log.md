@@ -2419,7 +2419,7 @@ None.
 
 ---
 
-## 81 COMMIT Unreleased ??? 2026-09-26T08:59:38-07:00
+## 81 COMMIT Unreleased 4102834 2026-09-26T08:59:38-07:00
 
 #### Coming From:
 
@@ -2431,11 +2431,11 @@ Reuse prepared actor-palette animation textures instead of rebuilding shared spr
 
 #### Outcome:
 
-The SDL2 video path will cache prepared texture variants by the complete palette hash while leaving the shared factory sprite and its base palette unchanged. Actor drawing will select that persistent variant directly, and the existing combat preloader will prepare the exact actor-part palette variants rather than only the generic BAM palette. Variant caches will be bounded per sprite and invalidated when source pixels change, preserving animated palette correctness while allowing the exact surfaces prepared before combat to survive into runtime use.
+Source `4102834` makes SDL2 actor drawing select a persistent texture variant keyed by the complete actor-palette hash instead of replacing the shared factory sprite palette before and after every draw. Each sprite retains the four most recently used variants, invalidates them when its source pixels change and leaves grey and sepia effects on the existing fallback path. The combat preloader now prepares each actor part and shadow with the exact palette that runtime drawing will request. The complete ten-patch stack applied to a pristine GemRB 0.9.5 tree, reproduced the development source exactly, passed every full-stack reverse check and built successfully both natively and for ARM. The staged bundle SHA256 values are `33f5c3acb264b6ee03d9789150159fa410c0611d5b6f22b13423b33e4bb25933` for `libgemrb_core.so.0.9.5`, `7abb4cf705eacd376afe06c3f81f25d4627670cbc3c7579b9b9f01e7bd15df30` for `SDLVideo.so` and the unchanged `5b2b535182fb1d2cd8ed814d4ba5a5141184f446fa3531c990315ada6218a46d` for the executable. Deployment was deferred because GemRB PID 1321 remains active on the target with 74,004 KiB available; the running installation was left untouched.
 
 #### Next Steps:
 
-Repartition the change across the existing SDL palette-modulation and GemRB prewarm patches so every ordered patch remains idempotent, add a focused native copy-on-write and palette-variant check if the current test infrastructure supports it, verify the complete stack in a clean GemRB tree, build one ARM GemRB bundle without Quartus, and cold-test the same battle once.
+After the active GemRB process exits or the MiSTer is rebooted, deploy the staged normal bundle without changing its configuration, launcher or FPGA core. Cold-load the same save and replay the spell-heavy fight once, comparing the visible severe-stutter count with the approximately 11-event baseline.
 
 #### Files Modified:
 
@@ -2445,7 +2445,7 @@ Repartition the change across the existing SDL palette-modulation and GemRB prew
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
