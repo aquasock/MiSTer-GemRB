@@ -2529,3 +2529,32 @@ None.
 - [ ] Passed
 
 ---
+
+## 85 COMMIT Unreleased 1f9b746 2026-09-26T12:59:35-07:00
+
+#### Coming From:
+
+Unreleased 1f9b746
+
+#### Purpose:
+
+Determine which system and frame phases contain the first visible post-load movement stutters.
+
+#### Outcome:
+
+The paused baseline, movement window, continuing frame trace and final paused boundary were captured from PID 1352. The fixed 25.027-second sampler ended just before the visible cluster and contained only two frames above 45 milliseconds, but the tracer remained active while movement continued and recorded fourteen long frames from 288.0 through 304.3 seconds, including six frames above 90 milliseconds and maxima of 449.849 and 210.874 milliseconds. Across the six frames above 90 milliseconds, 989.623 milliseconds was inside GemRB engine work, split between 624.759 milliseconds of update phase and 364.863 milliseconds of draw phase, while display and `SDL_RenderPresent` totaled only 3.556 milliseconds. No traced file operation above four milliseconds coincided with the cluster. The surrounding process-counter interval accumulated only 565,760 bytes of physical reads and four major faults with no swap or reclaim, but RSS grew by 61,136 KiB and the process incurred 76,415 minor faults, showing CPU-side allocation and resource construction rather than storage latency or FPGA presentation. The exact normal launcher was restored with its original SHA256 `216fc0445bdf8ef049bfe5f8e5b010b622fab009e8d7df2f03d42d128694b6d3`; subsequent launches do not preload the tracer.
+
+#### Next Steps:
+
+Use one bounded no-build replay with the sampler kept active through the user's stop signal and add per-long-frame process-fault deltas to the existing temporary tracer. The result should identify the main-thread call sites active during the 90-to-450-millisecond update and draw frames and distinguish allocation and decoding work from scheduler delay before proposing a production source change.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
