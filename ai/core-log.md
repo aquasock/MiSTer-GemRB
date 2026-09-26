@@ -2233,6 +2233,8 @@ Implement the correction as the tenth ordered GemRB patch, verify a clean nine-p
 
 #### Files Modified:
 
+- patches/0008-memory-aware-area-animation-preload.patch
+- patches/0009-dynamic-actor-animation-prewarm.patch
 - patches/0010-targeted-spell-action-prewarm.patch
 
 #### Status:
