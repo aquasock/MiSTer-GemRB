@@ -1569,3 +1569,32 @@ None.
 - [x] Passed
 
 ---
+
+## 52 COMMIT Unreleased ??? 2026-09-25T21:50:35-07:00
+
+#### Coming From:
+
+Unreleased 5fe8719
+
+#### Purpose:
+
+Stop SDL2 from rebuilding paletted sprite textures when only ordinary colour or alpha modulation changes during spell animation.
+
+#### Outcome:
+
+The approved change will keep the existing palette-baked path for grey and sepia effects, whose ordering can differ from texture modulation, while leaving ordinary `COLOR_MOD` and `ALPHA_MOD` flags for `SDL20VideoDriver::RenderCopyShaded` and the Noodles draw command to apply. This targets the measured spell path without changing game logic, animation cadence, custom palettes, SDL, the launcher or the FPGA core.
+
+#### Next Steps:
+
+Add the change as the seventh ordered GemRB patch, verify that the complete v0.9.5 patch stack applies cleanly, build one normal ARM GemRB bundle, deploy it after the active target session has ended, and compare the same spell-heavy battle with normal audio, `CapFPS=30` and diagnostics disabled.
+
+#### Files Modified:
+
+- patches/0007-sdlvideo-use-texture-modulation-for-paletted-sprites.patch
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
