@@ -2155,7 +2155,7 @@ None.
 
 ---
 
-## 72 COMMIT Unreleased ??? 2026-09-26T07:24:26-07:00
+## 72 COMMIT Unreleased 47ce25f 2026-09-26T07:24:26-07:00
 
 #### Coming From:
 
@@ -2167,11 +2167,11 @@ Prewarm dynamically created actors and their recursive combat dependencies befor
 
 #### Outcome:
 
-The approved change will replace the loading-screen-only snapshot with a memory-bounded work queue that accepts actors created by cutscene and game scripts. The queue will prepare actor combat and casting animations and follow reachable spell, external effect, summon-table, creature, projectile and visual-effect resources, processing work incrementally during the cutscene and dialog before combat while retaining the existing 80 MiB available-memory reserve and lazy fallback. The implementation will specifically cover the observed `cut204f2.bcs` to `illasera.cre` path and the later `spmon1.eff`, `MONSUM01.2da`, dog, worg and spell-animation chain without hardcoding those resource names.
+Source `8ac89d9` adds the ninth ordered GemRB patch, and source `47ce25f` moves its `Game.cpp` method hunk away from patch 0008 so the build driver's reverse checks remain idempotent without changing behavior. Every actor added to a loaded map is queued by global ID; one actor, generic resource or stance-orientation unit is processed per rendered frame. Actor spellbooks and compiled scripts expose resource references, and the queue recursively recognizes SPL, external EFF, monster-summoning 2DA, CRE, projectile, VVC and BAM dependencies while retaining the 80 MiB available-memory reserve. This covers the observed cutscene-created Illasera and her spell-driven dog and worg summon chain without resource-name special cases. The complete nine-patch stack and ARM bundle built successfully. The deployed core library SHA256 is `a611473a6b3c8c17e8d0ca7aea96b68541199fcaba39c0e46e89d5007ee9aef5`; SDLVideo remains `5f49144764a31449747720353f51363a408ec573bf553f83b89c816e4624dbe3` and the executable remains `5b2b535182fb1d2cd8ed814d4ba5a5141184f446fa3531c990315ada6218a46d`. The rebooted target had 464,380 KiB available before launch, and deployment preserved normal audio, `CapFPS=30`, `DrawFPS=0`, the canonical MGL and the timing-qualified Noodles RBF.
 
 #### Next Steps:
 
-Implement the correction as the ninth ordered GemRB patch, verify the complete patch stack from pristine GemRB 0.9.5, build one ARM GemRB bundle without running Quartus, deploy it to the rebooted MiSTer and cold-test the same cutscene and battle. Confirm that dynamic dependencies are prepared before combat, memory remains above reserve, swap remains unused during preload and the prior severe stutters are reduced.
+Cold-load the exact save and let the cutscene and dialog run normally, then replay the same battle. Confirm from the game log that the dynamic queue discovers and completes the Illasera and summon resource graph before combat, record its memory floor and swap use, and compare the visible severe-stutter count with the prior approximately 11-event baseline.
 
 #### Files Modified:
 
@@ -2179,7 +2179,7 @@ Implement the correction as the ninth ordered GemRB patch, verify the complete p
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
