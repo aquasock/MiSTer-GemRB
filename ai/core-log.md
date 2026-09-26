@@ -1834,7 +1834,7 @@ None.
 
 ---
 
-## 61 COMMIT Unreleased ??? 2026-09-25T22:59:16-07:00
+## 61 COMMIT Unreleased 2cf4651 2026-09-25T22:59:16-07:00
 
 #### Coming From:
 
@@ -1846,11 +1846,11 @@ Add the final frame-phase marker that separates game and GUI update time from th
 
 #### Outcome:
 
-The approved tracer correction will record the first existing render-target call after each present as the drawing boundary. Each long-frame record will retain the prior display, presentation, target and texture totals while dividing the current engine phase into pre-draw update time and drawing time. The delayed-load self-test will verify both new fields, and no new hot wrapper or GemRB, SDL or FPGA build will be added.
+Source `2cf4651` records the first existing render-target call after each present as the drawing boundary. Each long-frame record retains the prior display, presentation, target and texture totals while dividing the current engine phase into pre-draw update time and drawing time. The delayed-load native self-test exercises a synthetic 66.011-millisecond frame and correctly separates 0.005 milliseconds before drawing from an 8.599-millisecond drawing pass, including the measured target, update, lock and unlock calls. The strict ARM build passed with library SHA256 `ad890b0197799914a44bc99346a8bfda76e16df17b1a4ec058db6c8ae021453d`; no new hot wrapper or GemRB, SDL or FPGA build was added.
 
 #### Next Steps:
 
-Implement and validate the marker, run the ARM delayed-load self-test on the rebooted target, deploy it for one normal three-buffer launch, capture a paused boundary and a short spell-heavy combat segment, then restore the exact launcher and use the measured phase to select the correction.
+Run the ARM delayed-load self-test on the rebooted target, deploy the marker for one normal three-buffer launch, capture a paused boundary and a short spell-heavy combat segment, then restore the exact launcher and use the measured phase to select the correction.
 
 #### Files Modified:
 
@@ -1859,7 +1859,7 @@ Implement and validate the marker, run the ARM delayed-load self-test on the reb
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
