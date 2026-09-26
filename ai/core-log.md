@@ -2790,3 +2790,32 @@ Stage the harness, directly load the normal MGL on the rebooted MiSTer and repla
 - [ ] Passed
 
 ---
+
+## 94 COMMIT Unreleased 8c29693 2026-09-26T14:12:54-07:00
+
+#### Coming From:
+
+Unreleased 8c29693
+
+#### Purpose:
+
+Qualify separate panning and no-panning variants of the autonomous cold-load movement test.
+
+#### Outcome:
+
+On a manually rebooted MiSTer, the normal MGL reached a stable GemRB menu and the shortened replay began approximately ten seconds later. Directional codes 103, 105, 106 and 108 suppressed all twelve recorded arrow press, repeat and release events; the harness replayed the remaining 1,695 events over the original 57.101-second interval, loaded `AR4000`, moved the character with mouse clicks and retained the final Space pause. GemRB remained healthy at 199,660 KiB RSS with no process swap, and the normal launcher retained SHA256 `216fc0445bdf8ef049bfe5f8e5b010b622fab009e8d7df2f03d42d128694b6d3`. The user reported that this no-panning run was perfect and moved the character without moving the viewport. The accepted original 1,707-event trace is now the panning variant, which the user observes stutters more, while the same trace with the four directional codes excluded is the no-panning variant.
+
+#### Next Steps:
+
+Use both accepted variants as a controlled pair: replay the original trace when measuring the additional viewport-panning cost, and apply the four key exclusions when isolating cold save loading and character movement without panning. Keep all other launch, timing, mouse and pause inputs identical.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
