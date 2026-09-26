@@ -2038,7 +2038,7 @@ None.
 
 ---
 
-## 68 COMMIT Unreleased ??? 2026-09-26T07:03:11-07:00
+## 68 COMMIT Unreleased dcfd5ec 2026-09-26T07:03:11-07:00
 
 #### Coming From:
 
@@ -2050,11 +2050,11 @@ Move first-use animation preparation into area loading with memory-aware preload
 
 #### Outcome:
 
-The approved change will add a bounded current-area preload pass that discovers actor animation cycles and reachable spell, projectile and visual-effect animations, decodes their factories and prepares their frames for the active renderer while the loading screen is present. Preloading will use available-memory watermarks so it is aggressive while the MiSTer has headroom, narrows as memory approaches its reserve and stops before swap pressure. The append-only animation cache will gain safe least-recently-used trimming for factory objects that have no active external owner, allowing later areas to reclaim cold assets instead of retaining every resource for the entire process. The implementation will preserve lazy loading as a fallback for dynamically named script resources and for platforms where memory availability cannot be measured.
+Source `dcfd5ec` adds the eighth ordered GemRB patch. Area loading now prepares every current actor's combat, casting, damage and ready animation cycles and their SDL textures before closing the loading screen, then discovers memorized-spell effect resources and projectile, trail and visual-effect animations; lower-priority stance, movement and alternate-attack cycles are added only while at least 112 MiB remains available. The pass stops at an 80 MiB available-memory reserve, and the shared factory cache now tracks recent use and can discard its oldest cache-only objects under pressure without invalidating externally owned animations. Dynamic script resources retain the existing lazy fallback, and video backends other than SDL2 retain a no-op preparation hook. The complete eight-patch stack applied after pristine GemRB 0.9.5, reproduced the development worktree exactly, and the official ARM GemRB and bundle builds passed with only the existing SDL cast-alignment warning. The staged core library SHA256 is `77b7a19f5d57495316a26bbf03d47b2eb50d66e858a408fbcb7aa2afd2b77f27`, SDLVideo SHA256 is `5f49144764a31449747720353f51363a408ec573bf553f83b89c816e4624dbe3` and the executable remains `5b2b535182fb1d2cd8ed814d4ba5a5141184f446fa3531c990315ada6218a46d`. The corrected target at `10.10.0.21` was reachable, but GemRB PID 1348 remained active with 82,820 KiB available, so the running session was left untouched and deployment and hardware validation remain pending.
 
 #### Next Steps:
 
-Implement the change as a new GemRB patch, cross-build GemRB and the bundle, then deploy it with the accepted SDL and FPGA core. Validate a cold boot of the exact save against the retained baseline of approximately 11 severe stutters and confirm that loading completes, memory stays above the reserve, no swap is used and the same-process result remains correct.
+After the active GemRB session exits or the MiSTer is rebooted, deploy the staged normal bundle without changing its configuration, launcher or FPGA core. Cold boot and load the exact save, note the added loading time, verify available memory stays above 80 MiB with no swap use, then replay the interaction that produced approximately 11 severe stutters and compare it with the retained cold baseline.
 
 #### Files Modified:
 
@@ -2062,7 +2062,7 @@ Implement the change as a new GemRB patch, cross-build GemRB and the bundle, the
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
