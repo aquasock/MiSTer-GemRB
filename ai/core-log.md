@@ -38,6 +38,8 @@ Run `/media/fat/gemrb-noodles-test/run.sh` while the timing-qualified Noodles pr
 
 
 
+
+
 ## 3 COMMIT Unreleased e2fb908 2026-09-24T00:52:47-07:00
 
 #### Coming From:
@@ -1419,6 +1421,35 @@ Build and deploy the bundle and the core, then have the user compare the AR0015 
 #### Status:
 
 - [x] Built
+- [ ] Passed
+
+---
+
+## 47 COMMIT Unreleased ??? 2026-09-25T21:09:38-07:00
+
+#### Coming From:
+
+Unreleased de2dfd4
+
+#### Purpose:
+
+Preserve GemRB's intended game-state update cadence when rendered frames do not divide evenly into the simulation tick or a combat frame finishes late.
+
+#### Outcome:
+
+Planned. Change only the main-loop tick deadline so each completed game-state update advances it by one fixed simulation interval instead of resetting it to the current wall-clock time, retaining sub-tick elapsed time without running an unbounded update loop. This addresses the captured behavior in which the 20fps diagnostic cap schedules the nominal 15Hz simulation at only 10Hz and late combat frames permanently discard elapsed simulation time; renderer, audio, affinity, game rules and FPGA behavior remain unchanged.
+
+#### Next Steps:
+
+Add the correction as a separate GemRB patch, validate its cadence with a deterministic host model covering 20fps, 30fps, late frames and a long stall, apply every project patch from a clean GemRB v0.9.5 tree, build the normal bundle, and test the same combat sequence at the 20fps cap before deciding whether any remaining frame-rate drop requires a separate renderer change.
+
+#### Files Modified:
+
+- patches/0006-gemrb-preserve-game-tick-cadence.patch
+
+#### Status:
+
+- [ ] Built
 - [ ] Passed
 
 ---
