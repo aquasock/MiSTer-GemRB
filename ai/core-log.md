@@ -1774,3 +1774,33 @@ None.
 - [x] Passed
 
 ---
+
+## 59 COMMIT Unreleased ??? 2026-09-25T22:51:21-07:00
+
+#### Coming From:
+
+Unreleased 5aaec84
+
+#### Purpose:
+
+Extend the lightweight frame tracer to divide between-present combat stalls into GemRB drawing, Noodles target flushing and texture-transfer time.
+
+#### Outcome:
+
+The approved diagnostic extension will timestamp the first display-target switch before each present and accumulate the time spent in SDL texture update, lock, unlock and render-target-switch calls. Long-frame records will report those phase totals beside the existing frame-cap and presentation measurements, while individual SDL operations will be emitted only when they exceed four milliseconds. The delayed-load self-test will exercise every new wrapper, and no GemRB, SDL or FPGA build will be performed.
+
+#### Next Steps:
+
+Implement and validate the extended tracer, wait until the current game process exits, deploy it for one normal three-buffer launch, record a paused boundary and one short spell-heavy combat segment, then restore the exact launcher and use the phase split to select the source correction.
+
+#### Files Modified:
+
+- scripts/build-frame-tracer.sh
+- tools/noodles-frame-trace.c
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
