@@ -2819,3 +2819,32 @@ None.
 - [x] Passed
 
 ---
+
+## 95 COMMIT Unreleased ??? 2026-09-26T14:15:32-07:00
+
+#### Coming From:
+
+Unreleased 8c29693
+
+#### Purpose:
+
+Make menu replay faster and deterministic while preserving the accepted in-game movement interval.
+
+#### Outcome:
+
+The user accepted both panning variants and requested a one-second post-menu launch delay plus optimized navigation that waits one second before each menu click. This change will add deterministic menu timing transformation for the first four primary mouse clicks and a file-triggered replay start so uinput devices can exist before GemRB starts while the one-second lead begins only after the menu is confirmed stable.
+
+#### Next Steps:
+
+Generate and validate a tuned trace with each pre-click pointer path compressed to one tenth of a second followed by a one-second dwell, preserve all post-menu timing and suppress the twelve directional-key events at replay, then cold-launch and confirm that it loads the same autosave, moves the character and ends paused.
+
+#### Files Modified:
+
+- tools/mister-input-harness.py
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
