@@ -2674,3 +2674,32 @@ Stage the corrected harness, temporarily enable the existing frame tracer, direc
 - [ ] Passed
 
 ---
+
+## 90 COMMIT Unreleased 1d692a6 2026-09-26T13:55:38-07:00
+
+#### Coming From:
+
+Unreleased 1d692a6
+
+#### Purpose:
+
+Record the hardware result of bounded replay with restored prefix motion and stop the harness work at the user's direction.
+
+#### Outcome:
+
+The first corrected launch exited before input because GemRB raced the freshly loaded Noodles renderer; the replay was stopped before its first event. A final manually rebooted run used a temporary three-second renderer hold, remained stable and emitted all 677 prefix-motion events totaling positive 178 horizontal and negative 117 vertical units followed by all 822 selected events. The cursor still missed the intended controls, GemRB remained in the BG2 `Start2` main menu at 39,364 KiB RSS, and no save loaded, proving that accumulated evdev motion cannot reconstruct the missing absolute SDL cursor origin. The replay and sampler are stopped, the exact normal launcher is restored with SHA256 `216fc0445bdf8ef049bfe5f8e5b010b622fab009e8d7df2f03d42d128694b6d3`, and the still-running GemRB process was left at the main menu.
+
+#### Next Steps:
+
+Stop work as requested. If this harness is revisited, capture absolute SDL cursor coordinates or record a sequence beginning from a deliberately anchored in-game cursor position; do not retry the current relative-only trace or add another inferred offset.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
