@@ -2936,3 +2936,32 @@ None.
 - [x] Passed
 
 ---
+
+## 99 COMMIT Unreleased ??? 2026-09-26T16:58:51-07:00
+
+#### Coming From:
+
+Unreleased 8fb9689
+
+#### Purpose:
+
+Move traversability-cache allocation from the first path update into area loading.
+
+#### Outcome:
+
+Add a narrowly scoped GemRB patch that exposes cache initialization and invokes it from the `Map` constructor after tile properties are available. Preserve the existing update-time size check as a safety guard while ensuring the normal first path request no longer allocates and clears the full area-sized array.
+
+#### Next Steps:
+
+Build and deploy the patched GemRB bundle without changing the FPGA core, launcher settings or official input replay. After the user is ready to watch, run the official clean no-panning test and compare the repeatable opening movement stall with the prior clean samples.
+
+#### Files Modified:
+
+- patches/0011-initialize-traversability-cache-during-area-load.patch
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
