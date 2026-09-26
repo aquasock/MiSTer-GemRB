@@ -26,6 +26,10 @@
 
 typedef void (*sdl_render_present_fn)(void*);
 typedef void (*sdl_delay_fn)(uint32_t);
+typedef int (*sdl_set_render_target_fn)(void*, void*);
+typedef int (*sdl_update_texture_fn)(void*, const void*, const void*, int);
+typedef int (*sdl_lock_texture_fn)(void*, const void*, void**, int*);
+typedef void (*sdl_unlock_texture_fn)(void*);
 typedef ssize_t (*read_fn)(int, void*, size_t);
 typedef ssize_t (*pread_fn)(int, void*, size_t, off_t);
 typedef ssize_t (*pread64_fn)(int, void*, size_t, off64_t);
@@ -34,6 +38,10 @@ typedef FILE* (*fopen_fn)(const char*, const char*);
 
 static sdl_render_present_fn real_sdl_render_present;
 static sdl_delay_fn real_sdl_delay;
+static sdl_set_render_target_fn real_sdl_set_render_target;
+static sdl_update_texture_fn real_sdl_update_texture;
+static sdl_lock_texture_fn real_sdl_lock_texture;
+static sdl_unlock_texture_fn real_sdl_unlock_texture;
 static read_fn real_read;
 static pread_fn real_pread;
 static pread64_fn real_pread64;
@@ -47,6 +55,15 @@ static __thread uint64_t previous_present_begin;
 static __thread uint64_t previous_present_end;
 static __thread uint64_t delay_requested;
 static __thread uint64_t delay_elapsed;
+static __thread uint64_t display_boundary;
+static __thread uint64_t target_elapsed;
+static __thread uint64_t update_elapsed;
+static __thread uint64_t lock_elapsed;
+static __thread uint64_t unlock_elapsed;
+static __thread unsigned target_calls;
+static __thread unsigned update_calls;
+static __thread unsigned lock_calls;
+static __thread unsigned unlock_calls;
 
 static bool resolve_sdl_symbols(void)
 {
@@ -58,6 +75,18 @@ static bool resolve_sdl_symbols(void)
 	}
 	if (!real_sdl_delay) {
 		real_sdl_delay = (sdl_delay_fn) dlsym(RTLD_NEXT, "SDL_Delay");
+	}
+	if (!real_sdl_set_render_target) {
+		real_sdl_set_render_target = (sdl_set_render_target_fn) dlsym(RTLD_NEXT, "SDL_SetRenderTarget");
+	}
+	if (!real_sdl_update_texture) {
+		real_sdl_update_texture = (sdl_update_texture_fn) dlsym(RTLD_NEXT, "SDL_UpdateTexture");
+	}
+	if (!real_sdl_lock_texture) {
+		real_sdl_lock_texture = (sdl_lock_texture_fn) dlsym(RTLD_NEXT, "SDL_LockTexture");
+	}
+	if (!real_sdl_unlock_texture) {
+		real_sdl_unlock_texture = (sdl_unlock_texture_fn) dlsym(RTLD_NEXT, "SDL_UnlockTexture");
 	}
 	trace_guard = saved_guard;
 	return real_sdl_render_present && real_sdl_delay;
@@ -126,6 +155,13 @@ static void report_io(const char* operation, int fd, size_t requested, ssize_t r
 		path[0] ? path : "?");
 }
 
+static void report_sdl(const char* operation, uint64_t begin, uint64_t elapsed)
+{
+	if (elapsed < IO_LIMIT_NS) return;
+	trace_line("SDL tid=%ld op=%s at_ms=%.3f elapsed_ms=%.3f\n", (long) current_tid(), operation,
+		milliseconds(begin), milliseconds(elapsed));
+}
+
 __attribute__((constructor)) static void initialize_trace(void)
 {
 	trace_guard = 1;
@@ -135,6 +171,10 @@ __attribute__((constructor)) static void initialize_trace(void)
 
 	real_sdl_render_present = (sdl_render_present_fn) dlsym(RTLD_NEXT, "SDL_RenderPresent");
 	real_sdl_delay = (sdl_delay_fn) dlsym(RTLD_NEXT, "SDL_Delay");
+	real_sdl_set_render_target = (sdl_set_render_target_fn) dlsym(RTLD_NEXT, "SDL_SetRenderTarget");
+	real_sdl_update_texture = (sdl_update_texture_fn) dlsym(RTLD_NEXT, "SDL_UpdateTexture");
+	real_sdl_lock_texture = (sdl_lock_texture_fn) dlsym(RTLD_NEXT, "SDL_LockTexture");
+	real_sdl_unlock_texture = (sdl_unlock_texture_fn) dlsym(RTLD_NEXT, "SDL_UnlockTexture");
 	real_read = (read_fn) dlsym(RTLD_NEXT, "read");
 	real_pread = (pread_fn) dlsym(RTLD_NEXT, "pread");
 	real_pread64 = (pread64_fn) dlsym(RTLD_NEXT, "pread64");
@@ -173,20 +213,117 @@ void SDL_RenderPresent(void* renderer)
 	uint64_t between = previous_present_end ? begin - previous_present_end : 0;
 	uint64_t requested = delay_requested;
 	uint64_t delayed = delay_elapsed;
+	uint64_t boundary = display_boundary;
+	uint64_t target_time = target_elapsed;
+	uint64_t update_time = update_elapsed;
+	uint64_t lock_time = lock_elapsed;
+	uint64_t unlock_time = unlock_elapsed;
+	unsigned targets = target_calls;
+	unsigned updates = update_calls;
+	unsigned locks = lock_calls;
+	unsigned unlocks = unlock_calls;
 	delay_requested = 0;
 	delay_elapsed = 0;
+	display_boundary = 0;
+	target_elapsed = 0;
+	update_elapsed = 0;
+	lock_elapsed = 0;
+	unlock_elapsed = 0;
+	target_calls = 0;
+	update_calls = 0;
+	lock_calls = 0;
+	unlock_calls = 0;
 
 	real_sdl_render_present(renderer);
 	uint64_t end = monotonic_ns();
 	uint64_t present = end - begin;
+	uint64_t before_display = boundary && previous_present_end ? boundary - previous_present_end : between;
+	uint64_t engine = before_display > delayed ? before_display - delayed : 0;
+	uint64_t display = boundary ? begin - boundary : 0;
 
 	if ((interval && interval >= FRAME_LIMIT_NS) || present >= PRESENT_LIMIT_NS) {
-		trace_line("FRAME tid=%ld interval_ms=%.3f between_ms=%.3f delay_req_ms=%.3f delay_actual_ms=%.3f present_ms=%.3f\n",
-			(long) current_tid(), milliseconds(interval), milliseconds(between), milliseconds(requested),
-			milliseconds(delayed), milliseconds(present));
+		trace_line("FRAME tid=%ld at_ms=%.3f interval_ms=%.3f between_ms=%.3f delay_req_ms=%.3f delay_actual_ms=%.3f engine_ms=%.3f display_ms=%.3f present_ms=%.3f target_ms=%.3f/%u update_ms=%.3f/%u lock_ms=%.3f/%u unlock_ms=%.3f/%u\n",
+			(long) current_tid(), milliseconds(begin), milliseconds(interval), milliseconds(between), milliseconds(requested),
+			milliseconds(delayed), milliseconds(engine), milliseconds(display), milliseconds(present),
+			milliseconds(target_time), targets, milliseconds(update_time), updates, milliseconds(lock_time), locks,
+			milliseconds(unlock_time), unlocks);
 	}
 	previous_present_begin = begin;
 	previous_present_end = end;
+}
+
+int SDL_SetRenderTarget(void* renderer, void* texture)
+{
+	if (!real_sdl_set_render_target) resolve_sdl_symbols();
+	if (!real_sdl_set_render_target) {
+		trace_line("TRACE error missing=SDL_SetRenderTarget\n");
+		errno = ENOSYS;
+		return -1;
+	}
+	if (trace_guard || !is_main_thread()) return real_sdl_set_render_target(renderer, texture);
+	uint64_t begin = monotonic_ns();
+	int result = real_sdl_set_render_target(renderer, texture);
+	uint64_t elapsed = monotonic_ns() - begin;
+	target_elapsed += elapsed;
+	target_calls++;
+	if (!texture && !display_boundary) display_boundary = begin;
+	report_sdl("set-target", begin, elapsed);
+	return result;
+}
+
+int SDL_UpdateTexture(void* texture, const void* rect, const void* pixels, int pitch)
+{
+	if (!real_sdl_update_texture) resolve_sdl_symbols();
+	if (!real_sdl_update_texture) {
+		trace_line("TRACE error missing=SDL_UpdateTexture\n");
+		errno = ENOSYS;
+		return -1;
+	}
+	if (trace_guard || !is_main_thread()) return real_sdl_update_texture(texture, rect, pixels, pitch);
+	uint64_t begin = monotonic_ns();
+	int result = real_sdl_update_texture(texture, rect, pixels, pitch);
+	uint64_t elapsed = monotonic_ns() - begin;
+	update_elapsed += elapsed;
+	update_calls++;
+	report_sdl("update", begin, elapsed);
+	return result;
+}
+
+int SDL_LockTexture(void* texture, const void* rect, void** pixels, int* pitch)
+{
+	if (!real_sdl_lock_texture) resolve_sdl_symbols();
+	if (!real_sdl_lock_texture) {
+		trace_line("TRACE error missing=SDL_LockTexture\n");
+		errno = ENOSYS;
+		return -1;
+	}
+	if (trace_guard || !is_main_thread()) return real_sdl_lock_texture(texture, rect, pixels, pitch);
+	uint64_t begin = monotonic_ns();
+	int result = real_sdl_lock_texture(texture, rect, pixels, pitch);
+	uint64_t elapsed = monotonic_ns() - begin;
+	lock_elapsed += elapsed;
+	lock_calls++;
+	report_sdl("lock", begin, elapsed);
+	return result;
+}
+
+void SDL_UnlockTexture(void* texture)
+{
+	if (!real_sdl_unlock_texture) resolve_sdl_symbols();
+	if (!real_sdl_unlock_texture) {
+		trace_line("TRACE error missing=SDL_UnlockTexture\n");
+		return;
+	}
+	if (trace_guard || !is_main_thread()) {
+		real_sdl_unlock_texture(texture);
+		return;
+	}
+	uint64_t begin = monotonic_ns();
+	real_sdl_unlock_texture(texture);
+	uint64_t elapsed = monotonic_ns() - begin;
+	unlock_elapsed += elapsed;
+	unlock_calls++;
+	report_sdl("unlock", begin, elapsed);
 }
 
 void SDL_Delay(uint32_t duration_ms)

@@ -21,6 +21,10 @@ cat > "$OUT/fake-sdl.c" <<'EOF'
 #include <unistd.h>
 void SDL_Delay(uint32_t ms) { usleep((useconds_t) ms * 1000); }
 void SDL_RenderPresent(void* renderer) { (void) renderer; usleep(1000); }
+int SDL_SetRenderTarget(void* renderer, void* texture) { (void) renderer; (void) texture; usleep(1000); return 0; }
+int SDL_UpdateTexture(void* texture, const void* rect, const void* pixels, int pitch) { (void) texture; (void) rect; (void) pixels; (void) pitch; usleep(5000); return 0; }
+int SDL_LockTexture(void* texture, const void* rect, void** pixels, int* pitch) { static int pixel; (void) texture; (void) rect; *pixels = &pixel; *pitch = 4; usleep(1000); return 0; }
+void SDL_UnlockTexture(void* texture) { (void) texture; usleep(1000); }
 EOF
 cat > "$OUT/frame-trace-selftest.c" <<'EOF'
 #include <dlfcn.h>
@@ -28,14 +32,28 @@ cat > "$OUT/frame-trace-selftest.c" <<'EOF'
 #include <stdio.h>
 typedef void (*delay_fn)(uint32_t);
 typedef void (*present_fn)(void*);
+typedef int (*target_fn)(void*, void*);
+typedef int (*update_fn)(void*, const void*, const void*, int);
+typedef int (*lock_fn)(void*, const void*, void**, int*);
+typedef void (*unlock_fn)(void*);
 int main(int argc, char** argv)
 {
 	if (argc != 2 || !dlopen(argv[1], RTLD_NOW | RTLD_GLOBAL)) return 1;
 	present_fn present = (present_fn) dlsym(RTLD_DEFAULT, "SDL_RenderPresent");
 	delay_fn delay = (delay_fn) dlsym(RTLD_DEFAULT, "SDL_Delay");
-	if (!present || !delay) return 2;
+	target_fn target = (target_fn) dlsym(RTLD_DEFAULT, "SDL_SetRenderTarget");
+	update_fn update = (update_fn) dlsym(RTLD_DEFAULT, "SDL_UpdateTexture");
+	lock_fn lock = (lock_fn) dlsym(RTLD_DEFAULT, "SDL_LockTexture");
+	unlock_fn unlock = (unlock_fn) dlsym(RTLD_DEFAULT, "SDL_UnlockTexture");
+	if (!present || !delay || !target || !update || !lock || !unlock) return 2;
 	present(0);
 	delay(55);
+	target(0, 0);
+	update(0, 0, 0, 0);
+	void* pixels = 0;
+	int pitch = 0;
+	lock(0, 0, &pixels, &pitch);
+	unlock(0);
 	present(0);
 	return 0;
 }
@@ -47,5 +65,8 @@ GEMRB_FRAME_TRACE_LOG="$OUT/selftest.log" LD_PRELOAD="$OUT/libgemrb-frame-trace-
 	"$OUT/frame-trace-selftest" "$OUT/libfake-sdl.so"
 grep -q '^TRACE start ' "$OUT/selftest.log"
 grep -q '^FRAME ' "$OUT/selftest.log"
+grep -q ' engine_ms=' "$OUT/selftest.log"
+grep -q ' update_ms=' "$OUT/selftest.log"
+grep -q '^SDL .* op=update ' "$OUT/selftest.log"
 grep -q '^TRACE stop ' "$OUT/selftest.log"
 echo "frame tracer self-test passed"
