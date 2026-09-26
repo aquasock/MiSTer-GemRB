@@ -2587,3 +2587,32 @@ None.
 - [x] Passed
 
 ---
+
+## 87 COMMIT Unreleased ??? 2026-09-26T13:22:36-07:00
+
+#### Coming From:
+
+Unreleased 1f9b746
+
+#### Purpose:
+
+Create a deterministic MiSTer input capture and replay harness for autonomous cold-load stutter testing.
+
+#### Outcome:
+
+Add a standard-library Python tool that records timestamped Linux evdev events from explicitly selected physical keyboard and mouse devices without grabbing them, stores device identity and event capabilities in a portable JSON-lines trace, and replays the sequence through separate Linux uinput devices with the original relative timing. Validate device discovery and recording on the target, capture the user's complete launch, save-load, movement and pause sequence, then verify that the resulting trace is structurally replayable without changing the GemRB binary, configuration, launcher or FPGA core.
+
+#### Next Steps:
+
+After the recorded sequence validates, use it to reproduce the cold-load movement test autonomously with the existing frame and timestamped CPU diagnostics, stopping at the final recorded pause and comparing the same first-movement stalls.
+
+#### Files Modified:
+
+- tools/mister-input-harness.py
+
+#### Status:
+
+- [ ] Built
+- [ ] Passed
+
+---
