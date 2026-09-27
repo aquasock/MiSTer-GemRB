@@ -84,3 +84,32 @@ None.
 - [ ] Passed
 
 ---
+
+## 4 COMMIT Unreleased 4c49074 2026-09-26T18:01:36-07:00
+
+#### Coming From:
+
+Unreleased 4c49074
+
+#### Purpose:
+
+Record acceptance of the restored pre-burst Noodles image and close GemRB development at the user's direction.
+
+#### Outcome:
+
+MiSTer-Noodles source `f97ce70` seed 2 was restored under the canonical release filename `/media/fat/_Utility/Noodles_20260926.rbf` with local and device SHA256 `ae2cdf45e0322f0d91bafeba481594b57c6d65c80fa444256a0153338e849cc6`. After a clean reboot it reported protocol 1.7, passed the complete bounded copy sweep, retained exact SDL diagnostic hash `93f8e614` and drained the HDMI audio queue. The unchanged secondary panning comparison replayed all 1707 accepted events over 57.101 seconds, ended normally and passed the user's visual observation. GemRB was stopped after the test and no game, launcher or replay process remains active. The timing-qualified Noodles `812f4ea` burst-write image is rejected for GemRB because the user observed slower viewport panning; no selectable burst implementation or further GemRB optimization will be pursued.
+
+#### Next Steps:
+
+Keep the accepted GemRB source `4c49074`, normal bundle, official replay and restored Noodles RBF unchanged, with no open GemRB development proposal.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [x] Passed
+
+---
