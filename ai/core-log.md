@@ -2965,3 +2965,32 @@ Tell the user the clean test is ready without launching it. After the user confi
 - [ ] Passed
 
 ---
+
+## 100 COMMIT Unreleased f0e2276 2026-09-26T17:06:18-07:00
+
+#### Coming From:
+
+Unreleased f0e2276
+
+#### Purpose:
+
+Validate the area-load traversability initialization against the repeatable opening movement stutter.
+
+#### Outcome:
+
+On the rebooted MiSTer, the deployed `f0e2276` core library was verified by SHA256 before launch and the unchanged official no-panning replay emitted all 1,695 events over 57.101 seconds without diagnostics. The save loaded, the character completed the movement sequence and the final Space input paused normally. The user reported no change and judged the stutter the same as before, rejecting traversability-array allocation timing as the solution to the visible opening movement pause. The prior profile still proves that allocation can consume 616 to 793 milliseconds, but another synchronous first-movement or lazy-resource cost produces the observed symptom after that allocation is moved into area loading.
+
+#### Next Steps:
+
+Do not stack another speculative optimization onto `f0e2276`. Remove the ineffective patch before the next production build, preserve this failed result, and isolate work that remains inside the first post-click frame separately from the already moved allocation and from the timing-variable later BAM and zlib stalls.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
