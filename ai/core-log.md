@@ -2937,7 +2937,7 @@ None.
 
 ---
 
-## 99 COMMIT Unreleased ??? 2026-09-26T16:58:51-07:00
+## 99 COMMIT Unreleased f0e2276 2026-09-26T16:58:51-07:00
 
 #### Coming From:
 
@@ -2949,11 +2949,11 @@ Move traversability-cache allocation from the first path update into area loadin
 
 #### Outcome:
 
-Add a narrowly scoped GemRB patch that exposes cache initialization and invokes it from the `Map` constructor after tile properties are available. Preserve the existing update-time size check as a safety guard while ensuring the normal first path request no longer allocates and clears the full area-sized array.
+Source `f0e2276` adds an explicit traversability-cache initialization method and calls it from the `Map` constructor after final tile properties are available. The existing update-time size validation remains as a safety guard for later map-dimension changes, while normal area loading now allocates and clears the full array before actors can issue their first path request. All eleven ordered patches apply cleanly to pristine GemRB 0.9.5, the ARM build and bundle completed successfully, and the deployed core library matches SHA256 `d8c9a96b7870e2b919908ca890e5f1dd4ff0ba6172cfe952e26a2e0b376edea0`. Deployment preserved the exact normal launcher SHA256 `216fc0445bdf8ef049bfe5f8e5b010b622fab009e8d7df2f03d42d128694b6d3`, official replay SHA256 `4d42358d3ea17121acd8e33ec7ab36a0cf41d2f41686b90c25258df4aae1e630`, normal audio, `CapFPS=30`, `DrawFPS=0`, configuration logging and the timing-qualified FPGA core; no tracer or sampler is active.
 
 #### Next Steps:
 
-Build and deploy the patched GemRB bundle without changing the FPGA core, launcher settings or official input replay. After the user is ready to watch, run the official clean no-panning test and compare the repeatable opening movement stall with the prior clean samples.
+Tell the user the clean test is ready without launching it. After the user confirms they are watching, run the unchanged official no-panning replay and determine whether the repeatable opening movement stall is gone; treat any later variable asset stalls as a separate issue.
 
 #### Files Modified:
 
@@ -2961,7 +2961,7 @@ Build and deploy the patched GemRB bundle without changing the FPGA core, launch
 
 #### Status:
 
-- [ ] Built
+- [x] Built
 - [ ] Passed
 
 ---
