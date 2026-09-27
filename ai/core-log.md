@@ -55,3 +55,32 @@ None.
 - [x] Passed
 
 ---
+
+## 3 COMMIT Unreleased 4c49074 2026-09-26T17:55:31-07:00
+
+#### Coming From:
+
+Unreleased 4c49074
+
+#### Purpose:
+
+Correct the FPGA-core qualification record and restore the accepted pre-burst Noodles image after a panning regression.
+
+#### Outcome:
+
+Cross-project artifact verification corrects entry 2: RBF SHA256 `29df3cc992220ba04ca171e598918080e498b1e6aff20f28f924630cedaebebe` came from intermediate Noodles source `93d20a3` seed 2 and failed slow-corner setup, so it was never timing-qualified. Noodles entry 19 later replaced it with the genuinely timing-qualified source `812f4ea` seed-2 RBF SHA256 `d2439fe6bc4d0bf237d3c7cf7795b7fdaafd26491519e3d0b67dd0ff3ef1cd78`; the user tested that final candidate and reported slower viewport panning. The approved recovery is to restore the previously hardware-qualified pre-burst source `f97ce70` seed-2 RBF SHA256 `ae2cdf45e0322f0d91bafeba481594b57c6d65c80fa444256a0153338e849cc6` and end the GemRB work without pursuing a selectable burst implementation.
+
+#### Next Steps:
+
+Commit this correction, let the MiSTer-Noodles recovery restore and validate the canonical RBF, record its exact deployed hash and checks in a new entry, and leave the accepted GemRB bundle and official replay unchanged with no further optimization cycle open.
+
+#### Files Modified:
+
+None.
+
+#### Status:
+
+- [x] Built
+- [ ] Passed
+
+---
